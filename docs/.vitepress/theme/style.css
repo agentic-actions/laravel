@@ -1,0 +1,66 @@
+/**
+ * Near-black and warm grey, the system's own fonts, and no text heavier than
+ * 500 outside <strong>. Link text measures at least 4.5:1 on every background
+ * it sits on, in both themes (the values and ratios are in the comments).
+ */
+:root {
+  --vp-font-family-base: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+
+  /* 14.2:1 on #ffffff, 13.2:1 on #f6f6f7 */
+  --vp-c-brand-1: #2f2a25;
+  /* hover: 7.4:1 on #ffffff, 6.9:1 on #f6f6f7 */
+  --vp-c-brand-2: #5c544c;
+  /* button: #ffffff text at 14.2:1 */
+  --vp-c-brand-3: #2f2a25;
+  --vp-c-brand-soft: rgba(140, 125, 110, 0.16);
+
+  /* warm grey: 4.8:1 on #ffffff */
+  --vp-home-hero-name-color: #7a7067;
+}
+
+.dark {
+  /* 13.3:1 on #1b1b1f, 12.5:1 on #202127, 14.0:1 on #161618 */
+  --vp-c-brand-1: #e7e2db;
+  /* hover: 9.1:1 on #1b1b1f, 8.6:1 on #202127 */
+  --vp-c-brand-2: #c4bcb2;
+  /* button: #1b1b1f text at 13.3:1, 9.1:1 on hover */
+  --vp-c-brand-3: #e7e2db;
+  --vp-c-brand-soft: rgba(200, 185, 170, 0.16);
+
+  /* warm grey: 5.9:1 on #1b1b1f */
+  --vp-home-hero-name-color: #a0968b;
+
+  --vp-button-brand-text: #1b1b1f;
+  --vp-button-brand-hover-text: #1b1b1f;
+  --vp-button-brand-active-text: #1b1b1f;
+}
+
+.VPHero .heading .name,
+.VPHero .heading .text {
+  font-weight: 400;
+}
+
+:root .vp-doc h1,
+:root .vp-doc h2,
+:root .vp-doc h3,
+:root .vp-doc h4,
+:root .vp-doc th,
+.VPFeature .box .title,
+:root .VPSidebarItem.level-0 > .item .text,
+:root .VPNavBarTitle .title,
+:root .VPDocAsideOutline .outline-title {
+  font-weight: 500;
+}
+
+/* Underlined, so the link reads as a link without a heavier weight. */
+:root .vp-doc a {
+  font-weight: inherit;
+}
+
+/* With a near-black brand, colour alone does not mark the current section. */
+:root .VPNavBarMenuLink.active,
+:root .VPNavBarMenuGroup.active .text {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 6px;
+}
