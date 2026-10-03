@@ -396,7 +396,7 @@ const approval = approvalCard(messages.at(-1));
 - A decline runs nothing, and the row reads "Declined".
 - Confirmations, and [forms](asking.md), are kept in the app's default cache store, which every server must share: database, redis, memcached or dynamodb. Outside local development, `actions:check` warns about any other driver (the Cache store row).
 - Several calls paused in one step each get a card. The page shows one at a time, and the answers go out together once each has one.
-- A `prompt()`, `queue()` or `broadcast()` turn pauses the same way, with no card in its response. A reload shows the card. A queued turn's actions run with the person's session access, not a token's limits ([security](security.md#queued-runs-and-the-change-feed)), so run a token caller's turn in its request.
+- A `prompt()`, `queue()` or `broadcast()` turn pauses the same way, with no card in its response. A reload shows the card. A queued turn keeps the limits of the token that queued it ([security](security.md#queued-runs-and-the-change-feed)).
 
 ## Asking the person
 
