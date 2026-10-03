@@ -20,7 +20,7 @@
     <Step title="The card waits" icon="clock" tone="wait" note="built on the server from the action">
       <span class="aa-confirm-trip__pill"><Pill tone="wait" solid>handle() has not run</Pill></span>
     </Step>
-    <Step title="The person confirms" icon="user" note="in their own session, once" branch="declined: nothing runs" />
+    <Step title="The person confirms" icon="user" note="in their own session, once" branch="declined: nothing runs" branch-tone="neutral" />
     <Step title="The card is built again" note="it must read the same" branch="changed: nothing runs" />
     <Step title="handle()" code tone="pass" note="runs as the person, in their tenant" />
   </Flow>

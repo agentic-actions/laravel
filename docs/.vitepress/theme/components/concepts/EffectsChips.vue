@@ -1,12 +1,12 @@
 <script setup lang="ts">
 /**
- * EffectsChips: labelled rows of small chips that sit in the text, not in a
- * figure: a group label on the left (above it when narrow) and its chips, each
+ * EffectsChips: labelled rows of small chips, inside a Figure: a group label
+ * on the left (above it when narrow) and its chips, each
  * a monospace name, a muted detail and an icon. A toned chip takes its
  * accent's tint, so only the agent and MCP chips carry colour.
  *
- * Used on the Effects and surfaces page for the six surfaces (src/Surface.php)
- * and the five doors (docs/concepts.md#doors). Each group is a list named by
+ * Used on the Effects and surfaces page for the six surfaces (src/Surface.php),
+ * grouped by when a call on each is model-driven (docs/concepts.md#surfaces). Each group is a list named by
  * its label, so a screen reader reads the label, then the chips in order.
  *
  * Props: label (the accessible name of the whole strip), groups, a list of
@@ -49,7 +49,7 @@ const id = useId()
 
 <style>
 .aa-fx-chips {
-  margin: 20px 0 24px;
+  margin: 0;
   container-type: inline-size;
 }
 

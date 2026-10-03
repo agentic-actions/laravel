@@ -7,29 +7,23 @@ description: The steps every call takes, in order, and what each one answers whe
 
 A form, an agent, an MCP client, a queued job or your own code: every call to an action takes the same steps, in the same order.
 
-<Figure caption="The steps in order. A step that says no ends the call, and the caller gets the answer beside it.">
+<Figure caption="A step that says no ends the call with the answer beside it.">
 <PipelineFlow />
 </Figure>
 
 ## Where a call stops
 
-The first four steps answer "not found" when they say no, so an action a caller may not see reads exactly like one that does not exist. A denied `authorize()` answers 403, or 404 when it returns `Response::denyAsNotFound()`. Validation answers 422. Whatever the answer, the call ends with one event, which carries no input values.
-
-The full list, with what step 7 converts, is in [Concepts](/concepts#the-pipeline).
-
-## One authorize(), two moments
-
-An action has one `authorize()`. When it takes no input, it runs at step 5, before the input is read. When it takes `ValidatedInput`, it runs at step 9, on the validated input. Put checks on the caller, such as a role, in the first kind, and checks on a particular row in `handle()` or in the second kind.
+The door, the token, `shouldRegister()` and membership answer "not found" when they say no, so an action a caller may not see reads exactly like one that does not exist. A denied `authorize()` can answer 404 too, when it returns `Response::denyAsNotFound()`. See [The pipeline](/concepts#the-pipeline) in Concepts.
 
 ## What an agent's tool list shows
 
-Before each turn, the agent's tools are built by running steps 1 to 5 for every action in its toolsets. An action leaves the list only when one of them says no.
+Before each turn, the agent's tools are built by running every check up to an `authorize()` without input, for each action in its toolsets. An action leaves the list when one of them says no, or when it would offer a [forbidden key](/security).
 
 <Figure caption="An authorize() that takes input needs the model's arguments, so its tool stays listed until the model calls it.">
 <PipelineToolList />
 </Figure>
 
-So a person who may never run an action still sees its tool when its `authorize()` takes input, and is refused when the model calls it. A check on the caller in an `authorize()` without input keeps the tool off the list:
+Checks on the caller, such as a role, go in an `authorize()` without input, which keeps the tool off the list; checks on a particular row go in `handle()` or in an `authorize()` that takes `ValidatedInput`.
 
 <CodeCard file="app/Actions/UpdatePost.php">
 
@@ -42,7 +36,7 @@ public function authorize(ActionContext $context): bool
 
 </CodeCard>
 
-When `authorize()` has to take input, put the check on the caller in `shouldRegister()`, as the [strict agent schemas](/recipes#strict-agent-schemas-no-ids) recipe does.
+When `authorize()` has to take input, put the check on the caller in `shouldRegister()`, as the [strict agent schemas](/recipes#strict-agent-schemas-no-ids) recipe does. See [What an agent's tool list shows](/concepts#what-an-agents-tool-list-shows) in Concepts.
 
 ## Refusals
 
@@ -56,4 +50,4 @@ throw Refusal::make(__('You already have a post with that title.'))->on('title')
 
 </CodeCard>
 
-Replacements in the message come from your own text or the actor's saved rows, never from the caller's input. See [Refusals](/concepts#refusals) for `details()` and `listing()`.
+Replacements in the message come from your own text or the person's saved rows, never from the caller's input. See [Refusals](/concepts#refusals) in Concepts for `details()` and `listing()`.

@@ -7,7 +7,7 @@ description: How a laravel/ai agent calls actions, and how the copilot shows eac
 
 An agent receives your actions as tools, and the copilot shows the person each call as a live row, taken from what the pipeline did rather than from what the model says.
 
-<Figure caption="A done row carries the props it touched, and the page reloads them while the turn goes on.">
+<Figure caption="A done row names the page data it touched, and the page reloads it while the turn goes on.">
 <AgentsCopilot />
 </Figure>
 
@@ -15,20 +15,21 @@ An agent receives your actions as tools, and the copilot shows the person each c
 
 `#[Expose]` puts an action in a toolset, `default` unless it names others, and `#[UseToolset]` picks the toolsets an agent receives. With `InteractsWithActions`, the tools are built on every turn from `actionContext()`, for the signed-in person, so an action whose checks before input say no never reaches the list.
 
-<Figure caption="The agent's tools are its toolsets' actions that pass for this person, and each call answers the model with one sentence.">
+<Figure caption="The agent's tools are its toolsets' actions that pass for this person.">
 <AgentsTools />
 </Figure>
 
-Each call runs the whole pipeline as that person. The model reads a short sentence back, and exception messages and submitted values never reach it.
+The model reads a short sentence back from each call; exception messages and submitted values never reach it.
 
 <CodeCard file="app/Ai/BlogAssistant.php">
 
 ```php
 #[UseToolset]
-final class BlogAssistant implements Agent, HasTools
+final class BlogAssistant implements Agent, Conversational, HasTools
 {
     use InteractsWithActions;
     use Promptable;
+    use RemembersConversations;
 
     public function __construct(public User $user) {}
 
@@ -46,11 +47,11 @@ final class BlogAssistant implements Agent, HasTools
 
 </CodeCard>
 
-Put role and permission checks in an `authorize()` that takes no input, so they shape the list. See [What an agent's tool list shows](/concepts#what-an-agents-tool-list-shows).
+See [What an agent's tool list shows](/concepts#what-an-agents-tool-list-shows) in Concepts.
 
 ## Every call is a row
 
-The copilot streams the turn through `ActionsProtocol`. Each call of an action tool shows a row: its label while it runs, then done, refused or failed, as the pipeline recorded it, never as the model's text tells it. The label is the action's `activityLabel()`, or the package's sentence for its effect, and the stream never carries the tools' arguments or results. See [Labels](/copilot#labels), [Statuses](/copilot#statuses) and [The stream](/copilot#the-stream).
+The copilot streams the turn through `ActionsProtocol`. Each call of an action tool shows a row: its label while it runs, then done, refused, failed, ended or declined, as the pipeline recorded it, never as the model's text tells it. The label is the action's `activityLabel()`, or the package's sentence for its effect, and the stream never carries the tools' arguments, nor any result except the table a Read action shows ([Tables and charts](/concepts/tables)). See [Labels](/copilot#labels), [Statuses](/copilot#statuses) and [The stream](/copilot#the-stream).
 
 <CodeCard file="routes/web.php">
 
@@ -65,7 +66,7 @@ return (new BlogAssistant($request->user()))
 
 ## The page follows the writes
 
-A done row carries the action's `$touches`. `useActionSync()` reloads those props 150 ms after the last successful row, so the writes of one step cause one reload. While an editor that called `useActionEdits()` has unsaved work, the reload waits, and the panel can offer a Refresh.
+`useActionSync()` reloads what the done rows touched 150 ms after the last of them, so the writes of one step cause one reload. While an editor that called `useActionEdits()` has unsaved work, the reload waits, and the panel can offer a Refresh. See [The page follows the writes](/copilot#the-page-follows-the-writes).
 
 <CodeCard file="resources/js/components/PostEditor.tsx">
 
@@ -77,7 +78,7 @@ useActionEdits(form.isDirty);
 
 ## Writes made elsewhere
 
-A write over MCP, from a queued job, or by another member of the tenant has no row on this page. The change feed carries it: each completed write records the keys it touched, and the page polls its feed route and reloads them the same way. See [The change feed](/concepts#the-change-feed).
+The change feed carries the writes made elsewhere: each completed write records the keys it touched, and the page polls its feed route and reloads them the same way. See [The change feed](/concepts#the-change-feed).
 
 <Figure caption="Writes without a row reach the open page through the change feed.">
 <AgentsFeed />

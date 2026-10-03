@@ -51,7 +51,8 @@
   --aa-muted: #6b645b;
   --aa-line: #e6e1d8;
   --aa-line-strong: #d3ccc0;
-  --aa-wire: #a59d91;
+  /* 3.5:1 on the ground, 3.8:1 on the surface, 3.3:1 on the sunken fill */
+  --aa-wire: #8a8276;
   --aa-grid-dot: rgba(120, 105, 85, 0.16);
   --aa-halftone: rgba(110, 95, 75, 0.34);
   --aa-shadow: 0 1px 2px rgba(40, 30, 20, 0.05), 0 8px 24px -12px rgba(40, 30, 20, 0.12);
@@ -88,7 +89,8 @@
   --aa-muted: #a0978b;
   --aa-line: #2c2a25;
   --aa-line-strong: #423e37;
-  --aa-wire: #6f685e;
+  /* 3.9 / 3.6 / 3.4 */
+  --aa-wire: #7a7368;
   --aa-grid-dot: rgba(220, 205, 185, 0.09);
   --aa-halftone: rgba(225, 210, 190, 0.22);
   --aa-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px -12px rgba(0, 0, 0, 0.5);
@@ -258,6 +260,14 @@
 
 :root .VPNavBarTitle .logo {
   height: 22px;
+}
+
+/* At 320px the mark would push the bar wider than the screen; the title's
+   text stays, as the link's only name. */
+@media (max-width: 359px) {
+  :root .VPNavBarTitle .logo {
+    display: none;
+  }
 }
 
 /* A visible focus ring everywhere, in the ink. */

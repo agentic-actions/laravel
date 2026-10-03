@@ -2,7 +2,8 @@
 /**
  * MockTable: a Read action's rows shown as a table after its copilot row,
  * with the bar chart the page draws from the same rows. The package picks the
- * chart's kind and draws none itself (docs/data.md#the-chart).
+ * chart's kind and draws none itself (docs/data.md#the-chart). As on the
+ * Tables page, each value sits above its bar and each name under the axis.
  */
 const rows = [
   { author: 'Sam', posts: 12, words: 9400 },
@@ -29,8 +30,9 @@ const most = Math.max(...rows.map((row) => row.words))
     </table>
     <div class="aa-mock-table__chart" aria-hidden="true">
       <span v-for="row in rows" :key="row.author" class="aa-mock-table__bar">
+        <b>{{ row.words.toLocaleString('en-US') }}</b>
         <i :style="{ height: `${(row.words / most) * 100}%` }" />
-        <b>{{ row.author }}</b>
+        <span>{{ row.author }}</span>
       </span>
     </div>
     <Bubble from="agent">Sam wrote the most words this month.</Bubble>
@@ -87,34 +89,51 @@ const most = Math.max(...rows.map((row) => row.words))
 .aa-mock-table__chart {
   display: flex;
   align-items: flex-end;
+  justify-content: space-around;
   gap: 14px;
-  height: 52px;
-  padding: 0 10px;
-  border-bottom: 1px solid var(--aa-line-strong);
+  height: 92px;
+  padding: 0 4px;
 }
 
 .aa-mock-table__bar {
-  position: relative;
   display: flex;
-  flex: 1;
-  align-items: flex-end;
+  flex: 0 1 64px;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 3px;
   height: 100%;
+  color: var(--aa-ink);
+  font-family: var(--aa-font-mono);
+  font-size: var(--aa-fs-xs);
+  line-height: 1.2;
+}
+
+.aa-mock-table__bar b {
+  font-weight: 400;
 }
 
 .aa-mock-table__bar i {
   display: block;
-  width: 100%;
+  width: 36px;
+  max-height: calc(100% - 38px);
+  min-height: 4px;
   border-radius: 3px 3px 0 0;
-  background: var(--aa-line-strong);
+  background: var(--aa-wire);
 }
 
-.aa-mock-table__bar b {
-  position: absolute;
-  bottom: 4px;
-  left: 6px;
-  color: var(--aa-ink);
-  font-family: var(--aa-font-mono);
-  font-size: var(--aa-fs-xs);
-  font-weight: 400;
+.aa-mock-table__bar span {
+  align-self: stretch;
+  padding-top: 3px;
+  border-top: 1px solid var(--aa-line-strong);
+  color: var(--aa-muted);
+  text-align: center;
+}
+
+@media (forced-colors: active) {
+  .aa-mock-table__bar i {
+    forced-color-adjust: none;
+    background: CanvasText;
+  }
 }
 </style>

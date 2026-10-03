@@ -2,7 +2,9 @@
 /**
  * HomeFeature: one cell of HomeFeatures: an illustration (the slot, usually a
  * Mock* component) on a dotted plate, a title and two lines, the whole cell a
- * link to the concept page.
+ * link to the concept page. The heading and text come first in the DOM, so a
+ * screen reader meets the feature before its picture; the grid draws the
+ * picture above them.
  *
  * Props: title, text, link.
  */
@@ -13,14 +15,14 @@ defineProps<{ title: string; text: string; link: string }>()
 
 <template>
   <li class="aa-feature">
-    <div class="aa-feature__plate">
-      <div class="aa-feature__art"><slot /></div>
-    </div>
     <div class="aa-feature__text">
       <h3 class="aa-feature__title">
         <a :href="withBase(link)">{{ title }}</a>
       </h3>
       <p>{{ text }}</p>
+    </div>
+    <div class="aa-feature__plate">
+      <div class="aa-feature__art"><slot /></div>
     </div>
     <span class="aa-feature__go" aria-hidden="true"><Icon name="arrow" :size="16" /></span>
   </li>
@@ -32,6 +34,7 @@ defineProps<{ title: string; text: string; link: string }>()
   display: grid;
   grid-row: span 2;
   grid-template-rows: subgrid;
+  grid-template-columns: minmax(0, 1fr);
   row-gap: 20px;
   padding: 24px 24px 28px;
   background: var(--aa-ground);
@@ -43,6 +46,7 @@ defineProps<{ title: string; text: string; link: string }>()
 }
 
 .aa-feature__plate {
+  grid-row: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -62,6 +66,7 @@ defineProps<{ title: string; text: string; link: string }>()
 }
 
 .aa-feature__text {
+  grid-row: 2;
   display: flex;
   flex-direction: column;
   gap: 6px;

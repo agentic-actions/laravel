@@ -46,6 +46,8 @@
           <li><Pill tone="pass">done</Pill></li>
           <li><Pill tone="refuse">refused</Pill></li>
           <li><Pill tone="refuse">failed</Pill></li>
+          <li><Pill>ended</Pill></li>
+          <li><Pill>declined</Pill></li>
         </ul>
       </div>
       <div class="aa-agents-copilot__legend-row">

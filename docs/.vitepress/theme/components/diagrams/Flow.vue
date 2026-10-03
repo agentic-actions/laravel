@@ -2,7 +2,8 @@
 /**
  * Flow: a sequence of Steps that runs left to right, with an arrow between
  * each, and stacks top to bottom when its container is narrower than 640px.
- * It is an ordered list, so a screen reader reads the steps in order.
+ * Below 520px each box takes the whole width (see Step). It is an ordered
+ * list, so a screen reader reads the steps in order.
  *
  * Use it for anything that happens in order: the pipeline, a confirmation's
  * round trip, the OAuth handshake. Children are Step components only.
@@ -85,6 +86,12 @@ withDefaults(defineProps<{ label?: string; vertical?: boolean; compact?: boolean
     grid-template-columns: minmax(0, 1fr) auto;
     column-gap: 0;
     row-gap: var(--aa-flow-gap);
+  }
+}
+
+@container (max-width: 520px) {
+  .aa-flow.aa-flow.aa-flow {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 </style>

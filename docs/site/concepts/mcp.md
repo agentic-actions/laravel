@@ -13,16 +13,20 @@ MCP clients such as Claude Code, Cursor and Claude Desktop reach your actions th
 
 ## One server, one tool per action
 
-The server answers at `mcp/actions`. When your actions are tenant-scoped, set `mcp.tenant_path` (such as `mcp/t/{tenant}`) and they are served there instead, one URL per tenant. Each Read or Write action whose `#[Expose]` allows MCP is one tool. Destructive and External actions are never listed, because MCP has no confirmation step. See [Where it is mounted](/mcp#where-it-is-mounted).
+The server answers at `mcp/actions`. When your actions are tenant-scoped, set `mcp.tenant_path` (such as `mcp/t/{tenant}`) and they are served there instead, one URL per tenant. Each Read or Write action whose `#[Expose]` allows MCP is one tool. See [Where it is mounted](/mcp#where-it-is-mounted).
 
 ## A token names what it reaches
 
-A client connects with a person's token, and over MCP an ability counts only when the token names it: `actions:read`, `actions:write`, and `tenant:{id}` to bind it to one tenant. Your app mints it; the package ships no token page.
+A client connects with a person's token, and over MCP an ability counts only when the token names it: `actions:read`, `actions:write`, and `tenant:{key}` to bind it to one tenant. Your app mints it; the package ships no token page.
 
 <CodeCard file="php artisan tinker">
 
 ```php
-$user->createToken('Claude Code', ['actions:read', 'actions:write', 'tenant:'.$team->getKey()], now()->addDays(90));
+$user->createToken('Claude Code', [
+    'actions:read',
+    'actions:write',
+    'tenant:'.$team->getKey(),
+], now()->addDays(90));
 ```
 
 </CodeCard>
@@ -39,7 +43,7 @@ The client then runs as that person, and never does more than the person could i
 
 ## One budget per person
 
-Every MCP request counts against `mcp.per_minute`, 60 by default. All of one person's tokens and tenant URLs share that budget, and past it the answer is 429 before the server runs. See [Throttle](/mcp#throttle).
+All of one person's tokens and tenant URLs share one budget, `mcp.per_minute`. See [Throttle](/mcp#throttle).
 
 ## Remote clients sign in with OAuth
 

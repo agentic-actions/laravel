@@ -5,7 +5,7 @@ description: How an agent's risky call waits for the person, and how a form asks
 
 # Confirmations and forms
 
-An agent's call can stop and wait for the person: for a yes before something risky, or for the fields it left out.
+An agent's call can stop and wait for the person: for their confirmation before something risky, or for the fields it left out.
 
 <Figure caption="DeletePost's card in the chat, and the row each answer leaves.">
 <ConfirmationsCard />
@@ -13,7 +13,7 @@ An agent's call can stop and wait for the person: for a yes before something ris
 
 ## Confirm a risky call
 
-A Destructive or External action, such as deleting a post or sending an email, reaches an agent only when its `#[Expose]` names a toolset. When the agent calls it, the call pauses, and the server builds a card from the action's own `approvalReason()` and `approvalSummary()`. Nothing has run yet.
+A Destructive or External action, such as deleting a post or sending an email, reaches an agent only when its `#[Expose]` names a toolset. When the agent calls it, the call pauses, and the server builds a card from the action's own `approvalReason()` and `approvalSummary()`. Nothing has run yet. See [Offer the action](/copilot#offer-the-action).
 
 <Figure caption="The call runs only after the person confirms it, and only if the card still reads the same.">
 <ConfirmationsRoundTrip />
@@ -28,8 +28,10 @@ The rows come from the record the input names, found the way `authorize()` finds
 <CodeCard file="app/Actions/DeletePost.php">
 
 ```php
-public function approvalSummary(ActionContext $context, ValidatedInput $input): array
-{
+public function approvalSummary(
+    ActionContext $context,
+    ValidatedInput $input,
+): array {
     $post = $context->find(Post::class, $input->integer('post'));
 
     return [__('Post') => $post->title, __('Status') => $post->status];
@@ -38,7 +40,7 @@ public function approvalSummary(ActionContext $context, ValidatedInput $input): 
 
 </CodeCard>
 
-MCP clients are never offered a Destructive or External action, since MCP has no confirmation step. See [What the person can rely on](/copilot#what-the-person-can-rely-on) and [Security](/security#confirmations).
+See [What the person can rely on](/copilot#what-the-person-can-rely-on) and [Security](/security#confirmations).
 
 ## Ask for what is missing
 
@@ -60,7 +62,7 @@ See [What the form holds](/asking#what-the-form-holds) for which schema types be
 
 ## The model never reads the values
 
-The action runs with the person's values over the model's arguments. The model reads which fields were filled, then the action's usual reply. The values are not stored in the conversation either, so they reach a model only if your action returns them. A form never asks for a password, a token or a card number: such a call is refused. See [Never ask for secrets](/asking#never-ask-for-secrets).
+The action runs with the person's values over the model's arguments. The values are not stored in the conversation either, so they reach a model only if your action returns them. A form never asks for a password, a token or a card number: such a call is refused. See [Never ask for secrets](/asking#never-ask-for-secrets).
 
 ## Destructive and External actions never ask
 

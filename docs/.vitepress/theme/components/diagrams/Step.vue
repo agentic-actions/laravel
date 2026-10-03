@@ -2,7 +2,8 @@
 /**
  * Step: one box in a Flow, with a title, an optional note under it, and an
  * optional branch: the way out when this step says no, such as
- * "refused: 404", drawn under the box (beside it when the flow stacks).
+ * "refused: 404", drawn under the box (beside it when the flow stacks, and
+ * under it again, on the right, when the flow is narrower than 520px).
  *
  * Use it only inside a Flow. Keep the title to a few words; the note to one
  * short line.
@@ -56,7 +57,7 @@ withDefaults(
   position: relative;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 4px;
   min-width: 0;
   padding: 12px 14px;
@@ -166,10 +167,11 @@ withDefaults(
 .aa-step__wire {
   width: 0;
   height: 16px;
-  border-left: 1.5px dotted var(--tone-line);
+  border-left: 1.5px dotted var(--tone);
 }
 
 .aa-step__branch .aa-pill {
+  max-width: none;
   white-space: nowrap;
 }
 
@@ -213,7 +215,7 @@ withDefaults(
     width: 14px;
     height: 0;
     border-left: 0;
-    border-top: 1.5px dotted var(--tone-line);
+    border-top: 1.5px dotted var(--tone);
   }
 
   .aa-step__branch .aa-pill {
@@ -258,10 +260,71 @@ withDefaults(
   width: 14px;
   height: 0;
   border-left: 0;
-  border-top: 1.5px dotted var(--tone-line);
+  border-top: 1.5px dotted var(--tone);
 }
 
 .aa-flow.is-vertical .aa-step__branch .aa-pill {
   white-space: normal;
+}
+
+/* Narrow (a phone): every box takes the whole width and its answer sits under
+   it, on the right, so neither a title nor an answer is squeezed. The arrow
+   runs down the left, drawn on the step rather than the box, so it passes
+   beside the answer instead of through it. */
+@container (max-width: 520px) {
+  .aa-flow > .aa-step.aa-step {
+    isolation: isolate;
+  }
+
+  .aa-flow > .aa-step.aa-step .aa-step__box::after,
+  .aa-flow > .aa-step.aa-step .aa-step__box::before {
+    display: none;
+  }
+
+  .aa-flow > .aa-step.aa-step:not(:last-child)::after,
+  .aa-flow > .aa-step.aa-step:not(:last-child)::before {
+    content: '';
+    position: absolute;
+    pointer-events: none;
+  }
+
+  .aa-flow > .aa-step.aa-step:not(:last-child)::after {
+    z-index: -1;
+    left: 24px;
+    top: 0;
+    bottom: calc(3px - var(--aa-flow-gap));
+    border-left: 1.5px dotted var(--aa-wire);
+  }
+
+  .aa-flow > .aa-step.aa-step:not(:last-child)::before {
+    left: 21px;
+    bottom: calc(4px - var(--aa-flow-gap));
+    width: 6px;
+    height: 6px;
+    border-top: 1.5px solid var(--aa-wire);
+    border-right: 1.5px solid var(--aa-wire);
+    transform: rotate(135deg);
+  }
+
+  .aa-flow > .aa-step.aa-step .aa-step__branch {
+    grid-column: 1;
+    flex-direction: column;
+    align-items: flex-end;
+    max-width: none;
+    padding-right: 14px;
+  }
+
+  .aa-flow > .aa-step.aa-step .aa-step__wire {
+    width: 0;
+    height: 10px;
+    margin-right: 22px;
+    border-top: 0;
+    border-left: 1.5px dotted var(--tone);
+  }
+
+  .aa-flow > .aa-step.aa-step .aa-step__branch .aa-pill {
+    max-width: 100%;
+    white-space: normal;
+  }
 }
 </style>

@@ -3,7 +3,8 @@
  * Hub: one thing in the centre (a CodeCard or a Card) and the callers that
  * reach it around it, each with a dotted wire into the centre. The first half
  * of the callers sit on the left, the rest on the right; when the container is
- * narrower than 720px they stack above and below the centre as tiles.
+ * narrower than 1080px they stack above and below the centre as tiles, since
+ * a caller beside a wide centre needs about 260px.
  *
  * Use it for "many callers, one target": the surfaces of one action, the
  * clients of one MCP server. A screen reader reads the left callers, the
@@ -191,7 +192,7 @@ const right = computed(() => props.callers.slice(cut.value))
 }
 
 /* Narrow: the callers become tiles above and below the centre. */
-@container (max-width: 720px) {
+@container (max-width: 1080px) {
   .aa-hub {
     display: flex;
     flex-direction: column;

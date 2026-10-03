@@ -119,6 +119,13 @@ const second =
   white-space: nowrap;
 }
 
+@media (max-width: 479px) {
+  .aa-install code {
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+}
+
 .aa-install__prompt {
   color: var(--aa-muted);
 }
