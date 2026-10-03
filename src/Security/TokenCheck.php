@@ -3,6 +3,7 @@
 namespace AgenticActions\Security;
 
 use AgenticActions\ActionContext;
+use AgenticActions\Ai\QueuedTurns;
 use AgenticActions\Contracts\ReadsTokenGrants;
 use AgenticActions\Exposure\Entry;
 use AgenticActions\Queue\RunAction;
@@ -75,6 +76,11 @@ final class TokenCheck
         // code builds: the worker's guards hold no token, and its session guard would read as no limits.
         if (($run = RunAction::running()) !== null) {
             return $run->grants;
+        }
+
+        // The same inside a turn laravel/ai queued for a token: the grants that token had when the turn was queued.
+        if (($turn = QueuedTurns::grants()) !== null) {
+            return $turn;
         }
 
         $guard = (string) $context->guard;

@@ -3,6 +3,7 @@
 namespace AgenticActions\Streaming;
 
 use AgenticActions\Ai\PendingCards;
+use AgenticActions\Ai\QueuedTurns;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\ServiceProvider;
 use Laravel\Ai\Contracts\Tool;
@@ -45,5 +46,8 @@ final class StreamingServiceProvider extends ServiceProvider
         // The cards ActionTool previewed live in the current request's container. Under Octane that is a copy of the
         // worker's application, and the dispatcher would resolve a class listener from the worker's own, empty one.
         $events->listen(ToolApprovalRequested::class, fn (ToolApprovalRequested $event) => app(PendingCards::class)->requested($event));
+
+        // A turn laravel/ai queues keeps the grants of the token that queued it.
+        QueuedTurns::register($events);
     }
 }

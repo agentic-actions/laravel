@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **A turn laravel/ai queues keeps the limits of the token that queued it.** `queue()` and `broadcastOnQueue()` build an agent's tools in the worker, where no guard holds the caller's token, so a read-only or tenant-bound token's queued turn ran its tools with the person's session access. The job now carries the token's grants, and the worker reads them while it runs the turn, as it already did for a queued run. A turn a session, the console or a guest queued runs as before.
+
 ## 0.9.0-beta.1 - 2026-10-03
 
 The first public release. The package now installs from Packagist and its npm client from npm. Every version below installed only from a private repository, and its entry describes it as it was.
