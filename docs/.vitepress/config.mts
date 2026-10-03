@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, posix, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { defineConfig } from 'vitepress'
+import { defineConfigWithTheme, type DefaultTheme } from 'vitepress'
 
 const repository = 'https://github.com/agentic-actions/laravel'
 
@@ -9,6 +9,20 @@ const docs = fileURLToPath(new URL('..', import.meta.url))
 
 /** The npm client's version, which every release moves with the Composer one. */
 const release: string = JSON.parse(readFileSync(join(docs, '../js/package.json'), 'utf8')).version
+
+/**
+ * The install line the home page shows, as the README writes it: the release's
+ * major and minor, and its stability flag while it is a pre-release
+ * (0.9.0-beta.2 is ^0.9@beta, 1.2.0 is ^1.2).
+ */
+const [, major, minor, stability] = release.match(/^(\d+)\.(\d+)\.\d+(?:-([a-z]+))?/) ?? []
+const install = `composer require agentic-actions/laravel:^${major}.${minor}${stability ? `@${stability}` : ''}`
+
+/** The default theme's options, and the two the home page reads. */
+export interface ThemeConfig extends DefaultTheme.Config {
+  release: string
+  install: string
+}
 
 /**
  * The docs link to each other as GitHub URLs or relative paths, so they work on
@@ -121,7 +135,7 @@ function githubSlug(text: string): string {
     .replace(/ /g, '-')
 }
 
-export default defineConfig({
+export default defineConfigWithTheme<ThemeConfig>({
   title: 'Agentic Actions for Laravel',
   description:
     'Write each operation of a Laravel app once, as an Action class, and call it from web forms and JSON, Artisan, the queue, TypeScript, laravel/ai agents and MCP clients through one checked pipeline.',
@@ -131,11 +145,14 @@ export default defineConfig({
     hostname: 'https://agentic-actions.com',
   },
   head: [
-    ['meta', { name: 'theme-color', media: '(prefers-color-scheme: light)', content: '#ffffff' }],
-    ['meta', { name: 'theme-color', media: '(prefers-color-scheme: dark)', content: '#1b1b1f' }],
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }],
+    ['meta', { name: 'theme-color', media: '(prefers-color-scheme: light)', content: '#f7f5f0' }],
+    ['meta', { name: 'theme-color', media: '(prefers-color-scheme: dark)', content: '#151412' }],
   ],
 
+  // docs/site/ holds the pages only the site has; docs/site/concepts/ the visual concept pages.
   rewrites: {
+    'site/concepts/:page': 'concepts/:page',
     'site/:page': ':page',
   },
 
@@ -177,8 +194,14 @@ export default defineConfig({
   },
 
   themeConfig: {
+    release,
+    install,
+
+    logo: { light: '/mark.svg', dark: '/mark-dark.svg', alt: '' },
+
     nav: [
-      { text: 'Guide', link: '/getting-started', activeMatch: '^/(?!changelog)[^/]+' },
+      { text: 'How it works', link: '/concepts/how-it-works', activeMatch: '^/concepts/' },
+      { text: 'Guide', link: '/getting-started', activeMatch: '^/(?!changelog|concepts/)[^/]+' },
       { text: 'Changelog', link: '/changelog' },
       {
         text: release,
@@ -191,17 +214,30 @@ export default defineConfig({
       },
     ],
 
+    // A label equals the page's H1.
     sidebar: [
       {
-        text: 'Introduction',
+        text: 'Start',
         items: [
           { text: 'Getting started', link: '/getting-started' },
           { text: 'Setup', link: '/setup' },
-          { text: 'Concepts', link: '/concepts' },
         ],
       },
       {
-        text: 'Features',
+        text: 'How it works',
+        items: [
+          { text: 'One action, every caller', link: '/concepts/how-it-works' },
+          { text: 'The pipeline', link: '/concepts/pipeline' },
+          { text: 'Effects and surfaces', link: '/concepts/effects' },
+          { text: 'Tenants', link: '/concepts/tenants' },
+          { text: 'Agents and the copilot', link: '/concepts/agents' },
+          { text: 'Confirmations and forms', link: '/concepts/confirmations' },
+          { text: 'MCP and OAuth', link: '/concepts/mcp' },
+          { text: 'Tables and charts', link: '/concepts/tables' },
+        ],
+      },
+      {
+        text: 'Guides',
         items: [
           { text: 'The copilot', link: '/copilot' },
           { text: 'Asking the person', link: '/asking' },
@@ -212,6 +248,7 @@ export default defineConfig({
       {
         text: 'Reference',
         items: [
+          { text: 'Concepts', link: '/concepts' },
           { text: 'Security', link: '/security' },
           { text: 'Testing', link: '/testing' },
           { text: 'Recipes', link: '/recipes' },
@@ -227,7 +264,8 @@ export default defineConfig({
     },
 
     editLink: {
-      // Two pages are built from files outside docs/: edit those files.
+      // Two pages are built from files outside docs/: edit those files. Every
+      // other page, docs/site/ and docs/site/concepts/ included, is its own file.
       pattern: ({ filePath }) => {
         const source =
           { 'site/getting-started.md': 'README.md', 'site/changelog.md': 'CHANGELOG.md' }[filePath] ?? `docs/${filePath}`

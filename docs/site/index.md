@@ -1,50 +1,100 @@
 ---
 layout: home
 title: Agentic Actions for Laravel
-
-hero:
-  name: Agentic Actions
-  text: Write each Laravel operation once.
-  tagline: Your app's own operations, called from its web forms and JSON, Artisan, the queue, typed TypeScript, laravel/ai agents and MCP clients, each through the same checked pipeline.
-  actions:
-    - theme: brand
-      text: Get started
-      link: /getting-started
-    - theme: alt
-      text: GitHub
-      link: https://github.com/agentic-actions/laravel
-
-features:
-  - title: One class for every caller
-    details: Mark an Action class <code>#[Expose]</code> and it answers a web route with Precognition and a typed TypeScript function, and becomes an agent tool (with laravel/ai) and an MCP tool where its effect allows. The same class also runs from Artisan and the queue.
-    link: /getting-started#what-that-one-class-gets
-    linkText: What one class gets
-  - title: One pipeline
-    details: Every call goes through exposure, token abilities, tenant membership, <code>authorize()</code>, validation and <code>handle()</code>. The output schema is an allowlist, so undeclared keys never leave the server.
-    link: /concepts#the-pipeline
-    linkText: The pipeline
-  - title: A copilot on your page
-    details: Stream a laravel/ai agent into the page. Each tool call shows as a live row, and the page reloads the props the write touched.
-    link: /copilot
-    linkText: The copilot
-  - title: Confirmation before risky calls
-    details: When an agent calls a Destructive or External action, it runs only after the person confirms that call on a card the server builds.
-    link: /copilot#confirmations
-    linkText: Confirmations
-  - title: Tables from a Read action
-    details: The person sees the query's rows as a table. The model reads a short copy and says what stands out, so the numbers the person reads are the query's, never retyped.
-    link: /data
-    linkText: Tables
-  - title: MCP with tokens and OAuth
-    details: Claude Code, Cursor and Claude Desktop connect with a person's token. Claude and ChatGPT connectors sign in with OAuth on Laravel Passport.
-    link: /mcp
-    linkText: MCP
+titleTemplate: false
+markdownStyles: false
 ---
 
-## One action
+<HomeFrame>
 
-A draft blog post, written once. The same class answers a JSON call, a Blade form and `php artisan actions:run`, and, once your app adds laravel/ai or a token guard, an agent or an MCP client.
+<HomeHero />
 
-<!--@include: ../../README.md#create-post-->
+<HomeSection id="every-caller" eyebrow="01 · One action" title="One action, every caller" lede="Mark an Action class #[Expose] and the same class answers a route, Artisan, the queue, a typed TypeScript function, a laravel/ai agent and MCP clients." more="One action, every caller" more-link="/concepts/how-it-works">
 
-[Get started](/getting-started) shows the install and the web and CLI callers; [the copilot](/copilot) and [MCP](/mcp) show agents and MCP clients.
+<Hub label="The callers of CreatePost" :callers="[
+  { label: 'Web form and JSON', detail: 'POST /actions/create-post', icon: 'form' },
+  { label: 'Artisan', detail: 'actions:run create-post', icon: 'terminal' },
+  { label: 'The queue', detail: 'CreatePost::dispatch()', icon: 'queue' },
+  { label: 'TypeScript', detail: 'createPost()', icon: 'ts' },
+  { label: 'A laravel/ai agent', detail: 'a tool in its toolset', icon: 'agent', tone: 'agent' },
+  { label: 'MCP clients', detail: 'the create-post tool', icon: 'mcp', tone: 'mcp' },
+]">
+<CodeCard file="app/Actions/CreatePost.php">
+
+```php
+#[Expose]
+final class CreatePost extends Action
+{
+    protected string $description = 'Create a draft blog post.';
+
+    protected ?Effect $effect = Effect::Write;
+
+    public function schema(JsonSchema $schema): array
+    {
+        return ['title' => $schema->string()->max(120)->required()];
+    }
+
+    public function outputSchema(JsonSchema $schema): array
+    {
+        return ['id' => $schema->integer()->required()];
+    }
+
+    public function authorize(ActionContext $context): bool
+    {
+        return $context->actor instanceof User;
+    }
+
+    public function handle(ActionContext $context, ValidatedInput $input): Post
+    {
+        return $context->actor(User::class)->posts()->create($input->all());
+    }
+}
+```
+
+</CodeCard>
+</Hub>
+
+</HomeSection>
+
+<HomeSection id="pipeline" eyebrow="02 · The pipeline" title="Every call takes the same steps" lede="Whoever calls, the checks run in this order. A step before authorize() that says no answers “not found”, so a caller cannot tell a hidden action from a missing one." more="The pipeline" more-link="/concepts/pipeline">
+
+<Flow compact numbered label="The pipeline, in order">
+<Step title="exposure" note="#[Expose] opens a surface" />
+<Step title="token abilities" note="actions:write for a Write" />
+<Step title="tenant membership" tone="tenant" note="the actor is in the team" branch="not a member: 404" />
+<Step title="authorize()" code note="your own rule" />
+<Step title="validation" note="schema() as rules" />
+<Step title="handle()" code tone="pass" note="does the work" />
+<Step title="output allowlist" note="only declared keys leave" />
+</Flow>
+
+</HomeSection>
+
+<HomeSection id="features" eyebrow="03 · Around the pipeline" title="Built for a person working with an agent" flush>
+
+<HomeFeatures>
+<HomeFeature title="The copilot" text="An agent works on the page. Each tool call shows as a live row, and the page reloads what the write touched." link="/concepts/agents">
+<MockCopilot />
+</HomeFeature>
+<HomeFeature title="Confirmations" text="A Destructive or External call waits until the person confirms it, on a card the server builds." link="/concepts/confirmations">
+<MockConfirm />
+</HomeFeature>
+<HomeFeature title="Tenants" text="Every call runs inside one team. A stranger gets the same 404 as a team that does not exist." link="/concepts/tenants">
+<MockTenants />
+</HomeFeature>
+<HomeFeature title="MCP and OAuth" text="Clients connect with a person's token or sign in with OAuth, and reach Read and Write actions only." link="/concepts/mcp">
+<MockConsent />
+</HomeFeature>
+<HomeFeature title="Tables and charts" text="A Read action's rows reach the person as a table. The model reads a short copy, never retypes the numbers." link="/concepts/tables">
+<MockTable />
+</HomeFeature>
+<HomeFeature title="Testing" text="Fake every action, assert what ran, and pin what each toolset holds, so a widened toolset fails a test." link="/testing">
+<MockTests />
+</HomeFeature>
+</HomeFeatures>
+
+</HomeSection>
+
+<HomeCta />
+
+</HomeFrame>
