@@ -9,7 +9,7 @@ markdownStyles: false
 
 <HomeHero />
 
-<HomeSection id="every-caller" eyebrow="01 · One action" title="One action, every caller" lede="Mark the class #[Expose] for the route, agents and MCP; Artisan and the queue reach it either way." more="One action, every caller" more-link="/concepts/how-it-works">
+<HomeSection id="every-caller" eyebrow="01 · One action" title="One action, every caller" lede="Mark the class #[Expose] for the route, agents and MCP; Artisan and the queue reach it either way." more="One action, every caller" more-link="/how-it-works/one-action">
 
 <Hub label="The callers of CreatePost" :callers="[
   { label: 'Web form and JSON', detail: '/actions/create-post', icon: 'form' },
@@ -38,7 +38,7 @@ final class CreatePost extends Action
 
 </HomeSection>
 
-<HomeSection id="pipeline" eyebrow="02 · The pipeline" title="Every call takes the same steps" lede="Whoever calls, the same checks run. A step before authorize() that says no answers “not found”, so a caller cannot tell a hidden action from a missing one." more="The pipeline" more-link="/concepts/pipeline">
+<HomeSection id="pipeline" eyebrow="02 · The pipeline" title="Every call takes the same steps" lede="Whoever calls, the same checks run. A step before authorize() that says no answers “not found”, so a caller cannot tell a hidden action from a missing one." more="The pipeline" more-link="/how-it-works/pipeline">
 
 <Flow compact label="The pipeline">
 <Step title="exposure" note="#[Expose] lets the caller in" />
@@ -55,19 +55,19 @@ final class CreatePost extends Action
 <HomeSection id="features" eyebrow="03 · Around the pipeline" title="Built for a person working with an agent" flush>
 
 <HomeFeatures>
-<HomeFeature title="The copilot" text="An agent works on the page. Each action call shows as a live row, and the page reloads what the write touched." link="/concepts/agents">
+<HomeFeature title="The copilot" text="An agent works on the page. Each action call shows as a live row, and the page reloads what the write touched." link="/how-it-works/agents">
 <MockCopilot />
 </HomeFeature>
-<HomeFeature title="Confirmations" text="A Destructive or External call waits until the person confirms it, on a card the server builds." link="/concepts/confirmations">
+<HomeFeature title="Confirmations" text="A Destructive or External call waits until the person confirms it, on a card the server builds." link="/how-it-works/confirmations">
 <MockConfirm />
 </HomeFeature>
-<HomeFeature title="Tenants" text="Every tenant-scoped call runs inside one team. A stranger gets the same 404 as a team that does not exist." link="/concepts/tenants">
+<HomeFeature title="Tenants" text="Every tenant-scoped call runs inside one team. A stranger gets the same 404 as a team that does not exist." link="/how-it-works/tenants">
 <MockTenants />
 </HomeFeature>
-<HomeFeature title="MCP and OAuth" text="Clients connect with a person's token or sign in with OAuth, and reach Read and Write actions only." link="/concepts/mcp">
+<HomeFeature title="MCP and OAuth" text="Clients connect with a person's token or sign in with OAuth, and reach Read and Write actions only." link="/how-it-works/mcp">
 <MockConsent />
 </HomeFeature>
-<HomeFeature title="Tables and charts" text="A Read action's rows reach the person as a table. The numbers come from your query; the model reads a short copy." link="/concepts/tables">
+<HomeFeature title="Tables and charts" text="A Read action's rows reach the person as a table. The numbers come from your query; the model reads a short copy." link="/how-it-works/tables">
 <MockTable />
 </HomeFeature>
 <HomeFeature title="Testing" text="Fake every action, assert what ran, and pin what each toolset holds, so a widened toolset fails a test." link="/testing">

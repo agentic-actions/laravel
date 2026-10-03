@@ -32,7 +32,7 @@ Without `authorize()` the action is denied everywhere, and a key `outputSchema()
 
 ## What each caller gets
 
-Each caller comes in its own way, then takes the same steps, so a rule written once in `authorize()` or `schema()` holds for a form, a worker and a model alike. What each step answers when it says no is on [the pipeline](/concepts/pipeline), and the full list in [What that one class gets](/getting-started#what-that-one-class-gets).
+Each caller comes in its own way, then takes the same steps, so a rule written once in `authorize()` or `schema()` holds for a form, a worker and a model alike. What each step answers when it says no is on [the pipeline](/how-it-works/pipeline), and the full list in [What that one class gets](/getting-started#what-that-one-class-gets).
 
 <Figure caption="The same class, as each caller sees it, and what the app adds for each one.">
 <HowItWorksCallers />
@@ -40,4 +40,4 @@ Each caller comes in its own way, then takes the same steps, so a rule written o
 
 ## What #[Expose] opens
 
-`#[Expose]` is the only way onto the route, agents and MCP. Artisan, the queue and your own `run()` reach an action without it. See [Effects and surfaces](/concepts/effects).
+`#[Expose]` is the only way onto the route, agents and MCP. Artisan, the queue and your own `run()` reach an action without it. See [Effects and surfaces](/how-it-works/effects).

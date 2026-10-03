@@ -163,7 +163,7 @@ export default defineConfigWithTheme<ThemeConfig>({
 
   // docs/site/ holds the pages only the site has; docs/site/concepts/ the visual concept pages.
   rewrites: {
-    'site/concepts/:page': 'concepts/:page',
+    'site/concepts/:page': 'how-it-works/:page',
     'site/:page': ':page',
   },
 
@@ -211,8 +211,8 @@ export default defineConfigWithTheme<ThemeConfig>({
     logo: { light: '/mark.svg', dark: '/mark-dark.svg', alt: '' },
 
     nav: [
-      { text: 'How it works', link: '/concepts/how-it-works', activeMatch: '^/concepts/' },
-      { text: 'Guide', link: '/getting-started', activeMatch: '^/(?!changelog|concepts/)[^/]+' },
+      { text: 'How it works', link: '/how-it-works/one-action', activeMatch: '^/how-it-works/' },
+      { text: 'Guide', link: '/getting-started', activeMatch: '^/(?!changelog|how-it-works/)[^/]+' },
       { text: 'Changelog', link: '/changelog' },
       {
         text: release,
@@ -237,14 +237,14 @@ export default defineConfigWithTheme<ThemeConfig>({
       {
         text: 'How it works',
         items: [
-          { text: 'One action, every caller', link: '/concepts/how-it-works' },
-          { text: 'The pipeline', link: '/concepts/pipeline' },
-          { text: 'Effects and surfaces', link: '/concepts/effects' },
-          { text: 'Tenants', link: '/concepts/tenants' },
-          { text: 'Agents and the copilot', link: '/concepts/agents' },
-          { text: 'Confirmations and forms', link: '/concepts/confirmations' },
-          { text: 'MCP and OAuth', link: '/concepts/mcp' },
-          { text: 'Tables and charts', link: '/concepts/tables' },
+          { text: 'One action, every caller', link: '/how-it-works/one-action' },
+          { text: 'The pipeline', link: '/how-it-works/pipeline' },
+          { text: 'Effects and surfaces', link: '/how-it-works/effects' },
+          { text: 'Tenants', link: '/how-it-works/tenants' },
+          { text: 'Agents and the copilot', link: '/how-it-works/agents' },
+          { text: 'Confirmations and forms', link: '/how-it-works/confirmations' },
+          { text: 'MCP and OAuth', link: '/how-it-works/mcp' },
+          { text: 'Tables and charts', link: '/how-it-works/tables' },
         ],
       },
       {
