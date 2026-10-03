@@ -6,8 +6,8 @@
  * It composes Flow and Step and adds two things they lack, both in this
  * file: a dashed box for a step only some callers take (step 6 for agents
  * and MCP, the confirmation for an agent's Destructive or External call),
- * and a second box that keeps step 10's number, because concepts.md counts
- * the confirmation and handle() as one step.
+ * and the numbers 10a and 10b for the confirmation and handle(), because
+ * concepts.md counts the two as one step.
  *
  *   <Figure caption="…"><PipelineFlow /></Figure>
  */
@@ -28,7 +28,7 @@ import Pill from '../diagrams/Pill.vue'
       <Step title="input prepared" note="fixed input, conversions, prepareForValidation()" />
       <Step title="validation" icon="check" note="schema() plus rules()" branch="invalid: 422" />
       <Step title="authorize()" code icon="lock" note="when it takes ValidatedInput" branch="denied: 403" />
-      <Step class="is-some" title="the person confirms" icon="clock" tone="wait" note="an agent's Destructive or External call" branch="declined: nothing runs" />
+      <Step class="is-some is-first" title="the person confirms" icon="clock" tone="wait" note="an agent's Destructive or External call" branch="declined: nothing runs" branch-tone="neutral" />
       <Step class="is-same" title="handle()" code tone="pass" note="then the output projection and modelReply()" branch="Refusal: 409 by default" />
       <Step title="one event" note="with no input values">
         <span class="pl-flow__events">
@@ -48,71 +48,25 @@ import Pill from '../diagrams/Pill.vue'
 <style>
 .pl-flow .aa-step.is-some .aa-step__box {
   border-style: dashed;
+  border-color: var(--aa-wire);
   box-shadow: none;
 }
 
-/* concepts.md counts the confirmation and handle() as step 10. */
+.pl-flow .aa-step.is-some.aa-tone-wait .aa-step__box {
+  border-color: var(--aa-wait);
+}
+
+/* concepts.md counts the confirmation and handle() as step 10: 10a and 10b. */
 .pl-flow .aa-step.is-same {
   counter-increment: none;
 }
 
-/* On a phone the boxes take the whole width and each answer sits under its
-   box, on the right, so a title such as shouldRegister() never breaks. The
-   arrow then runs down the left, drawn on the step rather than the box. */
-@container (max-width: 520px) {
-  .pl-flow.pl-flow .aa-flow.is-vertical {
-    grid-template-columns: minmax(0, 1fr);
-  }
+.pl-flow .aa-flow.is-numbered .aa-step.is-first .aa-step__title::before {
+  content: counter(aa-step, decimal-leading-zero) 'a';
+}
 
-  .pl-flow.pl-flow .aa-flow.is-vertical > .aa-step {
-    isolation: isolate;
-  }
-
-  .pl-flow.pl-flow .aa-flow.is-vertical > .aa-step .aa-step__box::after,
-  .pl-flow.pl-flow .aa-flow.is-vertical > .aa-step .aa-step__box::before {
-    display: none;
-  }
-
-  .pl-flow.pl-flow .aa-flow.is-vertical > .aa-step:not(:last-child)::after,
-  .pl-flow.pl-flow .aa-flow.is-vertical > .aa-step:not(:last-child)::before {
-    content: '';
-    position: absolute;
-    pointer-events: none;
-  }
-
-  .pl-flow.pl-flow .aa-flow.is-vertical > .aa-step:not(:last-child)::after {
-    z-index: -1;
-    left: 24px;
-    top: 0;
-    bottom: calc(3px - var(--aa-flow-gap));
-    border-left: 1.5px dotted var(--aa-wire);
-  }
-
-  .pl-flow.pl-flow .aa-flow.is-vertical > .aa-step:not(:last-child)::before {
-    left: 21px;
-    bottom: calc(4px - var(--aa-flow-gap));
-    width: 6px;
-    height: 6px;
-    border-top: 1.5px solid var(--aa-wire);
-    border-right: 1.5px solid var(--aa-wire);
-    transform: rotate(135deg);
-  }
-
-  .pl-flow.pl-flow .aa-flow.is-vertical .aa-step__branch {
-    grid-column: 1;
-    flex-direction: column;
-    align-items: flex-end;
-    max-width: none;
-    padding-right: 14px;
-  }
-
-  .pl-flow.pl-flow .aa-flow.is-vertical .aa-step__wire {
-    width: 0;
-    height: 10px;
-    margin-right: 22px;
-    border-top: 0;
-    border-left: 1.5px dotted var(--tone-line);
-  }
+.pl-flow .aa-flow.is-numbered .aa-step.is-same .aa-step__title::before {
+  content: counter(aa-step, decimal-leading-zero) 'b';
 }
 
 .pl-flow__events {
@@ -140,7 +94,7 @@ import Pill from '../diagrams/Pill.vue'
   flex: none;
   width: 22px;
   height: 12px;
-  border: 1px dashed var(--aa-line-strong);
+  border: 1px dashed var(--aa-wire);
   border-radius: 4px;
 }
 </style>

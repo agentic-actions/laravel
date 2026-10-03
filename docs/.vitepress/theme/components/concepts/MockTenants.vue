@@ -2,8 +2,10 @@
 /**
  * MockTenants: a team switcher and two calls of the same tenant-scoped route,
  * one in a team the person belongs to and one in a team they do not, which
- * answers 404 (docs/concepts.md#tenants).
+ * answers 404 (docs/concepts.md#tenants). A zero-width space after each slash
+ * lets a route wrap at its segments.
  */
+const wrap = (url: string): string => url.replaceAll('/', '/\u200B')
 </script>
 
 <template>
@@ -15,8 +17,8 @@
         <ListRow icon="team" label="Research" />
       </div>
     </div>
-    <ListRow boxed mono tone="pass" label="/teams/design/actions/create-post" detail="a member" status="runs" />
-    <ListRow boxed mono tone="refuse" label="/teams/sales/actions/create-post" detail="not a member" status="404" />
+    <ListRow boxed mono tone="pass" :label="wrap('/teams/design/actions/create-post')" detail="a member" status="runs" />
+    <ListRow boxed mono tone="refuse" :label="wrap('/teams/sales/actions/create-post')" detail="not a member" status="404" />
   </Window>
 </template>
 

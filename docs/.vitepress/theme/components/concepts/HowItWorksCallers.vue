@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
  * HowItWorksCallers: what each caller of one action gets, as six cards in two
- * columns (one below 560px). Each card names the caller, what it calls, one or
- * two sentences, and the one thing an app adds for it.
+ * columns (one below 560px). Each card names the caller, what it calls, one
+ * fact, and the one thing an app adds for it.
  *
  * Sources: README.md, "What that one class gets"; docs/concepts.md, "Context",
  * "Doors", "Exposure" and "Queued runs"; docs/mcp.md, "What a client sees" and
@@ -26,35 +26,35 @@ const callers: Caller[] = [
     icon: 'form',
     eyebrow: 'Web route',
     title: 'POST /actions/create-post',
-    text: 'Named actions.create-post. A JSON caller gets the output; a browser form gets a redirect, and its errors in the error bag. A Precognition request never runs handle().',
+    text: 'JSON gets the output; a form gets a redirect.',
     needs: 'Actions::routes()',
   },
   {
     icon: 'ts',
     eyebrow: 'TypeScript',
     title: 'createPost()',
-    text: 'The route, with input and output typed from schema() and outputSchema(), ready for the client’s useAction().',
+    text: 'The route, typed from schema() and outputSchema().',
     needs: 'actions:typescript',
   },
   {
     icon: 'terminal',
     eyebrow: 'Artisan',
     title: 'actions:run create-post',
-    text: 'Runs as the user --as names, in the tenant --tenant names, through the same pipeline.',
+    text: 'Runs as the user --as names.',
     needs: 'no #[Expose] needed',
   },
   {
     icon: 'queue',
     eyebrow: 'The queue',
     title: 'CreatePost::dispatch()',
-    text: 'Queues the whole pipeline. The worker runs it as the caller and checks the token, membership, authorize() and validation again.',
+    text: 'The worker runs the whole pipeline, as the caller.',
     needs: 'no #[Expose] needed',
   },
   {
     icon: 'agent',
     eyebrow: 'laravel/ai agent',
     title: 'create-post',
-    text: 'A tool in the default toolset. The model reads $description and the schema, and gets back modelReply(), or “Done.”',
+    text: 'The model reads $description and the schema.',
     needs: 'composer require laravel/ai',
     tone: 'agent',
   },
@@ -62,7 +62,7 @@ const callers: Caller[] = [
     icon: 'mcp',
     eyebrow: 'MCP clients',
     title: 'create-post',
-    text: 'A tool on the package’s MCP server, listed for a token that names actions:write. Destructive and External actions never appear.',
+    text: 'Listed for a token that names actions:write.',
     needs: 'a token guard',
     tone: 'mcp',
   },

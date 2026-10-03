@@ -33,7 +33,7 @@ const lines: Line[] = [
     <CodeCard file="app/Actions/CreatePost.php">
       <ul class="hiw-anatomy" aria-label="The parts of CreatePost">
         <template v-for="line in lines" :key="line.code">
-          <li v-if="line.group" class="hiw-anatomy__group" aria-hidden="true">{{ line.group }}</li>
+          <li v-if="line.group" class="hiw-anatomy__group">{{ line.group }}</li>
           <li class="hiw-anatomy__line" :class="{ 'is-indent': line.indent, 'has-note': line.note }">
             <code class="hiw-anatomy__code">{{ line.code }}</code>
             <span v-if="line.note" class="hiw-anatomy__note">{{ line.note }}</span>

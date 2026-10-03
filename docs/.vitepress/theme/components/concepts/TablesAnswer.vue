@@ -81,7 +81,7 @@ const most = Math.max(...rows.map((row) => row.posts))
       </li>
       <li>
         <span class="aa-tables-answer__eyebrow aa-tone-agent">the model</span>
-        <span>One sentence on what stands out. It never retypes the rows.</span>
+        <span>Told to say in a sentence or two what stands out, not to repeat the rows.</span>
       </li>
     </ol>
   </div>
@@ -307,6 +307,13 @@ const most = Math.max(...rows.map((row) => row.posts))
 
 .vp-doc .aa-tables-answer__notes code {
   font-size: var(--aa-fs-xs);
+}
+
+@media (forced-colors: active) {
+  .aa-tables-answer__bar i {
+    forced-color-adjust: none;
+    background: CanvasText;
+  }
 }
 
 @container (max-width: 680px) {

@@ -4,8 +4,10 @@
  * and the one pipeline every caller goes through, in the README's order
  * (README.md, the opening paragraph; docs/concepts.md, "The pipeline").
  *
- * The steps are an ordered list of small monospace chips that wrap; tenant
- * membership and handle() carry the tenant and pass accents as on the home page.
+ * The steps are a list of small monospace chips that wrap, unnumbered: the
+ * pipeline page owns the numbers, and authorize() runs before or after
+ * validation. Tenant membership and handle() carry the tenant and pass
+ * accents as on the home page.
  */
 import type { Tone } from '../diagrams/tones'
 
@@ -48,7 +50,6 @@ const steps: { label: string; tone?: Tone }[] = [
   margin: 0;
   padding: 0;
   list-style: none;
-  counter-reset: hiw-step;
 }
 
 .vp-doc .hiw-core__steps > li + li {
@@ -67,21 +68,11 @@ const steps: { label: string; tone?: Tone }[] = [
   font-family: var(--aa-font-mono);
   font-size: var(--aa-fs-xs);
   line-height: 18px;
-  counter-increment: hiw-step;
-}
-
-.hiw-core__step::before {
-  content: counter(hiw-step, decimal-leading-zero);
-  color: var(--aa-muted);
 }
 
 .hiw-core__step:not(.aa-tone-neutral) {
   border-color: var(--tone-line);
   background: var(--tone-fill);
-}
-
-.hiw-core__step:not(.aa-tone-neutral)::before {
-  color: var(--tone);
 }
 
 .hiw-core__dot {

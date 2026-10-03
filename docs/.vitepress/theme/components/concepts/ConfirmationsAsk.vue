@@ -12,6 +12,8 @@
  * action's usual "Done." (docs/asking.md#what-the-model-reads).
  *
  * The fields are drawn, not real inputs, so a reader never tabs into a picture.
+ * The window sits in a plain wrapper because Columns draws its arrow on each
+ * child, outside the child's box, and the Window clips what overflows it.
  *
  *   <Figure caption="…"><ConfirmationsAsk /></Figure>
  */
@@ -22,24 +24,25 @@
     <Flow numbered compact label="An incomplete call that asks the person">
       <Step title="draft-post, title only" code tone="agent" note="the model leaves fields out" />
       <Step title="The form waits" tone="wait" note="MCP's form-elicitation shape" />
-      <Step title="The person submits" note="checked against your rules" branch="declined: nothing runs" />
+      <Step title="The person submits" note="checked against your rules" branch="declined: nothing runs" branch-tone="neutral" />
       <Step title="handle()" code tone="pass" note="with the person's values" />
     </Flow>
     <Columns arrows>
+      <div class="aa-ask__chat">
       <Window title="Copilot" class="aa-ask__window">
         <div class="aa-ask__form" role="group" aria-label="Form">
           <span class="aa-ask__source">Asked by Laravel</span>
           <p class="aa-ask__message">A few details for your post.</p>
           <div class="aa-ask__field">
-            <span class="aa-ask__name">Title <span aria-hidden="true">*</span></span>
+            <span class="aa-ask__name">Title <span aria-hidden="true">*</span><span class="aa-visually-hidden">(required)</span></span>
             <span class="aa-ask__input">Launch notes</span>
           </div>
           <div class="aa-ask__field">
-            <span class="aa-ask__name">Body <span aria-hidden="true">*</span></span>
+            <span class="aa-ask__name">Body <span aria-hidden="true">*</span><span class="aa-visually-hidden">(required)</span></span>
             <span class="aa-ask__input is-area">What shipped this week, and what comes next.</span>
           </div>
           <div class="aa-ask__field">
-            <span class="aa-ask__name">Status <span aria-hidden="true">*</span></span>
+            <span class="aa-ask__name">Status <span aria-hidden="true">*</span><span class="aa-visually-hidden">(required)</span></span>
             <span class="aa-ask__input is-select">Draft<svg aria-hidden="true" viewBox="0 0 12 12" width="12" height="12"><path d="M3 4.5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5" /></svg></span>
           </div>
           <div class="aa-ask__actions">
@@ -49,6 +52,7 @@
           </div>
         </div>
       </Window>
+      </div>
       <div class="aa-ask__after">
         <Card eyebrow="handle() receives" tone="pass">
           <dl class="aa-ask__values">
@@ -105,7 +109,7 @@
   font-size: var(--aa-fs-xs);
 }
 
-.aa-ask__name span {
+.aa-ask__name span[aria-hidden] {
   color: var(--aa-muted);
 }
 

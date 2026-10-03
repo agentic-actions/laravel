@@ -9,7 +9,9 @@
  * Props: label, detail (a second, muted line), tone (colours the dot or icon
  * and the pill), icon (an Icon name instead of the dot), status (the pill's
  * text), mono (the label in the monospace), boxed (a bordered row, as the
- * copilot draws its tool rows).
+ * copilot draws its tool rows). A mono label wraps at spaces, and only breaks
+ * a word that cannot fit; put a zero-width space (\u200B) where a route or
+ * code may break, such as after each slash.
  *
  *   <ListRow boxed icon="check" tone="pass" label="Saved" status="done" />
  */
@@ -87,7 +89,7 @@ withDefaults(
 }
 
 .aa-row__label.is-mono {
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   white-space: normal;
   font-family: var(--aa-font-mono);
   font-size: var(--aa-fs-xs);

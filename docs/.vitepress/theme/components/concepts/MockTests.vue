@@ -1,15 +1,17 @@
 <script setup lang="ts">
 /**
  * MockTests: a test run in a terminal: the caller's test fakes the actions and
- * asserts what ran, and a toolset is pinned (docs/testing.md).
+ * asserts what ran, and a toolset is pinned (docs/testing.md). A zero-width
+ * space before each -> lets a long call wrap there rather than inside it.
  */
+const fake = '$fake\u200B->'
 </script>
 
 <template>
   <Window title="Terminal" width="420px" class="aa-mock-tests">
     <span class="aa-mock-tests__cmd">$ vendor/bin/pest</span>
-    <ListRow mono icon="check" tone="pass" label="$fake->assertRan(CreatePost::class)" />
-    <ListRow mono icon="check" tone="pass" label="$fake->assertNotRan(PublishPost::class)" />
+    <ListRow mono icon="check" tone="pass" :label="`${fake}assertRan(CreatePost::class)`" />
+    <ListRow mono icon="check" tone="pass" :label="`${fake}assertNotRan(PublishPost::class)`" />
     <ListRow mono icon="check" tone="pass" label="assertToolset('default', ['create-post'])" />
     <span class="aa-mock-tests__sum"><Pill tone="pass" solid>3 passed</Pill></span>
   </Window>

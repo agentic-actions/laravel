@@ -5,17 +5,14 @@
  * (docs/mcp.md#tokens-and-abilities, #throttle, docs/concepts.md#the-pipeline).
  *
  * The kit's Hub puts the clients around a centre; the centre here is a framed
- * vertical Flow, with the abilities a token names as Pills inside their step.
- * Below 480px a Step's branch beside its box leaves the box too narrow, so each
- * branch is also drawn as a Pill inside its box, and a container query shows
- * exactly one of the two (the other is display: none, so a screen reader reads
- * it once).
+ * vertical Flow. The steps are not numbered: the pipeline page owns the
+ * pipeline's numbers.
  */
 const steps = [
   { title: 'auth:sanctum', code: true, note: 'reads the bearer token', branch: 'no valid token: 401' },
   { title: 'throttle', note: '60 a minute, per person', branch: 'past it: 429' },
-  { title: 'the MCP door', note: 'Read or Write, and #[Expose] allows MCP', branch: 'Destructive, External: never listed' },
-  { title: 'token abilities', note: 'named by the token; * never counts', branch: 'not named: not listed', abilities: true },
+  { title: 'the MCP door', note: 'Read or Write, and #[Expose] allows MCP', branch: 'never listed' },
+  { title: 'token abilities', note: 'named by the token; * never counts', branch: 'not named: not listed' },
   { title: 'the rest of the pipeline', note: 'membership, authorize(), validation, handle()', tone: 'pass' as const },
 ]
 
@@ -36,15 +33,8 @@ const clients = [
           <Pill tone="tenant" :dot="false">POST mcp/t/{tenant}</Pill>
         </span>
       </div>
-      <Flow vertical numbered label="What each request passes, in order">
-        <Step v-for="step in steps" :key="step.title" :title="step.title" :code="step.code" :note="step.note" :tone="step.tone" :branch="step.branch">
-          <span v-if="step.abilities" class="aa-mcp-server__abilities">
-            <Pill tone="pass">actions:read</Pill>
-            <Pill tone="pass">actions:write</Pill>
-            <Pill tone="tenant">tenant:{id}</Pill>
-          </span>
-          <span v-if="step.branch" class="aa-mcp-server__inbranch"><Pill tone="refuse">{{ step.branch }}</Pill></span>
-        </Step>
+      <Flow vertical label="What each request passes, in order">
+        <Step v-for="step in steps" :key="step.title" :title="step.title" :code="step.code" :note="step.note" :tone="step.tone" :branch="step.branch" />
       </Flow>
     </div>
   </Hub>
@@ -77,37 +67,15 @@ const clients = [
   text-transform: uppercase;
 }
 
-.aa-mcp-server__routes,
-.aa-mcp-server__abilities {
+.aa-mcp-server__routes {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
 }
 
-.aa-mcp-server__abilities,
-.aa-mcp-server__inbranch {
-  margin-top: 4px;
-}
-
-.aa-mcp-server__abilities .aa-pill {
-  white-space: nowrap;
-}
-
-.aa-mcp-server__inbranch {
-  display: none;
-}
-
 @container (max-width: 480px) {
   .aa-mcp-server {
     padding: 12px;
-  }
-
-  .aa-mcp-server .aa-step__branch {
-    display: none;
-  }
-
-  .aa-mcp-server__inbranch {
-    display: flex;
   }
 }
 </style>

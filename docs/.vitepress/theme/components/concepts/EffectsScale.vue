@@ -24,7 +24,7 @@ const groups: { tone: Tone; label: string; effects: Effect[] }[] = [
     label: 'a model may call it',
     effects: [
       { name: 'Read', meaning: 'changes nothing', ability: 'actions:read' },
-      { name: 'Write', meaning: "changes the actor's own data, which the actor could enter again", ability: 'actions:write' },
+      { name: 'Write', meaning: "changes the actor's own data, which the actor could enter again, and affects nobody else yet", ability: 'actions:write' },
     ],
   },
   {

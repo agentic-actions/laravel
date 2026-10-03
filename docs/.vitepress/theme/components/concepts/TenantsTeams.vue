@@ -32,8 +32,9 @@ const calls = [
     </div>
 
     <div class="aa-tenants-teams__grid">
-      <section
+      <div
         v-for="team in teams"
+        role="group"
         :key="team.name"
         class="aa-tenants-teams__team"
         :class="team.member ? 'aa-tone-tenant is-member' : 'aa-tone-neutral is-stranger'"
@@ -54,7 +55,7 @@ const calls = [
             {{ person }}
           </li>
         </ul>
-      </section>
+      </div>
     </div>
 
     <div class="aa-tenants-teams__calls">

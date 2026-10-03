@@ -86,10 +86,12 @@ function checkIncludes(file: string): void {
 }
 
 /**
- * VitePress checks that each linked page exists; this checks that each
- * #fragment a built page links to is an id on its target page.
+ * VitePress checks the links it renders from Markdown; this checks every
+ * internal href in the built HTML, including those a component writes from a
+ * prop or a template: its page (or file) must exist, and its #fragment must be
+ * an id on that page.
  */
-function checkFragments(outDir: string): void {
+function checkLinks(outDir: string): void {
   const decode = (text: string) =>
     text.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>')
   const pages = new Map<string, string>()
@@ -101,25 +103,34 @@ function checkFragments(outDir: string): void {
   }
 
   const ids = new Map([...pages].map(([page, html]) => [page, new Set([...html.matchAll(/\sid="([^"]+)"/g)].map((m) => decode(m[1])))]))
-  const broken: string[] = []
+  const missingPages: string[] = []
+  const missingFragments: string[] = []
 
   for (const [page, html] of pages) {
-    for (const [, href] of html.matchAll(/\shref="([^"]*#[^"]+)"/g)) {
-      if (/^([a-z][a-z\d+.-]*:|\/\/)/i.test(href)) {
+    for (const [, href] of html.matchAll(/\shref="([^"]*)"/g)) {
+      if (href === '' || /^([a-z][a-z\d+.-]*:|\/\/)/i.test(href)) {
         continue
       }
 
-      const [path, fragment] = decode(href).split('#')
+      const [address, fragment] = decode(href).split('#')
+      const path = address.split('?')[0]
       const target = path === '' ? page : posix.join(path.startsWith('/') ? '' : posix.dirname(page), path).replace(/^\//, '').replace(/\.html$/, '').replace(/(^|\/)$/, '$1index')
 
-      if (!ids.get(target)?.has(decodeURIComponent(fragment))) {
-        broken.push(`${page}.html: ${href}`)
+      if (!pages.has(target) && !existsSync(join(outDir, target))) {
+        missingPages.push(`${page}.html: ${href}`)
+      } else if (fragment && !ids.get(target)?.has(decodeURIComponent(fragment))) {
+        missingFragments.push(`${page}.html: ${href}`)
       }
     }
   }
 
-  if (broken.length) {
-    throw new Error(`Found ${broken.length} link(s) to a missing #fragment:\n${broken.join('\n')}`)
+  const problems = [
+    missingPages.length ? `Found ${missingPages.length} link(s) to a missing page:\n${missingPages.join('\n')}` : '',
+    missingFragments.length ? `Found ${missingFragments.length} link(s) to a missing #fragment:\n${missingFragments.join('\n')}` : '',
+  ].filter(Boolean)
+
+  if (problems.length) {
+    throw new Error(problems.join('\n'))
   }
 }
 
@@ -156,7 +167,7 @@ export default defineConfigWithTheme<ThemeConfig>({
     'site/:page': ':page',
   },
 
-  buildEnd: (siteConfig) => checkFragments(siteConfig.outDir),
+  buildEnd: (siteConfig) => checkLinks(siteConfig.outDir),
 
   markdown: {
     // Every token measures at least 4.6:1 on the code background, in both themes.

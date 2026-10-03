@@ -7,13 +7,13 @@ description: How a Read action's rows reach the person as a table, with the char
 
 A Read action can answer with a table: the person reads your query's rows, and the model says what stands out.
 
-<Figure caption="A copilot answer that shows a table. The numbers come from the query, and the sentence comes from the model.">
+<Figure caption="A copilot answer that shows a table.">
 <TablesAnswer />
 </Figure>
 
 ## Declare columns, return rows
 
-Implement `ShowsTable` on a Read action. `columns()` says what each row may show, and `handle()` returns the rows: a query, an array or a generator. Nothing outside the declared columns leaves the server, on any surface.
+Implement `ShowsTable` on a Read action. `columns()` says what each row may show, and `handle()` returns the rows: a query, an array or a generator. Nothing outside the declared columns leaves the server, on any surface. See [Show a table](/data#show-a-table) and [Column types](/data#column-types).
 
 <CodeCard file="app/Actions/PostsPerAuthor.php">
 
@@ -37,17 +37,17 @@ final class PostsPerAuthor extends Action implements ShowsTable
 
 ## One table, two readers
 
-In a copilot turn, the rows split. The person gets every row, up to 500. The model gets a short copy: the first 20 rows and an instruction to comment, not repeat. So the numbers on screen are the query's own and are never retyped by the model.
+In a copilot turn, the rows split.
 
 <Figure caption="The same rows, cut two ways after the columns allowlist.">
 <TablesSplit />
 </Figure>
 
-Everywhere else, such as a route, MCP or `actions:run`, the caller gets the same table as JSON. See [What each surface gets](/data#what-each-surface-gets).
+Everywhere else, a route and MCP get the same table as JSON, and `actions:run` prints it as a table. See [What each surface gets](/data#what-each-surface-gets).
 
 ## The chart follows the shape
 
-The package draws no chart. It names one in `table.chart`, from the columns alone: one row of numbers is a <Pill>metric</Pill>, a date column then numbers is a <Pill>line</Pill>, and a text column then numbers is a <Pill>bar</Pill> of up to 50 rows. One chart shows one unit, so the percentage above stays out of the bar chart of posts. Your page draws it with your own components. See [The chart](/data#the-chart).
+The package draws no chart. It names one in `table.chart`, from the columns and the number of rows: one row of numbers is a <Pill>metric</Pill>, a date column then numbers is a <Pill>line</Pill>, and a text or yes-or-no column then numbers is a <Pill>bar</Pill> of up to 50 rows. One chart shows one unit, so the percentage above stays out of the bar chart of posts. Your page draws it with your own components. See [The chart](/data#the-chart).
 
 ## Kept and refreshed
 
