@@ -21,6 +21,8 @@ Name a tenant model once, and every call runs inside one team: the URL names it,
 
 Set `tenant.model`, `tenant.parameter` (the route segment, `team`) and `tenant.membership`, a class that answers whether a person may enter a tenant. From then on every action is tenant-scoped, so mount them under the parameter:
 
+<CodeCard file="routes/web.php">
+
 ```php
 Route::middleware('auth')
     ->prefix('teams/{team}')
@@ -28,7 +30,9 @@ Route::middleware('auth')
     ->group(fn () => Actions::routes(tenant: true));
 ```
 
-An action that belongs to the account rather than a team, such as editing a profile, sets `$tenantScoped = false` and goes in a group without the prefix. [All the keys](/concepts#tenants).
+</CodeCard>
+
+An action that belongs to the account rather than a team, such as editing a profile, sets `$tenantScoped = false` and goes in a group without the prefix. See [Tenants](/concepts#tenants) for every key.
 
 ## A stranger sees a 404
 
@@ -40,7 +44,7 @@ The package checks membership itself, on every surface, before your code reads t
 
 ## Queries stay inside the team
 
-`$context->find(Post::class, $id)` looks the row up through your `tenant.scope`, so another team's post is simply not found. Its conditions stay in one group, so an `orWhere` in your scope cannot widen what `find()` reaches. [Security](/security) lists the guarantees.
+`$context->find(Post::class, $id)` looks the row up through your `tenant.scope`, so another team's post is simply not found. Its conditions stay in one group, so an `orWhere` in your scope cannot widen what `find()` reaches. See [Security](/security) for the guarantees.
 
 ## Tokens and MCP
 
@@ -48,7 +52,7 @@ The package checks membership itself, on every surface, before your code reads t
 <TenantsToken />
 </Figure>
 
-A token binds to a tenant with the ability `tenant:{key}`, by primary key. Over MCP, tenant-scoped actions live on the tenant path, such as `mcp/t/{team}`, and the rest on the base path, so a client that needs both connects both URLs. [MCP and tenants](/mcp#tenants).
+A token binds to a tenant with the ability `tenant:{key}`, by primary key. Over MCP, tenant-scoped actions live on the tenant path, such as `mcp/t/{team}`, and the rest on the base path, so a client that needs both connects both URLs. See [Tenants](/mcp#tenants) in the MCP guide.
 
 ## The copilot, the queue and the feed
 

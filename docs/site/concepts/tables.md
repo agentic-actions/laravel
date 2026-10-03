@@ -43,15 +43,15 @@ In a copilot turn, the rows split. The person gets every row, up to 500. The mod
 <TablesSplit />
 </Figure>
 
-Everywhere else, such as a route, MCP or `actions:run`, the caller gets the same table as JSON. See [what each surface gets](/data#what-each-surface-gets).
+Everywhere else, such as a route, MCP or `actions:run`, the caller gets the same table as JSON. See [What each surface gets](/data#what-each-surface-gets).
 
 ## The chart follows the shape
 
-The package draws no chart. It names one in `table.chart`, from the columns alone: one row of numbers is a <Pill>metric</Pill>, a date column then numbers is a <Pill>line</Pill>, and a text column then numbers is a <Pill>bar</Pill> of up to 50 rows. One chart shows one unit, so the percentage above stays out of the bar chart of posts. Your page draws it with your own components ([the chart](/data#the-chart)).
+The package draws no chart. It names one in `table.chart`, from the columns alone: one row of numbers is a <Pill>metric</Pill>, a date column then numbers is a <Pill>line</Pill>, and a text column then numbers is a <Pill>bar</Pill> of up to 50 rows. One chart shows one unit, so the percentage above stays out of the bar chart of posts. Your page draws it with your own components. See [The chart](/data#the-chart).
 
 ## Kept and refreshed
 
-A table is kept with a stored conversation, so a reload shows the rows the model described. When the action is exposed on the web, Refresh runs it again as the person, with the same input, through every check its route gets. Another person or another tenant gets a 404 ([refresh](/data#refresh)).
+A table is kept with a stored conversation, so a reload shows the rows the model described. When the action is exposed on the web, Refresh runs it again as the person, with the same input, through every check its route gets. Another person or another tenant gets a 404. See [Refresh](/data#refresh).
 
 ## Datasets: the agent asks
 
@@ -66,8 +66,12 @@ A dataset lets the model ask its own question within names you declare: dimensio
 </Flow>
 </Figure>
 
+<CodeCard file="The model's arguments">
+
 ```json
 {"measures": ["posts"], "by": ["author"], "since": "-1m", "compare": true}
 ```
 
-Read the [datasets reference](/data#datasets) and the security notes on [tables](/security#tables) and [datasets](/security#datasets).
+</CodeCard>
+
+See [Datasets](/data#datasets), and the security notes on [tables](/security#tables) and [datasets](/security#datasets).

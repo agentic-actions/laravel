@@ -4,8 +4,9 @@
  * in its slot, highlighted by the site's Shiki themes like any other block.
  *
  * Use it where code is part of a picture: the action at a Hub's centre, the
- * two sides of a before-and-after. Elsewhere a plain fenced block is enough.
- * Leave a blank line after the opening tag and before the closing one.
+ * two sides of a before-and-after. On the concept pages every code block sits
+ * in one, with the file it belongs in as the tab. Leave a blank line after the
+ * opening tag and before the closing one.
  *
  * Props: file (the tab's label, such as "app/Actions/CreatePost.php"), tone
  * (tints the border, rarely needed).
@@ -87,5 +88,9 @@ withDefaults(defineProps<{ file?: string; tone?: Tone }>(), { tone: 'neutral' })
 
 .aa-codecard__body.vp-doc > p {
   margin: 0;
+}
+
+.vp-doc > div > .aa-codecard {
+  margin: 16px 0;
 }
 </style>
