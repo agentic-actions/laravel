@@ -1,0 +1,93 @@
+{
+    "actions": {
+        "create-post": {
+            "agents": [
+                "default"
+            ],
+            "class": "Workbench\\App\\Actions\\CreatePost",
+            "effect": "write",
+            "mcp": true,
+            "tenant_scoped": false,
+            "web": true
+        },
+        "delete-post": {
+            "agents": [
+                "team"
+            ],
+            "class": "Workbench\\App\\Actions\\DeletePost",
+            "effect": "destructive",
+            "mcp": false,
+            "tenant_scoped": true,
+            "web": true
+        },
+        "draft-team-post": {
+            "agents": [
+                "team"
+            ],
+            "class": "Workbench\\App\\Actions\\DraftTeamPost",
+            "effect": "write",
+            "mcp": false,
+            "tenant_scoped": true,
+            "web": true
+        },
+        "import-posts": {
+            "agents": [
+                "default"
+            ],
+            "class": "Workbench\\App\\Actions\\ImportPosts",
+            "effect": "write",
+            "mcp": true,
+            "tenant_scoped": true,
+            "web": true
+        },
+        "list-team-posts": {
+            "agents": [
+                "default"
+            ],
+            "class": "Workbench\\App\\Actions\\ListTeamPosts",
+            "effect": "read",
+            "mcp": true,
+            "tenant_scoped": true,
+            "web": true
+        },
+        "post-stats": {
+            "agents": [
+                "default"
+            ],
+            "class": "Workbench\\App\\Actions\\PostStats",
+            "effect": "read",
+            "mcp": false,
+            "tenant_scoped": false,
+            "web": true
+        },
+        "posts": {
+            "agents": [
+                "default"
+            ],
+            "class": "Workbench\\App\\Actions\\Posts",
+            "effect": "read",
+            "mcp": false,
+            "tenant_scoped": false,
+            "web": true
+        },
+        "publish-post": {
+            "agents": [
+                "team"
+            ],
+            "class": "Workbench\\App\\Actions\\PublishPost",
+            "effect": "external",
+            "mcp": false,
+            "tenant_scoped": true,
+            "web": true
+        }
+    },
+    "agents": {
+        "Workbench\\App\\Ai\\BlogAssistant": [
+            "default"
+        ],
+        "Workbench\\App\\Ai\\TeamAssistant": [
+            "team"
+        ]
+    },
+    "version": 1
+}

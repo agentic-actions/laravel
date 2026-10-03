@@ -1,0 +1,49 @@
+<?php
+
+namespace {{ namespace }};
+
+use AgenticActions\Action;
+use AgenticActions\ActionContext;
+use AgenticActions\Effect;
+use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\Support\ValidatedInput;
+
+/**
+ * Discovered, and exposed nowhere yet. Add #[Expose] once the effect, the description and authorize() are decided.
+ */
+final class {{ class }} extends Action
+{
+    /**
+     * What an agent reads before it calls this action.
+     */
+    protected string $description = '';
+
+    /**
+     * Read, Write, Destructive or External. Undeclared on purpose: nothing remote reaches this action until you choose.
+     */
+    protected ?Effect $effect = null;
+
+    /**
+     * The input this action accepts.
+     */
+    public function schema(JsonSchema $schema): array
+    {
+        return [];
+    }
+
+    /**
+     * Denied until you decide who may run this action.
+     */
+    public function authorize(ActionContext $context): bool
+    {
+        return false;
+    }
+
+    /**
+     * Do the work.
+     */
+    public function handle(ActionContext $context, ValidatedInput $input): mixed
+    {
+        return null;
+    }
+}

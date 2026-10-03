@@ -1,0 +1,15 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: 6
+    paths:
+        - config
+        - src
+        # The two @api traits are used only by an app's classes. PHPStan analyses a trait through a class that
+        # uses it, so one user of each is listed here: the workbench's agent and the PHPUnit-style kit test.
+        - workbench/app/Ai/BlogAssistant.php
+        - tests/Feature/Testing/PhpUnitStyleTest.php
+    configDirectories:
+        - config
+    treatPhpDocTypesAsCertain: false

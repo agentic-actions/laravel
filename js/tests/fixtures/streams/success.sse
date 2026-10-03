@@ -1,0 +1,40 @@
+data: {"type":"start","messageId":"id-1"}
+
+data: {"type":"start-step"}
+
+data: {"type":"data-action","id":"a:id-2","data":{"action":"create-post","label":"Saving\u2026","status":"running","effect":"write"}}
+
+data: {"type":"data-action","id":"a:id-2","data":{"action":"create-post","label":"Draft saved","status":"done","effect":"write","touches":["posts"]}}
+
+data: {"type":"data-action","id":"a:id-3","data":{"action":"CountDrafts","label":"Counting your drafts\u2026","status":"running"}}
+
+data: {"type":"data-action","id":"a:id-3","data":{"action":"CountDrafts","label":"Counted your drafts","status":"done"}}
+
+data: {"type":"finish-step"}
+
+data: {"type":"start-step"}
+
+data: {"type":"text-start","id":"id-4"}
+
+data: {"type":"text-delta","id":"id-4","delta":"I"}
+
+data: {"type":"text-delta","id":"id-4","delta":" saved"}
+
+data: {"type":"text-delta","id":"id-4","delta":" the"}
+
+data: {"type":"text-delta","id":"id-4","delta":" draft."}
+
+data: {"type":"text-delta","id":"id-4","delta":" You"}
+
+data: {"type":"text-delta","id":"id-4","delta":" have"}
+
+data: {"type":"text-delta","id":"id-4","delta":" one."}
+
+data: {"type":"text-end","id":"id-4"}
+
+data: {"type":"finish-step"}
+
+data: {"type":"finish","finishReason":"stop"}
+
+data: [DONE]
+

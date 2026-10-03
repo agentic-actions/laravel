@@ -1,0 +1,30 @@
+data: {"type":"start","messageId":"id-1"}
+
+data: {"type":"start-step"}
+
+data: {"type":"text-start","id":"id-2"}
+
+data: {"type":"text-delta","id":"id-2","delta":"I"}
+
+data: {"type":"text-delta","id":"id-2","delta":" will"}
+
+data: {"type":"text-delta","id":"id-2","delta":" ask"}
+
+data: {"type":"text-delta","id":"id-2","delta":" you"}
+
+data: {"type":"text-delta","id":"id-2","delta":" first."}
+
+data: {"type":"text-end","id":"id-2"}
+
+data: {"type":"tool-input-available","toolCallId":"call_1","toolName":"delete-post","input":{}}
+
+data: {"type":"tool-approval-request","toolCallId":"call_1","approvalId":"call_1"}
+
+data: {"type":"data-approval","id":"approval:call_1","data":{"action":"delete-post","effect":"destructive","label":"Waiting for your confirmation","title":"Delete this post? This cannot be undone.","summary":[{"label":"Post","value":"Launch notes"},{"label":"Status","value":"draft"}],"confirm":"Confirm","decline":"Decline"}}
+
+data: {"type":"finish-step"}
+
+data: {"type":"finish","finishReason":"tool-calls"}
+
+data: [DONE]
+

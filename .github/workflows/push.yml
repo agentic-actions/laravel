@@ -1,0 +1,76 @@
+name: push
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: PHP ${{ matrix.php }} - Laravel 13 - ${{ matrix.ai && 'laravel/ai and laravel/passport' || 'no laravel/ai or laravel/passport' }}
+    runs-on: ubuntu-24.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.3', '8.5']
+        ai: [true, false]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: pdo_sqlite
+          tools: composer:v2
+          coverage: none
+
+      - name: Install dependencies
+        run: composer update --prefer-stable --prefer-dist --no-interaction --no-progress --with="laravel/framework:^13.15"
+
+      - name: Remove laravel/ai and laravel/passport
+        if: ${{ ! matrix.ai }}
+        run: composer remove --dev laravel/ai laravel/passport --no-interaction --no-progress
+
+      - name: Check code style
+        run: vendor/bin/pint --test
+
+      - name: Run static analysis
+        if: ${{ matrix.ai }}
+        run: vendor/bin/phpstan --memory-limit=-1 --no-progress
+
+      - name: Run tests
+        if: ${{ matrix.ai }}
+        run: vendor/bin/pest --exclude-group=database
+
+      - name: Run tests without laravel/ai or laravel/passport
+        if: ${{ ! matrix.ai }}
+        run: vendor/bin/pest --exclude-group=database --testsuite=Unit,Feature
+
+  js:
+    name: npm client
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm --prefix js ci
+
+      - name: Run checks
+        run: npm --prefix js run check

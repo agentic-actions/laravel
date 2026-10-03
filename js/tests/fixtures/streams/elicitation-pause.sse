@@ -1,0 +1,40 @@
+data: {"type":"start","messageId":"id-1"}
+
+data: {"type":"start-step"}
+
+data: {"type":"text-start","id":"id-2"}
+
+data: {"type":"text-delta","id":"id-2","delta":"I"}
+
+data: {"type":"text-delta","id":"id-2","delta":" can"}
+
+data: {"type":"text-delta","id":"id-2","delta":" draft"}
+
+data: {"type":"text-delta","id":"id-2","delta":" it"}
+
+data: {"type":"text-delta","id":"id-2","delta":" once"}
+
+data: {"type":"text-delta","id":"id-2","delta":" you"}
+
+data: {"type":"text-delta","id":"id-2","delta":" add"}
+
+data: {"type":"text-delta","id":"id-2","delta":" a"}
+
+data: {"type":"text-delta","id":"id-2","delta":" few"}
+
+data: {"type":"text-delta","id":"id-2","delta":" details."}
+
+data: {"type":"text-end","id":"id-2"}
+
+data: {"type":"tool-input-available","toolCallId":"call_1","toolName":"draft-team-post","input":{}}
+
+data: {"type":"tool-approval-request","toolCallId":"call_1","approvalId":"call_1"}
+
+data: {"type":"data-elicitation","id":"elicitation:call_1","data":{"action":"draft-team-post","params":{"mode":"form","message":"A few details for your post.","requestedSchema":{"type":"object","properties":{"title":{"type":"string","title":"Title","minLength":1,"maxLength":120,"default":"Launch notes"},"body":{"type":"string","title":"Body","maxLength":5000,"x-agentic-actions":{"widget":"textarea"}},"status":{"type":"string","title":"Status","oneOf":[{"const":"draft","title":"Draft"},{"const":"published","title":"Published"}]}},"required":["title","body","status"]}},"labels":{"source":"Asked by Laravel","submit":"Submit","decline":"Decline","cancel":"Not now"}}}
+
+data: {"type":"finish-step"}
+
+data: {"type":"finish","finishReason":"tool-calls"}
+
+data: [DONE]
+

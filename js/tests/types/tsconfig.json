@@ -1,0 +1,15 @@
+{
+    "extends": "../../tsconfig.json",
+    "compilerOptions": {
+        "noEmit": true,
+        "baseUrl": "../..",
+        "paths": {
+            "@agentic-actions/client": ["./src/index.ts"],
+            "@agentic-actions/client/inertia": ["./src/inertia.ts"],
+            "@agentic-actions/client/react": ["./src/react.ts"],
+            "@agentic-actions/client/ai-sdk": ["./src/ai-sdk.ts"],
+            "@agentic-actions/client/views": ["./src/views.ts"]
+        }
+    },
+    "include": ["./*.ts", "./*.tsx", "../fixtures/*.ts"]
+}

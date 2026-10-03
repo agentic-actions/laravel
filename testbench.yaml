@@ -1,0 +1,31 @@
+laravel: '@testbench'
+
+providers:
+  - AgenticActions\AgenticActionsServiceProvider
+  - Laravel\Sanctum\SanctumServiceProvider
+  - Inertia\ServiceProvider
+  - Spatie\Permission\PermissionServiceProvider
+  - Workbench\App\Providers\WorkbenchServiceProvider
+
+migrations:
+  - vendor/laravel/sanctum/database/migrations
+  - workbench/database/migrations
+
+seeders:
+  - Workbench\Database\Seeders\DatabaseSeeder
+
+workbench:
+  start: '/'
+  install: true
+  health: false
+  discovers:
+    web: true
+    api: true
+    commands: false
+    components: false
+    factories: true
+    views: true
+  build:
+    - create-sqlite-db
+    - db-wipe
+    - migrate-fresh

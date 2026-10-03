@@ -1,0 +1,474 @@
+#!/usr/bin/env bash
+#
+# Walk the fresh-app path, the setup a new user follows, in a real, new Laravel application.
+#
+#   bin/fresh-app plain       composer create-project laravel/laravel; actions:install --mcp runs php artisan install:api
+#   bin/fresh-app livewire    composer create-project laravel/livewire-starter-kit
+#
+# The app is built in build/fresh-app-{mode} (git-ignored), or under $FRESH_APP_ROOT when it is set. The package is
+# installed from a Composer path repository with symlinks off. The repository points at a copy of this checkout that
+# leaves out vendor/, node_modules/, build/ and .git, because Composer mirrors a path repository whole, apart from the
+# paths .gitattributes marks export-ignore. Nothing is pushed or published.
+#
+# Every item of section 1.2 is asserted; the script stops at the first failure and prints what it saw. The output of
+# composer, npm and the app's own tests goes to build/fresh-app-{mode}.log.
+
+set -euo pipefail
+
+# The assertions read the human console output. laravel/pao, in the new skeleton's require-dev, compacts that output
+# when it detects a coding agent in the environment; this turns it off, whoever runs the script.
+export PAO_DISABLE=true
+
+mode="${1:-}"
+
+case "$mode" in
+    plain) kit='laravel/laravel' ;;
+    livewire) kit='laravel/livewire-starter-kit' ;;
+    *)
+        echo 'Usage: bin/fresh-app {plain|livewire}' >&2
+        exit 64
+        ;;
+esac
+
+repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+stubs="$repo/bin/fresh-app-stubs"
+root="${FRESH_APP_ROOT:-$repo/build}"
+
+mkdir -p "$root"
+root="$(cd "$root" && pwd)"
+
+case "$root/" in
+    "$repo/build/"*) ;;
+    "$repo/"*)
+        echo "FRESH_APP_ROOT must be outside the repository, or under its build/ directory: $root" >&2
+        exit 64
+        ;;
+esac
+
+app="$root/fresh-app-$mode"
+package="$root/fresh-app-$mode-package"
+log="$root/fresh-app-$mode.log"
+
+out=''
+
+item() {
+    printf '\n==> [item %s] %s\n' "$1" "$2"
+}
+
+ok() {
+    printf '    ok  %s\n' "$1"
+}
+
+fail() {
+    printf '    FAILED  %s\n' "$1" >&2
+
+    if [[ -n "$out" ]]; then
+        printf '%s\n' '--- output ---' "$out" '--------------' >&2
+    fi
+
+    printf 'The full log is %s\n' "$log" >&2
+    exit 1
+}
+
+# Run a command in the app, record its output in $out and the log, and require an exit code (default 0).
+#   expect_exit <code> <description> <command...>
+expect_exit() {
+    local expected="$1" description="$2" code=0
+    shift 2
+
+    printf '\n$ %s\n' "$*" >>"$log"
+    out="$("$@" 2>&1)" || code=$?
+    printf '%s\n' "$out" >>"$log"
+
+    [[ "$code" == "$expected" ]] || fail "$description: exit code $code, expected $expected"
+
+    ok "$description"
+}
+
+# Run a command whose output only matters when it fails.
+quietly() {
+    local description="$1" code=0
+    shift
+
+    printf '\n$ %s\n' "$*" >>"$log"
+    out="$("$@" 2>&1)" || code=$?
+    printf '%s\n' "$out" >>"$log"
+
+    if [[ "$code" != 0 ]]; then
+        out="$(printf '%s\n' "$out" | tail -n 40)"
+        fail "$description: exit code $code"
+    fi
+
+    ok "$description"
+}
+
+# Require $out to contain a string.
+contains() {
+    [[ "$out" == *"$1"* ]] || fail "expected the output to contain: $1"
+
+    ok "prints: $1"
+}
+
+# Require $out not to contain a string.
+lacks() {
+    [[ "$out" != *"$1"* ]] || fail "expected the output not to contain: $1"
+
+    ok "does not print: $1"
+}
+
+# Require a file to contain a string.
+file_contains() {
+    grep -qF -- "$2" "$1" || { out="$(cat "$1")"; fail "expected $1 to contain: $2"; }
+
+    ok "${1#"$app/"} contains: $2"
+}
+
+# Require a file not to contain an extended regular expression.
+file_lacks_match() {
+    ! grep -qE -- "$2" "$1" || { out="$(cat "$1")"; fail "expected $1 not to match: $2"; }
+
+    ok "${1#"$app/"} has no line matching: $2"
+}
+
+artisan() {
+    php artisan "$@"
+}
+
+rm -rf "$app" "$package"
+: >"$log"
+
+printf 'Fresh-app path, %s mode, in %s\n' "$mode" "$app"
+
+# ----------------------------------------------------------------------------------------------------------------------
+item 1 "composer require agentic-actions/laravel from a path repository"
+
+quietly "composer create-project $kit" \
+    composer create-project "$kit" "$app" --no-interaction --prefer-dist --no-progress
+
+cd "$app"
+
+quietly 'copy the checkout without vendor/, node_modules/, build/ and .git' \
+    rsync -a --delete \
+        --exclude='/.git' --exclude='/vendor' --exclude='/build' --exclude='node_modules' \
+        --exclude='/composer.lock' --exclude='/.phpunit.cache' --exclude='/workbench/storage' \
+        "$repo/" "$package/"
+
+quietly 'add the path repository' \
+    composer config repositories.agentic-actions "{\"type\": \"path\", \"url\": \"$package\", \"options\": {\"symlink\": false}}"
+
+quietly 'composer require agentic-actions/laravel:@dev' \
+    composer require 'agentic-actions/laravel:@dev' --no-interaction --no-progress
+
+installed="$app/vendor/agentic-actions/laravel"
+
+[[ -f "$installed/js/dist/index.js" && -f "$installed/js/package.json" ]] || fail 'the installed package has no js/dist or js/package.json'
+ok 'the installed package ships js/dist and js/package.json'
+
+[[ ! -e "$installed/tests" && ! -e "$installed/workbench" && ! -e "$installed/docs" ]] || fail 'the installed package ships tests/, workbench/ or docs/'
+ok 'the installed package leaves out tests/, workbench/ and docs/'
+
+expect_exit 0 'php artisan about lists the package' artisan about --only=agentic_actions
+contains 'Agentic Actions'
+
+# ----------------------------------------------------------------------------------------------------------------------
+printf '\n==> %s\n' "php artisan actions:install sets the app up: web routes, and MCP with Sanctum on the plain app"
+
+# The plain app gets MCP too: actions:install runs install:api, which requires Sanctum, then the migrations.
+if [[ "$mode" == plain ]]; then
+    features=(--web --mcp)
+else
+    features=(--web)
+fi
+
+expect_exit 0 "actions:install --no-interaction ${features[*]}" artisan actions:install --no-interaction "${features[@]}"
+contains 'config/agentic-actions.php'
+contains "routes/web.php   Route::middleware('auth')->group(fn () => Actions::routes());"
+contains 'php artisan actions:check --update'
+[[ -f config/agentic-actions.php ]] || fail 'config/agentic-actions.php was not published'
+ok 'config/agentic-actions.php exists'
+
+if [[ "$mode" == plain ]]; then
+    contains 'API scaffolding installed.'
+    contains 'app/Models/User.php   use Laravel\Sanctum\HasApiTokens;'
+    file_contains composer.json '"laravel/sanctum"'
+    [[ -f routes/api.php ]] || fail 'install:api wrote no routes/api.php'
+    ok 'install:api wrote routes/api.php'
+
+    expect_exit 0 'migrate:status' artisan migrate:status
+    contains 'create_personal_access_tokens_table'
+    lacks 'Pending'
+fi
+
+expect_exit 0 'actions:install again publishes nothing twice' artisan actions:install --no-interaction "${features[@]}"
+contains 'ALREADY THERE'
+lacks 'PUBLISHED'
+lacks 'Running migrations.'
+
+# ----------------------------------------------------------------------------------------------------------------------
+item 3 "php artisan make:agentic-action CreatePost writes a stub exposed nowhere"
+
+expect_exit 0 'make:agentic-action CreatePost' artisan make:agentic-action CreatePost
+
+stub="$app/app/Actions/CreatePost.php"
+file_lacks_match "$stub" '^#\[Expose'
+file_contains "$stub" 'protected ?Effect $effect = null;'
+file_contains "$stub" 'return false;'
+
+expect_exit 0 'actions:list shows the stub' artisan actions:list
+contains 'web        skipped: no #[Expose]'
+
+# ----------------------------------------------------------------------------------------------------------------------
+item 4 "the developer writes the class: #[Expose], the effect, a description, schema(), authorize() and handle()"
+
+cp "$stubs/CreatePost.php" "$app/app/Actions/CreatePost.php"
+cp "$stubs/Post.php" "$app/app/Models/Post.php"
+cp "$stubs/create_posts_table.php" "$app/database/migrations/2026_09_24_000000_create_posts_table.php"
+ok 'copied CreatePost, Post and the posts migration'
+
+quietly 'add posts() to User' php "$stubs/patch-user.php"
+quietly 'php artisan migrate --seed' artisan migrate --seed --force --no-interaction
+
+# ----------------------------------------------------------------------------------------------------------------------
+item 2 "the route lines: actions:list prints both before they exist, then they are added"
+
+expect_exit 0 'actions:list before any generated route' artisan actions:list
+contains 'web        open, no route yet'
+contains 'No generated routes yet. Add them inside your own middleware:'
+contains "routes/web.php   Route::middleware('auth')->group(fn () => Actions::routes());"
+contains "routes/api.php   Route::middleware('auth:sanctum')->name('api.')->group(fn () => Actions::routes());"
+
+# Import the facade next to the Route facade, then append the route line.
+add_route_line() {
+    local file="$1" line="$2"
+
+    php -r '
+        [$file, $line] = [$argv[1], $argv[2]];
+        $source = file_get_contents($file);
+        $import = "use AgenticActions\\Facades\\Actions;";
+        if (! str_contains($source, $import)) {
+            $source = str_replace("use Illuminate\\Support\\Facades\\Route;", "use Illuminate\\Support\\Facades\\Route;\n".$import, $source);
+        }
+        file_put_contents($file, rtrim($source)."\n\n".$line."\n");
+    ' "$file" "$line"
+}
+
+add_route_line routes/web.php "Route::middleware('auth')->group(fn () => Actions::routes());"
+ok "routes/web.php: Route::middleware('auth')->group(fn () => Actions::routes());"
+
+if [[ "$mode" == plain ]]; then
+    add_route_line routes/api.php "Route::middleware('auth:sanctum')->name('api.')->group(fn () => Actions::routes());"
+    ok "routes/api.php: Route::middleware('auth:sanctum')->name('api.')->group(fn () => Actions::routes());"
+
+    quietly 'add HasApiTokens to User, as install:api asks' php "$stubs/patch-user.php" --api-tokens
+
+    # The page the Blade form lives on (item 7).
+    mkdir -p resources/views/posts
+    cp "$stubs/create.blade.php" resources/views/posts/create.blade.php
+    printf "\nRoute::middleware('auth')->get('posts/create', fn () => view('posts.create'))->name('posts.create');\n" >>routes/web.php
+    ok 'added the Blade form at GET /posts/create'
+fi
+
+expect_exit 0 'actions:list after the route lines' artisan actions:list
+lacks 'No generated routes yet.'
+contains 'POST /actions/create-post (actions.create-post)'
+
+# ----------------------------------------------------------------------------------------------------------------------
+item 5 "actions:check asks for the snapshot, and --update writes actions.exposure.json"
+
+expect_exit 1 'actions:check fails without a snapshot' artisan actions:check
+contains 'run php artisan actions:check --update'
+
+expect_exit 0 'actions:check --update' artisan actions:check --update
+[[ -f actions.exposure.json ]] || fail 'actions.exposure.json was not written'
+ok 'actions.exposure.json exists'
+
+expect_exit 0 'actions:check passes' artisan actions:check
+contains 'Every check passed'
+
+# install:api's GET /api/user authenticates with Sanctum, the MCP guard, and checks no ability.
+if [[ "$mode" == plain ]]; then
+    contains '[Token routes] The route [GET|HEAD api/user] authenticates with the MCP guard [sanctum] and checks no ability'
+fi
+
+# ----------------------------------------------------------------------------------------------------------------------
+item 6 "actions:list shows the web route, the CLI and where MCP is served; agents are skipped with the reason"
+
+expect_exit 0 'actions:list' artisan actions:list
+contains 'POST /actions/create-post (actions.create-post)'
+
+if [[ "$mode" == plain ]]; then
+    contains 'POST /api/actions/create-post (api.actions.create-post)'
+fi
+
+contains 'agents     skipped: laravel/ai is not installed'
+
+# MCP needs a token guard, not laravel/ai: install:api gave the plain app Sanctum, and the Livewire kit has none.
+if [[ "$mode" == plain ]]; then
+    contains 'mcp        open  POST mcp/actions'
+else
+    contains 'mcp        open, not mounted: mcp.middleware names no configured guard'
+fi
+
+contains 'cli        php artisan actions:run create-post'
+
+# ----------------------------------------------------------------------------------------------------------------------
+item 10 "php artisan actions:run create-post title=Hi body=... --as=1"
+
+expect_exit 0 'actions:run create-post --as=1' artisan actions:run create-post title=Hi 'body=Hello from the CLI' --as=1
+contains '"title": "Hi"'
+contains '"id": '
+
+expect_exit 1 'actions:run refuses the same title again' artisan actions:run create-post title=Hi body=Again --as=1
+contains 'You already have a post with that title.'
+
+# ----------------------------------------------------------------------------------------------------------------------
+item 11 "php artisan actions:typescript writes a file for the npm root and the web mount"
+
+quietly 'npm ci in the installed client' npm --prefix "$installed/js" ci --no-audit --no-fund
+quietly 'build the installed client' npm --prefix "$installed/js" run build
+quietly 'npm install ./vendor/agentic-actions/laravel/js' npm install --no-audit --no-fund ./vendor/agentic-actions/laravel/js
+
+expect_exit 0 'actions:typescript' artisan actions:typescript
+contains 'Wrote resources/js/agentic/actions.ts.'
+
+typescript="$app/resources/js/agentic/actions.ts"
+imports="$(grep -oE "from '[^']+'" "$typescript" | sort -u)"
+[[ "$imports" == "from '@agentic-actions/client'" ]] || { out="$imports"; fail 'the file imports something other than @agentic-actions/client'; }
+ok 'the file imports only @agentic-actions/client'
+
+file_contains "$typescript" "url: '/actions/create-post'"
+header="$(head -n 1 "$typescript")"
+[[ "$header" =~ ^//\ Generated\ by\ \`php\ artisan\ actions:typescript\`\ from\ agentic-actions/laravel\ [^\ ]+\.\ Do\ not\ edit\.$ ]] \
+    || { out="$header"; fail 'the version stamp is missing'; }
+ok "stamped: ${header#// }"
+
+expect_exit 0 'actions:typescript --check' artisan actions:typescript --check
+
+quietly 'npm install typescript and @inertiajs/core' npm install --no-audit --no-fund --save-dev 'typescript@~5.9.3' '@inertiajs/core@^3.0'
+cp "$stubs/actions-check.ts" resources/js/agentic/actions-check.ts
+cp "$stubs/tsconfig.fresh-app.json" tsconfig.fresh-app.json
+expect_exit 0 "the file type-checks against @inertiajs/core's UrlMethodPair" npx --no-install tsc -p tsconfig.fresh-app.json
+
+# ----------------------------------------------------------------------------------------------------------------------
+if [[ "$mode" == plain ]]; then
+    item '7, 8, 13' "a PHPUnit test in the app: the Blade form, the token client, an unknown guard, and actions:check"
+
+    php -r '
+        $file = "bootstrap/app.php";
+        $source = file_get_contents($file);
+        $source = preg_replace("/->withExceptions\(function \(Exceptions \\\$exceptions\): void \{\n/", "\$0        \$exceptions->dontFlash(\x27card_number\x27);\n", $source, 1, $count);
+        if ($count !== 1) { fwrite(STDERR, "bootstrap/app.php has no withExceptions() closure.\n"); exit(1); }
+        file_put_contents($file, $source);
+    '
+    file_contains bootstrap/app.php "\$exceptions->dontFlash('card_number');"
+
+    cp "$stubs/FreshAppPathTest.php" tests/Feature/FreshAppPathTest.php
+    expect_exit 0 'php artisan test --filter=FreshAppPathTest' artisan test --filter=FreshAppPathTest
+    contains '5 passed'
+else
+    item '9, 13' "a Livewire component calls CreatePost::run(), and a Refusal becomes a field error"
+
+    mkdir -p app/Livewire resources/views/livewire
+    cp "$stubs/CreatePostForm.php" app/Livewire/CreatePostForm.php
+    cp "$stubs/create-post-form.blade.php" resources/views/livewire/create-post-form.blade.php
+    cp "$stubs/CreatePostFormTest.php" tests/Feature/CreatePostFormTest.php
+    ok 'copied CreatePostForm, its view and CreatePostFormTest'
+
+    expect_exit 0 'php artisan test --filter=CreatePostFormTest' artisan test --filter=CreatePostFormTest
+    contains '4 passed'
+fi
+
+# ----------------------------------------------------------------------------------------------------------------------
+item 12 "composer require laravel/ai: create-post joins the default toolset, and an agent calls it"
+
+quietly 'composer require laravel/ai' composer require laravel/ai --no-interaction --no-progress
+
+expect_exit 0 'actions:install --no-interaction --copilot --tenancy' artisan actions:install --no-interaction --copilot --tenancy
+contains "laravel/ai's conversation tables"
+contains 'The agentic_conversations table'
+contains 'Continue each conversation with Actions::conversation($agent, $user, $tenant)'
+
+expect_exit 0 'migrate:status' artisan migrate:status
+contains 'create_agent_conversations_table'
+contains 'create_agentic_conversations_table'
+lacks 'Pending'
+
+expect_exit 1 'actions:check fails: the snapshot is stale' artisan actions:check
+contains 'actions.exposure.json is stale: review the change, then run php artisan actions:check --update. Changed: create-post.'
+
+expect_exit 0 'actions:check --update' artisan actions:check --update
+
+agents="$(php -r 'echo json_encode(json_decode(file_get_contents("actions.exposure.json"), true)["actions"]["create-post"]["agents"]);')"
+[[ "$agents" == '["default"]' ]] || { out="$agents"; fail 'create-post.agents is not ["default"]'; }
+ok 'actions.exposure.json: create-post.agents is ["default"]'
+
+mkdir -p app/Ai
+cp "$stubs/BlogAssistant.php" app/Ai/BlogAssistant.php
+cp "$stubs/BlogAssistantTest.php" tests/Feature/BlogAssistantTest.php
+ok 'copied BlogAssistant and BlogAssistantTest'
+
+expect_exit 0 'actions:check --update records the agent' artisan actions:check --update
+expect_exit 0 'actions:list names the agent' artisan actions:list
+contains 'agents     toolsets: default'
+contains 'default: App\Ai\BlogAssistant'
+
+expect_exit 0 'php artisan test --filter=BlogAssistantTest' artisan test --filter=BlogAssistantTest
+contains '4 passed'
+
+# ----------------------------------------------------------------------------------------------------------------------
+item 13 "actions:check passes inside the app's PHPUnit suite, with laravel/ai installed"
+
+if [[ "$mode" == plain ]]; then
+    filter='FreshAppPathTest|BlogAssistantTest'
+else
+    filter='CreatePostFormTest|BlogAssistantTest'
+fi
+
+expect_exit 0 "php artisan test --filter='$filter'" artisan test --filter="$filter"
+contains 'actions check passes'
+lacks 'failed'
+
+# ----------------------------------------------------------------------------------------------------------------------
+printf '\n==> %s\n' "php artisan optimize caches the generated routes, then the manifest"
+
+expect_exit 0 'php artisan optimize' artisan optimize
+contains 'agentic-actions'
+[[ -f bootstrap/cache/agentic-actions.php ]] || fail 'optimize wrote no actions manifest'
+ok 'bootstrap/cache/agentic-actions.php exists'
+
+routes_cache="$(ls bootstrap/cache/routes-v*.php)"
+[[ ! bootstrap/cache/agentic-actions.php -ot "$routes_cache" ]] || fail 'the manifest is older than the route cache'
+ok 'the manifest is no older than the route cache'
+
+expect_exit 0 'route:list reads the cached generated route' artisan route:list --name=actions.create-post
+contains 'actions/create-post'
+
+expect_exit 0 'actions:check --production passes with cached routes' artisan actions:check --production
+contains 'Every check passed'
+
+expect_exit 0 'actions:run works with cached config and routes' artisan actions:run create-post title=Cached body=Hello --as=1
+contains '"title": "Cached"'
+
+expect_exit 0 'php artisan optimize:clear' artisan optimize:clear
+[[ ! -f bootstrap/cache/agentic-actions.php ]] || fail 'optimize:clear left the actions manifest'
+ok 'optimize:clear removed the actions manifest'
+
+# ----------------------------------------------------------------------------------------------------------------------
+printf '\n==> %s\n' "composer remove laravel/ai: the agent left behind is skipped with a warning"
+
+quietly 'composer remove laravel/ai' composer remove laravel/ai --no-interaction --no-progress
+
+expect_exit 0 'actions:list' artisan actions:list
+contains 'agents     skipped: laravel/ai is not installed'
+contains 'App\Ai\BlogAssistant could not be loaded: Trait "Laravel\Ai\Promptable" not found'
+
+expect_exit 1 'actions:check fails only on the stale snapshot' artisan actions:check
+contains '[Discovery] App\Ai\BlogAssistant could not be loaded'
+
+if [[ "$mode" == plain ]]; then
+    contains '1 failure, 2 warnings.'
+else
+    contains '1 failure, 1 warning.'
+fi
+
+printf '\nThe fresh-app path passed in %s mode (%s).\n' "$mode" "$app"

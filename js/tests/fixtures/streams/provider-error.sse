@@ -1,0 +1,20 @@
+data: {"type":"start","messageId":"id-1"}
+
+data: {"type":"start-step"}
+
+data: {"type":"data-action","id":"a:id-2","data":{"action":"create-post","label":"Saving\u2026","status":"running","effect":"write"}}
+
+data: {"type":"data-action","id":"a:id-2","data":{"action":"create-post","label":"Draft saved","status":"done","effect":"write","touches":["posts"]}}
+
+data: {"type":"finish-step"}
+
+data: {"type":"start-step"}
+
+data: {"type":"text-start","id":"id-3"}
+
+data: {"type":"text-delta","id":"id-3","delta":"Partly"}
+
+data: {"type":"error","errorText":"The reply stopped before it finished. Anything already saved stays saved."}
+
+data: [DONE]
+

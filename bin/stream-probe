@@ -1,0 +1,370 @@
+#!/usr/bin/env bash
+#
+# The stream probe: copilot rows through nginx + PHP-FPM, one tool at a time, and a disconnect mid-turn that still
+# stores the turn.
+#
+#   STREAM_PROBE_ROOT=<scratch dir> bin/stream-probe
+#
+# It builds a fresh Laravel app in $STREAM_PROBE_ROOT/app, installs the package from a Composer path repository that
+# points at a copy of this checkout (as bin/fresh-app does) with laravel/ai ^1.0, and serves it with Laravel Herd as
+# $STREAM_PROBE_SITE.test (default aa-stream-probe): over HTTP/1.1 first, then over HTTP/2 + TLS after herd secure.
+# Each turn calls two tools in one provider step, and each tool takes two seconds, so the two done rows must arrive
+# about two seconds apart. The script stops at the first failure and prints what it saw; herd unsecure and herd unlink
+# run on every exit. Nothing is pushed or published.
+#
+# Needs: Laravel Herd (nginx + PHP-FPM), curl with HTTP/2, Google Chrome (or $STREAM_PROBE_CHROME), Node 22 and perl,
+# and this checkout's js/node_modules (npm --prefix js ci) for the wire check.
+
+set -euo pipefail
+
+export PAO_DISABLE=true
+
+# Decimal points, whatever the machine's locale.
+export LC_ALL=C
+
+repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+stubs="$repo/bin/stream-probe-stubs"
+root="${STREAM_PROBE_ROOT:-}"
+site="${STREAM_PROBE_SITE:-aa-stream-probe}"
+
+if [[ -z "$root" ]]; then
+    echo 'Set STREAM_PROBE_ROOT to a scratch directory outside the repository.' >&2
+    exit 64
+fi
+
+mkdir -p "$root"
+root="$(cd "$root" && pwd)"
+
+case "$root/" in
+    "$repo/"*)
+        echo "STREAM_PROBE_ROOT must be outside the repository: $root" >&2
+        exit 64
+        ;;
+esac
+
+app="$root/app"
+package="$root/package"
+bodies="$root/bodies"
+log="$root/stream-probe.log"
+
+out=''
+linked=false
+secured=false
+
+step() {
+    printf '\n==> [step %s] %s\n' "$1" "$2"
+}
+
+ok() {
+    printf '    ok  %s\n' "$1"
+}
+
+fail() {
+    printf '    FAILED  %s\n' "$1" >&2
+
+    if [[ -n "$out" ]]; then
+        printf '%s\n' '--- output ---' "$out" '--------------' >&2
+    fi
+
+    printf 'The full log is %s\n' "$log" >&2
+    exit 1
+}
+
+# Run a command whose output only matters when it fails.
+quietly() {
+    local description="$1" code=0
+    shift
+
+    printf '\n$ %s\n' "$*" >>"$log"
+    out="$("$@" 2>&1)" || code=$?
+    printf '%s\n' "$out" >>"$log"
+
+    if [[ "$code" != 0 ]]; then
+        out="$(printf '%s\n' "$out" | tail -n 40)"
+        fail "$description: exit code $code"
+    fi
+
+    ok "$description"
+}
+
+# Undo herd secure and herd link, however the script ends.
+cleanup() {
+    if [[ "$secured" == true ]]; then
+        herd unsecure "$site" >>"$log" 2>&1 || true
+    fi
+
+    if [[ "$linked" == true ]]; then
+        herd unlink "$site" >>"$log" 2>&1 || true
+        printf '\nherd unsecure and herd unlink ran for %s.\n' "$site"
+    fi
+}
+
+trap cleanup EXIT
+
+# The wall clock, in seconds with milliseconds, the same clock the app's microtime() reads.
+now() {
+    perl -MTime::HiRes=time -e 'printf "%.3f", time'
+}
+
+# Prefix each non-empty line read from standard input with the seconds since the command started.
+stamp() {
+    perl -MTime::HiRes=time -ne 'BEGIN { $| = 1; $t0 = time } chomp; next if $_ eq ""; printf "%7.3f  %s\n", time - $t0, $_'
+}
+
+# Wait until the site answers at the given base URL (nginx restarts after herd link and herd secure), and print what
+# PHP-FPM reports about itself.
+#   answering <base url>
+answering() {
+    local base="$1" attempt
+
+    for attempt in $(seq 1 40); do
+        if out="$(curl -sS --fail "$base/probe/info" 2>&1)"; then
+            ok "$base answers: $out"
+
+            return
+        fi
+
+        sleep 0.5
+    done
+
+    fail "$base does not answer"
+}
+
+# One full turn: stream it with curl -N, save the body and the stamped lines, and check the headers and the timing.
+#   full_turn <run> <base url> <expected status line> <curl options...>
+full_turn() {
+    local run="$1" base="$2" status="$3"
+    shift 3
+
+    if ! curl -sS -N "$@" -D "$bodies/$run.headers" "$base/probe/stream?run=$run" 2>"$bodies/$run.curl" | tee "$bodies/wire/$run.sse" | stamp >"$bodies/$run.timed"; then
+        out="$(cat "$bodies/$run.curl" "$bodies/$run.timed")"
+        fail "$run: curl failed"
+    fi
+
+    out="$(cat "$bodies/$run.headers" "$bodies/$run.timed")"
+    printf '\n$ curl -N %s %s/probe/stream?run=%s\n%s\n' "$*" "$base" "$run" "$out" >>"$log"
+
+    head -n 1 "$bodies/$run.headers" | grep -qF "$status" || fail "$run: expected the status line $status"
+    ok "$run: $(head -n 1 "$bodies/$run.headers" | tr -d '\r')"
+
+    grep -qiF 'content-type: text/event-stream; charset=utf-8' "$bodies/$run.headers" || fail "$run: Content-Type"
+    grep -qiF 'cache-control: no-cache, no-transform, private' "$bodies/$run.headers" || fail "$run: Cache-Control"
+    ok "$run: Content-Type text/event-stream; charset=utf-8, Cache-Control no-cache, no-transform, private"
+
+    local first second end
+    first="$(awk '/"type":"data-action"/ && /"status":"done"/ { print $1; exit }' "$bodies/$run.timed")"
+    second="$(awk '/"type":"data-action"/ && /"status":"done"/ { n++; if (n == 2) { print $1; exit } }' "$bodies/$run.timed")"
+    end="$(awk '/data: \[DONE\]/ { print $1 }' "$bodies/$run.timed")"
+
+    [[ -n "$first" && -n "$second" && -n "$end" ]] || fail "$run: expected two done rows and [DONE]"
+
+    grep -E '"type":"data-action"|\[DONE\]' "$bodies/$run.timed" | sed 's/^/        /'
+
+    awk -v a="$first" -v b="$second" 'BEGIN { exit !(b - a >= 1.5) }' || fail "$run: the done rows arrived $first s and $second s after the request, less than 1.5 s apart"
+    ok "$run: the done rows arrived at $first s and $second s ($(awk -v a="$first" -v b="$second" 'BEGIN { printf "%.3f", b - a }') s apart)"
+
+    awk -v a="$first" -v d="$end" 'BEGIN { exit !(d - a >= 1.5) }' || fail "$run: the first done row arrived less than 1.5 s before [DONE]"
+    ok "$run: the first done row arrived $(awk -v a="$first" -v d="$end" 'BEGIN { printf "%.3f", d - a }') s before [DONE] (at $end s)"
+}
+
+# A turn cut by curl --max-time 3, right after the first done row: its partial body, then the run's record.
+#   cut_turn <run> <base url> <curl options...>
+cut_turn() {
+    local run="$1" base="$2" code=0 cut
+    shift 2
+
+    curl -sS -N "$@" --max-time 3 "$base/probe/stream?run=$run" >"$bodies/$run.partial" 2>>"$log" || code=$?
+    cut="$(now)"
+
+    [[ "$code" == 28 ]] || { out="$(cat "$bodies/$run.partial")"; fail "$run: curl exited $code, expected 28 (the --max-time cut)"; }
+
+    out="$(cat "$bodies/$run.partial")"
+    [[ "$(grep -c '"status":"done"' "$bodies/$run.partial")" == 1 ]] || fail "$run: the partial body should hold exactly one done row"
+    ! grep -qF '[DONE]' "$bodies/$run.partial" || fail "$run: the partial body should not reach [DONE]"
+    ok "$run: curl cut the stream after the first done row, at $cut"
+
+    stored "$run" "$base" "$cut"
+}
+
+# After a disconnect: wait for the turn to end, then require both tools to have run, the second after the cut, and the
+# turn stored with both messages completed.
+#   stored <run> <base url> <unix seconds of the cut>
+stored() {
+    local run="$1" base="$2" cut="$3"
+
+    sleep 4.5
+
+    out="$(curl -sS "$base/probe/runs?run=$run")"
+    printf '\n$ curl %s/probe/runs?run=%s\n%s\n' "$base" "$run" "$out" >>"$log"
+
+    php -r '
+        $runs = json_decode($argv[1], true, flags: JSON_THROW_ON_ERROR);
+        $cut = (float) $argv[2];
+        $tools = array_column($runs["tools"], "tool");
+        $messages = array_map(fn (array $m): string => $m["role"].":".$m["status"], $runs["messages"]);
+        if ($tools !== ["slow-note", "SlowLookup"]) { fwrite(STDERR, "tools: ".json_encode($tools)."\n"); exit(1); }
+        if ((float) $runs["tools"][1]["finished_at"] <= $cut) { fwrite(STDERR, "the second tool finished before the cut\n"); exit(1); }
+        if ($messages !== ["user:completed", "assistant:completed"]) { fwrite(STDERR, "messages: ".json_encode($messages)."\n"); exit(1); }
+        foreach ($runs["tools"] as $tool) {
+            printf("        %-10s %.3f -> %.3f  connection_status %d\n", $tool["tool"], $tool["started_at"], $tool["finished_at"], $tool["connection_status"]);
+        }
+        printf("        the second tool finished %.3f s after the cut\n", $runs["tools"][1]["finished_at"] - $cut);
+    ' "$out" "$cut" || fail "$run: the turn did not complete after the disconnect"
+
+    ok "$run: both tools ran, the second after the disconnect, and the turn was stored with both messages completed"
+}
+
+rm -rf "$app" "$package" "$bodies"
+mkdir -p "$bodies/wire"
+: >"$log"
+
+printf 'Stream probe in %s, served as %s.test\n' "$root" "$site"
+
+if herd links 2>/dev/null | grep -qF "| $site "; then
+    echo "A Herd link named $site exists already: unlink it, or set STREAM_PROBE_SITE." >&2
+    exit 1
+fi
+
+# ----------------------------------------------------------------------------------------------------------------------
+step 1 'a fresh app with the package from a path repository, laravel/ai ^1.0, and SQLite'
+
+quietly 'composer create-project laravel/laravel' \
+    composer create-project laravel/laravel "$app" --no-interaction --prefer-dist --no-progress
+
+cd "$app"
+
+quietly 'copy the checkout without vendor/, node_modules/, build/ and .git' \
+    rsync -a --delete \
+        --exclude='/.git' --exclude='/vendor' --exclude='/build' --exclude='node_modules' \
+        --exclude='/composer.lock' --exclude='/.phpunit.cache' --exclude='/workbench/storage' --exclude='/.idea' \
+        "$repo/" "$package/"
+
+quietly 'add the path repository' \
+    composer config repositories.agentic-actions "{\"type\": \"path\", \"url\": \"$package\", \"options\": {\"symlink\": false}}"
+
+quietly 'composer require agentic-actions/laravel:@dev laravel/ai:^1.0' \
+    composer require 'agentic-actions/laravel:@dev' 'laravel/ai:^1.0' --no-interaction --no-progress
+
+quietly "publish laravel/ai's configuration and migrations" \
+    php artisan vendor:publish --provider='Laravel\Ai\AiServiceProvider' --no-interaction
+
+# ----------------------------------------------------------------------------------------------------------------------
+step 2 'the probe files: ProbeAssistant, SlowNote, SlowLookup, the gateway, probe_runs, the routes and the page'
+
+mkdir -p app/Actions app/Ai/Tools
+cp "$stubs/ProbeAssistant.php" app/Ai/ProbeAssistant.php
+cp "$stubs/OneStepTwoToolsGateway.php" app/Ai/OneStepTwoToolsGateway.php
+cp "$stubs/SlowNote.php" app/Actions/SlowNote.php
+cp "$stubs/SlowLookup.php" app/Ai/Tools/SlowLookup.php
+cp "$stubs/create_probe_runs_table.php" database/migrations/2026_09_25_000000_create_probe_runs_table.php
+cp "$stubs/probe-routes.php" routes/probe.php
+cp "$stubs/probe-page.blade.php" resources/views/probe-page.blade.php
+printf "\nrequire __DIR__.'/probe.php';\n" >>routes/web.php
+ok 'copied the stubs, and required routes/probe.php from routes/web.php'
+
+quietly 'php artisan migrate --seed' php artisan migrate --seed --force --no-interaction
+
+rm -f storage/logs/laravel.log
+
+printf '\n    versions:\n'
+printf '        PHP %s (CLI)\n' "$(php -r 'echo PHP_VERSION;')"
+printf '        %s\n' "$(herd --version 2>&1 | head -n 1)"
+printf '        laravel/framework %s, laravel/ai %s, agentic-actions/laravel %s\n' \
+    "$(composer show laravel/framework --format=json | php -r 'echo json_decode(stream_get_contents(STDIN))->versions[0];')" \
+    "$(composer show laravel/ai --format=json | php -r 'echo json_decode(stream_get_contents(STDIN))->versions[0];')" \
+    "$(composer show agentic-actions/laravel --format=json | php -r 'echo json_decode(stream_get_contents(STDIN))->versions[0];')"
+printf '        %s\n' "$(curl --version | head -n 1)"
+printf '        Node %s\n' "$(node --version)"
+
+# ----------------------------------------------------------------------------------------------------------------------
+step 3 "herd link $site (HTTP/1.1)"
+
+quietly "herd link $site" herd link "$site"
+linked=true
+
+http="http://$site.test"
+answering "$http"
+
+# ----------------------------------------------------------------------------------------------------------------------
+step 4 'timing over HTTP/1.1: the two done rows arrive about two seconds apart'
+
+full_turn h1 "$http" 'HTTP/1.1 200' --http1.1
+
+# ----------------------------------------------------------------------------------------------------------------------
+step 6 'a disconnect over HTTP/1.1: curl --max-time 3'
+
+cut_turn d1 "$http" --http1.1
+
+# ----------------------------------------------------------------------------------------------------------------------
+step 3 "herd secure $site (HTTP/2 + TLS)"
+
+quietly "herd secure $site" herd secure "$site"
+secured=true
+
+https="https://$site.test"
+answering "$https"
+
+# ----------------------------------------------------------------------------------------------------------------------
+step 4 'timing over HTTP/2: the two done rows arrive about two seconds apart'
+
+full_turn h2 "$https" 'HTTP/2 200' --http2
+
+# ----------------------------------------------------------------------------------------------------------------------
+step 6 'a disconnect over HTTP/2: curl --max-time 3'
+
+cut_turn d2 "$https" --http2
+
+# ----------------------------------------------------------------------------------------------------------------------
+step 5 "headless Chrome: the network log and the page's reader see the rows two seconds apart"
+
+export STREAM_PROBE_PROFILE="$root/chrome-profile"
+
+code=0
+out="$(node "$repo/bin/stream-probe-browser.mjs" full "$https/probe/page?run=br1" "$bodies/wire/br1.sse" 2>&1)" || code=$?
+printf '\n$ node bin/stream-probe-browser.mjs full\n%s\n' "$out" >>"$log"
+printf '%s\n' "$out" | sed 's/^/        /'
+[[ "$code" == 0 ]] || fail 'the browser check'
+ok 'Chrome saw the rows one tool at a time'
+
+# ----------------------------------------------------------------------------------------------------------------------
+step 6 'a disconnect in Chrome: the tab closes right after the first done row'
+
+code=0
+out="$(node "$repo/bin/stream-probe-browser.mjs" close "$https/probe/page?run=br2" 2>&1)" || code=$?
+printf '\n$ node bin/stream-probe-browser.mjs close\n%s\n' "$out" >>"$log"
+printf '%s\n' "$out" | sed 's/^/        /'
+[[ "$code" == 0 ]] || fail 'the tab was not closed'
+
+closed="$(printf '%s\n' "$out" | awk '/^CLOSED / { print $2 }')"
+ok "the tab closed at $closed"
+
+stored br2 "$https" "$closed"
+
+# ----------------------------------------------------------------------------------------------------------------------
+step 6 'nothing in the logs'
+
+if [[ -s storage/logs/laravel.log ]]; then
+    out="$(tail -n 40 storage/logs/laravel.log)"
+    fail 'the app wrote storage/logs/laravel.log'
+fi
+
+ok 'the app wrote nothing to storage/logs/laravel.log'
+
+# ----------------------------------------------------------------------------------------------------------------------
+step 7 "the recorded bodies validate against ai 7's chunk schema"
+
+quietly "WIRE_STREAMS=$bodies/wire node --test js/tests/runtime/wire.test.mjs" \
+    env WIRE_STREAMS="$bodies/wire" node --test "$repo/js/tests/runtime/wire.test.mjs"
+
+printf '%s\n' "$out" | grep -E '^# (tests|pass|fail)' | sed 's/^/        /'
+
+# ----------------------------------------------------------------------------------------------------------------------
+step 8 "herd unsecure and herd unlink"
+
+quietly "herd unsecure $site" herd unsecure "$site"
+secured=false
+
+quietly "herd unlink $site" herd unlink "$site"
+linked=false
+
+printf '\nThe stream probe passed (%s).\n' "$root"

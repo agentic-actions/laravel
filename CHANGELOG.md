@@ -1,0 +1,318 @@
+# Changelog
+
+## 0.9.0-beta.1 - 2026-10-03
+
+The first public release. The package now installs from Packagist and its npm client from npm. Every version below installed only from a private repository, and its entry describes it as it was.
+
+### Upgrading
+
+- **Require `^0.9@beta`**, and remove the private VCS repository from `composer.json` and its token from `auth.json` or `COMPOSER_AUTH`. `^0.9@alpha` reaches this version too.
+- **npm:** `@agentic-actions/client` is published. Installing it from `file:vendor/agentic-actions/laravel/js` still works and keeps the two versions matched; from npm, install the same version as the Composer package.
+- **A token bound to a tenant reaches only tenant-scoped actions,** on every door, as it always did over MCP. Under a tenant's URL that also serves account-level actions (one `Actions::routes()` group with no `tenant:` argument), a token with `tenant:{key}` now gets a 404 for them, and an account-level action its call reaches in-process or on the queue is refused too.
+- **A body never supplies the tenant's route parameter.** On a route that names the tenant, a body key named like the tenant parameter (`team` for `{team}`) is dropped, as every other route parameter already was. An action that read it from `rules()` now sees it missing.
+- **A `pattern()` ends at the end of the value.** It compiles with the `D` modifier, so `^[a-z]+$` refuses `"admin\n"`, as the JSON Schema it is advertised as does.
+
+### Fixed
+
+- **A generated web route caps an oversized list** before validating it, as every other door already did: a list its rules cap reaches the validator with at most one item past the cap, so a long list for a `unique()` list costs no more than a short one.
+- **A table's caption keeps a filter value inside its quotes.** A text value is plain text, as a card's is, and its quotation marks become apostrophes, so it cannot close its quotes or reorder the caption around it.
+- **The tables' refresh route answers an unknown tenant as it answers a foreign one**, with the same JSON 404.
+
+### Documentation
+
+- The README describes the public install, and `composer.json` and the npm manifest name the repository, its issues and its security policy.
+- `docs/security.md` says where a turn that laravel/ai queues stops: its actions run with the person's session access, not the limits of the token that started it.
+
+## 0.9.0-alpha.1 - 2026-10-01
+
+Tables and datasets: a Read action can show the person its rows as a table in the copilot, drawn by the page, while the model reads a short copy and says what stands out. A table is kept with its conversation for reloads and can be refreshed on the web. A dataset declares dimensions and measures over one model, and the model asks its questions within those names while the package writes the query. Also fixes for `ActionContext::find()` under a tenant scope that ends in an `orWhere`, and for an oversized list on any action. It installs only from the private repository, and the API can change before 0.9.0.
+
+### Upgrading
+
+- **Publish the tables' migration for a copilot.** `php artisan actions:install --copilot` publishes `agentic_views` (the tag `agentic-actions-views-migrations`, beside laravel/ai's conversations table) and asks to migrate. Without it, tables still show live, nothing is kept, and `actions:check` warns in its Tables row once an agent is offered a table action.
+- **Schedule the pruning** of kept tables whose conversation is gone: `Schedule::command('model:prune', ['--model' => [\AgenticActions\Streaming\AgenticView::class]])->daily();`.
+- **A tenant scope's own conditions are now one group.** Every condition your `tenant.scope` class or `scopeUsing()` closure adds is wrapped in one group, so what comes after them narrows the tenant's rows. With an `orWhere` at the top level, or an `or` inside a raw condition, `find($key)` now returns the asked row or 404; before, it could return another row of the tenant. Any other scope reads the same rows; its SQL gains parentheses.
+- **`_views` is reserved.** Every `Actions::routes()` group gains the refresh route `_views/{view}`, named `{routes.name}_views`, and an action named `_views` is refused, as `_changes` is.
+- **npm:** the root gains `viewsOf()`, `formatCell()`, `refreshView()` and the types `TableColumn`, `TableData` and `ViewData`, and `ActionDataParts` gains `view`, so a `useChat` panel types the new part. `/react` is unchanged.
+- The actions manifest stays version 5.
+
+### Added
+
+- **Tables.** A Read action that implements `ShowsTable` declares `columns()` with `Column` (text, integer, number, money, percent, date, datetime and boolean), and returns its rows as a list, a collection or a query, which the package limits to `views.max_rows` (500). The columns are its output allowlist, and every surface returns one shape: `columns`, `rows`, `truncated`, `chart` (the chart the rows' shape calls for: a line, a bar, a metric or none) and `caption`. `actions:run` prints it as a table.
+- **In the copilot**, a table arrives as a `data-view` part after its row, rebuilt from an allowlist, at most ten a turn. The model reads a compact copy: the count, the first `views.model_rows` rows (20) with each text cut to 80 characters, the columns' keys, labels and descriptions, and an instruction to say what stands out instead of repeating the rows. A `prompt()` turn and MCP read the whole output, since no person sees a table there.
+- **Kept tables.** With an agent whose conversations are stored, each table shown is kept in `agentic_views` with its conversation. `Transcript::forUseChat(..., agent: $agent)` returns it in its message after a reload, while the agent's tools still offer its action, under the columns the action declares now.
+- **Refresh.** A kept table of an action exposed on the web can be refreshed by the person it was shown to: `POST {group}/actions/_views/{ref}` runs the stored input again through the web door, with every check, and leaves the kept table as it was. A call that ran on fixed input, and an action whose class declares its own middleware, are not refreshable.
+- **npm: `@agentic-actions/client/views`** with `<ActionTable>`: an unstyled table, cells written by `Intl` in the page's language, numbers aligned to the end, the caption, a note when the rows were cut, the time, and Refresh with `onRefresh` for a chart beside it.
+- **Datasets.** A class that extends `AgenticActions\Datasets\Dataset` names a `$model` and declares `dimensions()` (one time dimension, text, and backed enums, on the model or through one `BelongsTo`) and `measures()` (count, countDistinct, sum, avg, min, max, a conditional count or sum, money, and the ratio of two measures). The package generates its call, made only of the declared names: measures, `by` or a `grain` (day, week from Monday, month, quarter or year), a range in the dataset's zone (`-30d`, `-8w`, a date), filters, `compare` with the previous period, sort and limit. It writes the query itself: in the tenant's scope as `find()` applies it, with the conditions `scope()` adds nested so they only narrow, every value a binding, times bucketed in the dataset's zone across its offset changes, and nulls last on every driver. The answer is a table with a caption that says what was asked, and a refresh asks for the same dates. SQLite, MySQL, MariaDB and Postgres are supported. The package sets no time limit: a statement timeout your connection raises answers with a fixed sentence, and `datasets.connection` runs datasets on a connection of their own, such as a read replica with a limit. `actions:check` reports each declaration error, the columns a dataset reads against `agents.forbidden_output_keys`, an unsupported driver, and a dataset connection with no time limit. Inside a tenant, a related row is read in the tenant's scope too, and `$shared` names the relations whose rows every tenant shares.
+
+### Fixed
+
+- **An oversized list costs no more than a short one.** On every action, a list its rules cap (`array` or `list` with `max:N`) is cut to one item past the cap before validation reads it. Validation reads at most one item past the cap, so an oversized list is refused as fast as one item too many.
+- **`ActionContext::find()` under a tenant scope with a top-level `or`.** A scope such as `->where('team_id', $team->id)->orWhere('shared', true)` made `find($key)` read `team_id = ? or shared = ? and id = ?`, which returned the tenant's first row for any key. The scope's conditions are now grouped, raw ones included.
+
+## 0.8.0-alpha.2 - 2026-09-29
+
+Fixes since 0.8.0-alpha.1: a form or confirmation for a call carrying a number that is not finite, a nested field's error in the npm client, and two passages of the docs. It installs only from the private repository, and the API can change before 0.8.0.
+
+### Upgrading
+
+- **Nothing to change.** `^0.8@alpha` reaches this version; the actions manifest stays version 5.
+
+### Fixed
+
+- **A call whose arguments hold a number that is not finite.** An argument a JSON body decodes to infinity or NaN (`1e400`), even under a key agents are not offered, made the fingerprint of a form or a confirmation throw, so each such call reported an exception and got the refusal instead of the form. The fingerprint now holds those numbers, and the call is asked or refused as any other; validation still refuses the number when the call runs.
+- **npm: a nested field's error is no longer a refusal.** `useAction()` read a 422 on a nested or list field, which Laravel keys by its dot path (`author.name`, `tags.0`), as one on a key the form does not hold, so the field's message also became `refusal`. A key now belongs to the form when the form holds its first segment; one it does not hold, such as a route parameter, is still a refusal.
+- **docs.** `docs/asking.md` says that an action whose `authorize()` takes `ValidatedInput` shows its form, with `ask()`'s choices and defaults, before that check, and `docs/mcp.md` that `ask()`'s choices and defaults must stay stable between requests for an MCP answer to verify.
+
+## 0.8.0-alpha.1 - 2026-09-29
+
+Every surface now answers an input as the web does: an empty or blank value reads as null for every field, a number that is not finite is refused, and nullable list items and empty object items keep their place. It also carries the fixes of an outside review (a confirmed call that runs for over a minute, `actions:install`'s exit code, output unions, TypeScript for a required key with a default) and of a fresh-install walkthrough of the console. It installs only from the private repository, and the API can change before 0.8.0.
+
+### Upgrading
+
+- **Require `^0.8@alpha`.** `^0.7@alpha` does not reach this version.
+- **Redeploy with `php artisan optimize`**, or `actions:cache`, as usual. The actions manifest stays version 5, so a 0.7 manifest still loads.
+- **A `number` field refuses a value that is not finite.** `INF`, `-INF` and `NAN`, and a numeric string too large for a float such as `"1e999"`, now fail validation with "must be a number" before `handle()`; before, they reached it.
+- **A list whose items are nullable accepts null items.** `$schema->array()->items($schema->string()->nullable())` takes `[null]`, and a nullable object item's required keys apply only when the item is not null; before, both failed validation.
+- **An output union may answer differently.** A scalar or a list under an `anyOf` whose first branch is an object now comes out as the value instead of `null` or `{}`, and so does a scalar or a list under a union of types (`$schema->union([...])`); a scalar under an `anyOf` or a union that declares only objects and lists comes out as `null`.
+- **An empty string, or one of only whitespace, reads as null for every field on every surface.** `""` or `"  "` for any field, a string field included, now fails validation with the message the web gives, or becomes null where the field is nullable, from `run()`, `actions:run`, a queued run, an agent and MCP too, as it already did on the web behind Laravel's `TrimStrings` and `ConvertEmptyStringsToNull`. An action that accepted `""` from those callers, for an optional string, an enum of strings, or a string with `min()`, `pattern()` or `format()`, now gets null or a validation error, as web callers already did: declare the field `nullable()` to receive null. The same holds for a key only `rules()` declares, a union `rules()` owns, and the values inside a list without `items()` or an object without properties. A string of only whitespace for `password`, `password_confirmation` or `current_password` at the top level stays as given, as `TrimStrings` leaves those keys; no other string is trimmed, and an omitted key stays omitted.
+- **A turn that answers a confirmation holds its conversation for up to `approvals.ttl`.** A request that answers a confirmation, or sends new words to a turn waiting on one, now holds that conversation until its turn ends for `approvals.ttl` seconds at most (1800 by default), where it was 60: keep your deploy's limit for a turn (`request_terminate_timeout`, Octane's `max_execution_time`) under it. A request that dies holding it leaves the conversation answering 409 until then. The reservation is now a Laravel cache lock: the database store keeps it in the `cache_locks` table, which Laravel's cache migration creates, and a store without locks answers 409 to every such request.
+- **`actions:install` exits with a failure when a step fails.** A publish that fails or leaves nothing behind, `install:api` or `migrate` failing now makes it exit 1 after "A step above failed", skipping the steps that need it and the migrations question; before, it exited 0. A script that ran it where `migrate` refuses, such as production without `--force`, now stops there. Declining one of its questions still exits 0.
+- **npm: a definition cannot name GET.** The client's `Method` type is now `'post' | 'put' | 'patch' | 'delete'`, so `action({ method: 'get', … })` is a type error, and `callAction()` throws before sending a GET or HEAD definition, which it could never send: the input travels as the body. Generated definitions use POST and are unaffected; call a GET route with Inertia or `fetch` directly.
+- **A number field that fails its type no longer reports its bounds.** An `integer()` or `number()` with `min()`, `max()` or `multipleOf()` stops at its first failed rule, so a value of the wrong type gets only "must be an integer" or "must be a number", without a bound's message.
+- **An empty string for a file field reads as null.** In an app that skips `ConvertEmptyStringsToNull`, `""` for a `format('binary')` field now fails with "must be a file", or becomes null where the field is nullable, as it does with the middleware; before, `handle()` received `""`.
+- **A list item that gives none of its object's keys keeps its place.** `[{}, {"note": "A"}]` for a list of objects whose keys are optional now reaches `handle()` as `[[], ["note" => "A"]]`; before, the empty item was left out, and a list of only such items left the input altogether. An array with integer keys that `rules()` owns keeps its own order.
+- **Run `php artisan actions:typescript` after updating.** A required key with a `default()` is now required in the generated types, as the server requires it: code that left one out gains a type error where the server answered 422. Lists are now written `Array<T>` instead of `T[]`, the same types, so `actions:typescript --check` reports the file stale until it is regenerated.
+
+### Changed
+
+- **Empty and blank strings in text fields.** The coercer reads `""`, and a string of only whitespace, as null for string fields too, as it already did for other types, so every surface gives the web's answer: a nullable string receives null, any other string field the web's validation error, in object keys and list items too. Before, off the web a string field kept `""` (a nullable one became null on HTTP and the console only), and a string of spaces reached `handle()` for a field of any type, since Laravel's validator runs only the implicit rules on it. This applies to every key at every depth, whether the schema declares it or not, as the middleware does, so a key only `rules()` declares and the values of a union, a list without `items()` or an object without properties follow it too; and an answer of only whitespace in an asked form is left out, as an empty one is. A string that holds anything else is never trimmed, and a blank value for the keys `TrimStrings` leaves alone (`password`, `password_confirmation` and `current_password`, at the top level) stays as given.
+- **Generated lists read `Array<T>`.** `actions:typescript` writes every list as `Array<T>`, `Array<Json>` without `items`, in place of `T[]` and `(T)[]`; the types are identical.
+
+### Fixed
+
+- **The package's consent page after an Inertia sign-in.** In an Inertia app, a signed-out person signs in through the app's form, whose redirect back to the authorization URL is an Inertia visit; the package's page now answers it with Inertia's 409 and `X-Inertia-Location`, so the browser loads the screen as a full page instead of showing it in Inertia's error dialog. An app with its own authorization view is unaffected.
+- **`actions:list` describes a Passport guard.** Its Token guards section called one "unknown to the token reader". A Passport guard that `mcp.middleware` names now reads "Passport: OAuth scopes (actions:read, actions:write), only on the MCP URL the person approved", and one it does not name "Passport: its tokens reach no action, since agentic-actions.mcp.middleware does not name this guard" (its cookie reads as a session, as Sanctum's does).
+- **`actions:install`'s next steps.** It suggests `php artisan make:agentic-action CreatePost` only while no action is discovered, and `php artisan actions:check --update` only while the snapshot is missing or stale, as `actions:check`'s Snapshot row decides, or after that first action. While laravel/ai is missing, `--copilot` prints only the warning to require it, without `make:agent` or `Actions::conversation()`.
+- **`actions:check` warns when no MCP token can sign anyone in.** `install:api` only asks for Sanctum's trait, and without it Sanctum's guard authenticates no bearer token, yet the check passed. The MCP guard row now warns when a Sanctum guard in `mcp.middleware`, or a Passport guard there without a Sanctum one, signs in a user model that uses neither Sanctum's nor Passport's `HasApiTokens`, naming the model and the line to add inside it: `use \Laravel\Sanctum\HasApiTokens;`, which serves a Passport guard too, or `use \Laravel\Passport\HasApiTokens;` for Passport alone. A guard without a provider, as Sanctum's is by default, reads the `users` provider's model.
+- **docs/mcp.md.** The Inertia consent snippet has the typed closure (`: Response`, `->toResponse(request())`), and "When Claude cannot connect" names the MCP URL's 500 when Passport has no keys.
+- **A number that is not finite no longer reaches `handle()`.** A JSON body's `1e999` decodes to infinity, which passed a `number` field's validation, ran the action and then failed to encode the response, a 500 after a Write had run. The coercer now converts a numeric string only when the result is finite, and a `number` field refuses infinity and NaN on every surface, list items included.
+- **Null items in a list.** A list declared with nullable items refused a null item, and a null object item failed its required keys, although the agent tools and TypeScript offered null. Validation now accepts them, and `handle()` receives the list's items in their order.
+- **TypeScript types for a required key with a default.** `actions:typescript` wrote `integer()->default(1)->required()` as an optional key, so TypeScript accepted a call the server refused as missing a required field. A key is now optional only when the schema does not require it; defaults stay metadata, never applied.
+- **Output `anyOf` keeps a value its branches declare.** The projector took the first branch whatever the value's shape, so with an object branch first a string came out as `null` and a list as `{}`. It now picks the branch by shape: a list's array branch before an object branch, an object's object branch, and a scalar as it is; undeclared keys are still dropped at every depth.
+- **An empty string never reaches `handle()` for a typed field.** Laravel's validator skips a field's type rules for `""`, so an optional integer given `""` in-process, on the command line, in a queued run or by a model reached `handle()` as `""`. The coercer now reads `""` as null for every field typed other than string, on every surface, so validation refuses it unless the field is nullable.
+- **A bounded number that is not finite.** `INF` or `NAN` (a JSON body's `1e999`) for a `number()` with `multipleOf()`, `min()` or `max()` now gets a 422, not a 500: the bounds run only on a value that passed its type.
+- **An empty string for a file.** The empty-value rule left file fields out, so with Laravel's `ConvertEmptyStringsToNull` skipped, `""` for a file reached `handle()`. It now reads as null there too.
+- **Empty object items in a list.** An item that gave none of its declared keys was left out of the list `handle()` received, shifting it into an array with gaps, and a required list of such items was missing from the input. The item now keeps its place as an empty object, and only lists are put in order.
+- **Output unions of types, and nested `anyOf`.** A key typed `$schema->union(['object', 'string'])` projected a string to `null` and a list under `union(['object', 'array'])` to `{}`, and a value under an `anyOf` nested in another came out `null`. They now take the type the value's shape declares, and a scalar under a union of objects and lists only comes out `null`, as it does for a key typed as an object.
+- **`actions:check` on a cache store without locks.** For the `apc`, `session` and `storage` drivers, the Cache store row now says that every answer is refused, which it is since a turn's reservation became a cache lock; it said an answer was only not single-use, or not one shared record.
+- **A transcript on a page that paginates by cursor.** `Transcript::forUseChat()` read the request's `?cursor=`, so a page listing something else by cursor showed older messages, or failed with an exception when that cursor held no `id`. It now always gives the newest messages.
+- **A confirmed call that runs for over a minute.** The reservation of its turn lapsed after 60 seconds, so the same answer sent again meanwhile resumed the turn a second time: a package action still ran once, but the conversation stored a refusal as its result and the first stream ended with an error. A request whose reservation had lapsed could also end another request's. The reservation is now a cache lock that only its holder releases, lasting up to `approvals.ttl`.
+- **`actions:install` reported success after a failed step.** It ignored the exit codes of `vendor:publish`, `install:api` and `migrate`, printed PUBLISHED for a publish that failed, and went on to publish the package's conversation table after laravel/ai's had failed and to run the migrations. A publish now reads PUBLISHED only when the thing is there afterwards, FAILED otherwise.
+- **`actions:typescript` refuses `eval` and `arguments` as export names.** An action or a named route exported as either produced a file TypeScript refuses in a module (TS1215); the command now names it and asks for another name, as for a reserved word.
+- **npm: `callAction()` on a GET definition.** The client's types accepted a definition with `method: 'get'`, but `callAction()` always sends a body, so `fetch` rejected the call with the platform's own error. `callAction()` now refuses GET and HEAD with its own error before anything is sent, and TypeScript refuses a GET definition.
+- **SECURITY.md.** Its supported line still read 0.4.x; it now reads 0.8.x, and it names security@agentic-actions.com for private reports, beside GitHub's private vulnerability reporting.
+
+## 0.7.0-alpha.1 - 2026-09-27
+
+OAuth for remote MCP clients: a Claude custom connector, ChatGPT and other clients that sign in with OAuth 2.1 connect to the package's MCP server, on Laravel Passport and laravel/mcp's OAuth routes. The person approves one MCP URL on a consent screen, and the client's token reaches only that URL. It is optional: an app without Passport, or with Passport and no Passport guard in `mcp.middleware`, works exactly as before. It installs only from the private repository, and the API can change before 0.7.0.
+
+### Upgrading
+
+- **Require `^0.7@alpha`.** `^0.6@alpha` does not reach this version.
+- **Redeploy with `php artisan optimize`**, or `actions:cache`, as usual. The actions manifest stays version 5, so a 0.6 manifest still loads.
+- **Nothing changes without a Passport guard in `mcp.middleware`**, even with Passport installed: no scopes, no consent view, no middleware on Passport's routes, and the same 401 header on the package's MCP paths.
+- **With it** (`['auth:sanctum,api', 'throttle:agentic-actions-mcp']`), the 401 header on the package's MCP paths comes from the package and adds the path's `scope`; Passport's scope list gains `actions:read` and `actions:write`; the package's consent view becomes Passport's authorization view when the app has none; and every Passport guard joins the Token routes row of `actions:check`, which fails an unscoped route on one while `Mcp::oauthRoutes()` is registered.
+- **Text on cards, forms and the consent screen** also loses U+200E, U+200F and U+061C, which now become spaces as the other direction controls do.
+- **Migrations are published file by file.** `--tag=agentic-actions-migrations` publishes the `agentic_conversations` migration only; the new `agentic_mcp_connections` migration has its own tag, `agentic-actions-oauth-migrations`, which `actions:install --mcp` publishes only with OAuth on.
+- **`actions:install`** describes MCP as "with Sanctum tokens or OAuth (Passport)", never offers Sanctum or its trait to an app whose user model uses Passport's trait, and prints the OAuth steps still missing. The Token routes sentence names `scope:… or scopes:…` for a Passport guard. A test that pins these sentences needs the new ones.
+- **npm.** Nothing new in the client.
+
+### Added
+
+- **OAuth for the MCP server.** On the package's MCP paths, the 401 challenge names the path's protected-resource metadata and scopes, and laravel/mcp's metadata lists the scopes the path's actions need. Every authorization naming a package MCP URL (the RFC 8707 `resource`) shows the consent screen, which names the app, the client, where its answer goes, the tenant and the abilities, and cannot be framed; the package's paths take only S256 PKCE, the path's scopes, clients limited to the authorization code and refresh grants with plain ASCII redirect addresses and no backslash, and tenants the person belongs to. Approving revokes the client's earlier tokens and codes for the person and records one connection per client and person, naming the URL and the scopes approved there; approving another URL moves it, and the Allow of a denied screen changes nothing. A Passport token then grants the read and write scopes it holds that the person approved, and the connection's tenant, on that URL only. `AgenticActions\OAuth\Consent` hands an app's own page the screen's data; `AgenticActions\OAuth\McpConnection::for($user)` lists a person's connections and `revoke()` ends one. docs/mcp.md ("Connect Claude, ChatGPT and other remote clients (OAuth)"), docs/setup.md, docs/security.md, docs/recipes.md and the Boost skill.
+- **`actions:check`'s OAuth row.** It fails missing Passport keys, a Passport guard listed before Sanctum's, a token reader of the app's own beside OAuth connections and a route answering a package path's metadata first; it warns about `Mcp::oauthRoutes()` without a Passport guard in `mcp.middleware` and the reverse, a missing `login` route, access tokens that last more than a day, and `mcp.redirect_domains` accepting any site outside local and testing. The Tables row fails a missing `agentic_mcp_connections` table while OAuth is on.
+- **The token reader knows Passport.** Passport's cookie token reads as a session, and `describe()` answers `passport`, so no "unknown guard" notice is logged for it.
+
+## 0.6.0-alpha.1 - 2026-09-26
+
+Fields only a model must give, and asking over MCP: an action names the fields every model's call must give while the web may leave them out, and an action with `$askForMissing` now asks MCP clients that can show a form, as it asks in the app. It installs only from the private repository, and the API can change before 0.6.0.
+
+### Upgrading
+
+- **Require `^0.6@alpha`.** `^0.5@alpha` does not reach this version.
+- **Redeploy with `php artisan optimize`**, or `actions:cache`, as usual. The actions manifest stays version 5, so a 0.5 manifest still loads; rebuilding it brings the new reason for an `agentSchema()` action's skipped route.
+- **Nothing changes until an action says so.** `requiredForAgents()` returns no fields by default. An action with `$askForMissing` that is already on MCP now shows its form to a client on protocol 2026-07-28 that declares form elicitation, where that client got the refusal before; every other client still gets the refusal naming the fields.
+- **The app's key.** The MCP request state is encrypted with it. Every Laravel app has one; a test that posts to the MCP mount under Testbench sets `app.key`.
+- **npm.** Nothing new in the client; update `@agentic-actions/client` with the PHP package as usual.
+
+### Added
+
+- **`requiredForAgents()`.** An action names the fields a model's call must give, through the agent tools and MCP alike, where the route, `run()`, `dispatch()`, the CLI and TypeScript may still leave them out or null. Agents and MCP clients are offered them as required and not nullable, a model's call without one is refused naming it, whatever `sometimes` `rules()` keeps for the web, and with `$askForMissing` the form asks for them and marks them required. It takes the place of `rules()` keyed on the surface plus a `prepareForValidation()` that fills in null, which gave the form no required marker. docs/asking.md ("Fields only a model must give").
+
+- **Asking over MCP.** An action with `$askForMissing` now asks MCP clients that can show a form: a request on protocol 2026-07-28 whose `_meta` declares form elicitation gets, for a call missing fields a form can hold, an `InputRequiredResult` with one `elicitation/create` request (the copilot's form in MCP's standard keys) and a `requestState` encrypted and authenticated with the app's key, bound to the credential (the request's bearer token, whichever guard reads it), person, tenant, tool, arguments and form, for `approvals.ttl` seconds. The retry with the answer runs the action once through every check, and the result names the filled fields, never the values. An answer the rules refuse gets the form again with the messages; decline and cancel run nothing; a state that does not verify gets JSON-RPC error -32602, and a stale or foreign one a fresh form. Every other client gets the refusal naming the fields, as before. The MCP Inspector 2.8.0's web page (modern protocol era) and `@modelcontextprotocol/client` 2.1.0 show the form; its CLI, laravel/mcp's client and clients on the `initialize` handshake get the refusal. docs/mcp.md ("Asking over MCP"), docs/asking.md, docs/security.md and the Boost skill.
+
+### Changed
+
+- **MCP answers `tools/call` through the package's own handler** (`CallAction`, a subclass of laravel/mcp's `CallTool`). A client that does not declare form elicitation gets exactly the answer it got before. The MCP request state needs the app's key, which every Laravel app has; a test that posts to the MCP mount under Testbench sets `app.key`.
+- The reason `actions:list`, `actions:check` and `MisconfiguredExposure` give for an `agentSchema()` action's skipped route now says why (its `schema()` holds what `fromAgent()` builds, not what a form sends) and points to `requiredForAgents()` for agents that only need to give more fields than the web. The rule is unchanged. A test that pins the sentence needs the new one.
+
+## 0.5.0-alpha.1 - 2026-09-26
+
+Asking the person: when a model's call to a Read or Write action leaves fields out, the action can ask the person for them in a form in the chat, and runs once with their values; the model learns only which fields were filled. It also brings `actions:install`, a conversation per tenant and the fixes made since 0.4.0-alpha.1. It installs only from the private repository, and the API can change before 0.5.0.
+
+### Upgrading
+
+- **Redeploy with `php artisan optimize`**, or `actions:cache`. The actions manifest is version 5; a version-4 manifest is ignored, and every request scans, until it is rebuilt.
+- **Nothing asks until an action says so.** `$askForMissing` is off by default, and a chat route that already passes the agent to `ChatRequest::from()` needs nothing new. To ask, set it on a Read or Write action, optionally write `ask()`, and add the form to the page.
+- **npm.** Update `@agentic-actions/client` with the PHP package. The page adds `elicitation()`, `<ElicitationForm>` and `answerElicitation()` (docs/asking.md#the-page).
+- `data-elicitation` joins `data-action` and `data-approval` as a part type the package owns: a part of your own named so is dropped.
+- An app that published the language files adds the new lines, or publishes them again: `ask.php` is new, and `model.php` gains four lines.
+- `actions:check`'s Approvals row now says the actions "wait on the person", and names asking actions too; its Cache store row says "Confirmations and forms" and warns for asking actions as for confirmed ones. A test that pins these sentences needs the new ones.
+- **A new message sent during a Confirm.** With the agent, `ChatRequest::from()` now reserves a waiting turn for a new message as for an answer, so whichever request arrives second gets the 409 with `stream.stale` before any agent work. A page that sends both at once shows that sentence for the later one.
+- **The Tables row.** `actions:check` now warns when a feature in use lacks its tables, naming the `actions:install` flags that publish them. Warnings do not fail the command.
+
+### Added
+
+- **Asking the person.** A Read or Write action with `protected bool $askForMissing = true;` asks the person, in a form in the chat, for the fields a model's call left out or got wrong, instead of refusing the call. The form is MCP's form-mode elicitation (`{mode, message, requestedSchema}`), built on the server from the action's schema and an optional `ask(Ask $ask, ActionContext $context)`, whose `Ask` builder sets the sentence, the fields always shown for review, choices, defaults and a textarea. A model's value opens as a field's default only when validation accepted it and it holds no direction override or isolate, and no control character but a tab, line feed or carriage return. The form holds text, numbers, dates, yes or no and choices; a call that also leaves out anything else, or a field that reads as a secret, is refused as before, naming the fields. Submit is checked against the action's own rules first (a Precognition request, errors by field), then runs the action once, as the person, with their values over the model's arguments and every check again; Decline and Not now run nothing. The model reads which fields were filled, never the values, which the conversation store never holds either. It pauses on the agents that can confirm a call, under the same single-use claim, reservation, `approvals.ttl` and reload. Destructive and External actions never ask, and MCP clients get the refusal naming the fields, as before.
+- **npm, for forms.** The root gains `elicitation()` and the standard's types (`ElicitationField`, `ElicitationParams`, `ElicitResult`, `ElicitationData`, `WaitingElicitation`); `/react` gains `<ElicitationForm>`, which renders any MCP form with native controls; `/ai-sdk` gains `answerElicitation()`, and its transport sends the answer.
+- **Checks, docs and Boost, for forms.** `actions:check`'s Approvals row warns about an agent that never asks because it does not store its conversations, and fails a conversation store no agent can wait on. docs/asking.md ("Asking the person"), the guarantees in docs/security.md, a test in docs/testing.md, lines in docs/copilot.md, docs/concepts.md, docs/mcp.md and docs/setup.md, a line in the Boost guideline and a sixth task in its skill.
+- **`php artisan actions:install`.** It asks which features the app uses (web routes, agents and a copilot, confirmations, MCP, tenants), publishes the config and the migrations those features need, runs `install:api` for MCP when Sanctum is missing, prints the next steps the app has not taken yet, and asks before it runs the migrations it published. It publishes nothing twice. In CI, pass the features as flags with `--no-interaction`.
+- **A conversation per tenant.** `Actions::conversation($agent, $user, $tenant)` keeps one laravel/ai conversation per person, agent class and tenant: `id()` finds it for the reload, and `open()` starts it in laravel/ai's store the first time. The key is what the route passes, never an id from the request. Its `agentic_conversations` table comes from a migration published only on request (`vendor:publish --tag=agentic-actions-migrations`, or `actions:install --copilot --tenancy`). docs/copilot.md's multi-tenant recipe uses it.
+- **The Tables row.** `actions:check` warns when a feature in use lacks its tables: agents that store their conversations without laravel/ai's tables, a published `agentic_conversations` migration that has not run, and MCP on the `sanctum` guard without `personal_access_tokens`. Each warning names the `actions:install` flags that publish them.
+- **docs/setup.md**: what the package depends on, and what each feature needs (packages, tables, routes, config, install flags).
+
+### Fixed
+
+- **Two answers to one confirmation sent at once.** The second answer now gets the same 409 as a replay, before any agent work, so the stored conversation always holds the result of the call that ran. Before, the call still ran once, but the conversation could say it was not done. `ChatRequest::from()` reserves the waiting turn in the default cache store, `respond()` holds it until the agent's stream ends, and a request that dies holding it frees it after 60 seconds.
+- **A Confirm and a new message sent at once.** With the agent, `ChatRequest::from()` now reserves the waiting turn for a new message too, from a session or a token, so whichever request arrives first goes on and the other gets the same 409 before any agent work.
+- A `with` whose bracketed CTE name is more than one word (`with [recent posts] as (…)`, `[2024]`, `[recent-posts]`) runs in a Read instead of being refused, as `with [recent] as (…)` already did.
+- On SQL Server, and on a driver the Read guard does not know, the guard refuses as unchecked a statement with a character past ASCII outside quotes, strings and comments, or a `--` comment holding a line break other than a carriage return or line feed. SQL Server does not document which Unicode characters it reads as white space, so a Unicode space could hide a second statement. Quote such a name in brackets, as Laravel's grammar does. The guard also reads only ASCII white space between tokens now, whatever the locale.
+- **Octane: chat turns streamed nothing.** Under Octane on FrankenPHP, a turn streamed through `ActionsProtocol` answered 200 with an empty body and never ran. `ActionsProtocol` now echoes and flushes each part itself, so rows arrive one tool at a time there as on PHP-FPM, and a closed tab still leaves the turn to finish and be stored.
+- **Octane: a paused call showed no card.** Under Octane, a turn that paused for a confirmation sent no card and kept no claim, so the person's Confirm ran nothing. The package now reads the cards it previewed from the current request's container when laravel/ai reports the pause.
+
+## 0.4.0-alpha.1 - 2026-09-26
+
+Confirmations: an agent may run a Destructive or External action only after the person confirms that one call, in the page, from their own session. It installs only from the private repository, and the API can change before 0.4.0.
+
+### Upgrading
+
+- **Redeploy with `php artisan optimize`**, or `actions:cache`. The actions manifest is version 4; a version-3 manifest is ignored, and every request scans, until it is rebuilt.
+- **Nothing is offered to agents until you name a toolset.** A bare `#[Expose]` still keeps Destructive and External actions off agents, so no app's agent tools change on upgrade. To offer one, write `#[Expose(agents: [...])]`, add `approvalReason()` and `approvalSummary()`, then run `php artisan actions:check --update` and review the diff of `actions.exposure.json`.
+- **The confirmation route** passes the agent to `ChatRequest::from($request, $agent)`, returns through `respond()`, and passes `messageId: $chat->messageId()` to `ActionsProtocol` (docs/copilot.md#confirmations). A 0.3 route keeps working unchanged for Read and Write tools.
+- **The reload** passes the agent to `Transcript::forUseChat($conversationId, $user, agent: $agent)` to bring a waiting card back.
+- **npm.** Update `@agentic-actions/client` with the PHP package: the `/ai-sdk` transport now sends the person's answers, and `actionsChat()` sends them by itself once every waiting call has one.
+- `ActivityStatus` gains `declined`, and a row's `effect` may be `destructive` or `external`. A `switch` over either that must be exhaustive needs the new cases.
+- `#[Expose(agents: [...])]` on a Destructive or External action is no longer an exposure error: its toolsets receive it. `mcp: true` on one is still an error, now "MCP has no confirmation step", and `actions:list` shows the new reasons.
+- An app that published the language files adds the new lines, or publishes them again: `approval.php` is new, and `model.php`, `activity.php` and `stream.php` gain lines.
+- Confirmations are kept in the default cache store. Outside local development, use a database, redis, memcached or dynamodb store that every server shares; `actions:check` warns about any other driver once an agent is offered a Destructive or External action.
+
+### Added
+
+- **Confirmations.** A Destructive or External action whose `#[Expose]` names a toolset reaches an agent whose conversations laravel/ai stores. Each call waits for the person: the chat shows a card, built on the server after `authorize()` allowed the call, from `Action::approvalReason()` (one sentence) and `Action::approvalSummary()` (at most eight label ⇒ value rows, from the validated input and the record it names). The browser receives that sentence and those rows as plain text, never the call's arguments or the model's words. Confirm runs the call once, as the person who was asked, in their tenant, with the input the card described, and only while the card, built again just before the call runs, reads as the one they confirmed, so keep the summary free of values that change on their own, such as the time; Decline runs nothing. One step of the model asks about at most eight calls. MCP never serves these actions, and an agent cannot switch the confirmation off.
+- **Single-use confirmations.** Each paused call gets one claim in the default cache store, taken after both `authorize()` steps and before `handle()`. A replayed answer, a second answer sent at once, another person's answer, a token and an answer after `approvals.ttl` seconds (a new config key, 1800 by default) run nothing.
+- **Answers.** `ChatRequest::from($request, $agent)` reads, per waiting call, approve or decline and an optional reason, and nothing else, only from the session of the person the conversation belongs to. The model reads a decline reason as one quoted string. `respond()` answers 422 for an empty message and 409 with one sentence for an answer that is no longer waiting. `ActionsProtocol(messageId:)` continues the answered message.
+- **The stream.** A waiting call crosses as an input-less tool part and its approval request, followed by a `data-approval` card; a resumed call settles with no output, and a declined one gets a `declined` row. `Transcript::forUseChat(..., agent:)` restores a waiting card on reload, rebuilt from the record, while it still reads as the card first shown and can still be confirmed.
+- **npm.** The root gains `approvalCard()` and the `ApprovalCardData` and `WaitingApproval` types; `/react` gains `<ApprovalCard>`; `/ai-sdk` sends answers.
+- **Checks.** `actions:check` gains the Approvals row (a warning for an agent that is never offered its toolsets' confirmed actions, a failure for a conversation store that cannot hold them) and the Summary row (a failure for a confirmed agent action offered input without `approvalSummary()`, or with an `authorize()` that does not take `ValidatedInput`). The Cache store row also covers confirmations.
+- **Rows.** Default labels for the new effects: "Removing…" and "Removed", "Sending…" and "Sent".
+- **Languages, docs and Boost.** `approval.php` and new lines in `model.php`, `activity.php` and `stream.php`, in English and Arabic. docs/copilot.md gains "Confirmations", docs/security.md their guarantees, docs/testing.md a confirmation test, and the Boost skill a fifth task.
+
+### Changed
+
+- `Ai\ActionTool` implements laravel/ai's `Approvable`. The effect decides: `withoutApproval()` throws on a Destructive or External tool, and `requireApproval()` throws on a Read or Write tool.
+- `Actions::tools($context, $toolsets)` takes an optional third argument, the agent. Without it, Destructive and External actions are never offered.
+
+## 0.3.0-alpha.1 - 2026-09-25
+
+MCP, queued runs and the change feed. It installs only from the private repository, and the API can change before 0.3.0.
+
+### Upgrading
+
+- **Bare `#[Expose]` Read and Write actions become MCP tools.** A bare `#[Expose]` now allows MCP for every Read and Write action that has a description. MCP mounts as soon as the app has a token guard such as Sanctum's, since `mcp.path` defaults to `mcp/actions`, and from then on each of those actions is a tool for every token that lists the matching ability: `actions:read` for a Read, `actions:write` for a Write. To keep an action off MCP, name its surfaces instead, for example `#[Expose(web: true, agents: ['default'])]`. Run `php artisan actions:check --update` and review the diff, since the `mcp` fact of those actions changes in `actions.exposure.json`.
+- Nothing is mounted until the app has a token guard (`php artisan install:api`), a path and an MCP-open action. `AGENTIC_ACTIONS_MCP=false`, or null `mcp.path` and `mcp.tenant_path`, keeps MCP closed.
+- The model rows of `actions:check` (Model input, Model output, Ids, Order, Schema, HTTP-only) now cover MCP-exposed actions, also without laravel/ai, so they may report actions they skipped before.
+- Once a token guard and an MCP path are set, the mount looks for MCP-open actions at boot whenever routes are not cached. Every Artisan command, test run and uncached web request then loads the actions, also in an app that never calls `Actions::routes()`, and a misconfigured action fails at boot in a local web request and in tests.
+- The actions manifest is version 3. A version-2 manifest is ignored, and the app scans, until `php artisan optimize` or `actions:cache` runs again.
+- Each `Actions::routes()` group gains the change feed's route, named `_changes` under the group's name prefix. Two groups under the same name prefix (for example a `tenant: true` and a `tenant: false` group, both unnamed) now share a route name, which `route:cache` refuses. Give each group its own `->name()` prefix.
+- The change feed is on by default, and each completed write makes one cache write. Set `feed.enabled` to false in an app with no polling page.
+- `laravel/mcp` ^1.0 is now required. Its service provider is discovered: it registers its commands, loads `routes/ai.php` when that file exists, adds one global middleware that acts only on 401 answers of routes that carry it, registers container callbacks and an `mcp` view namespace, adds a global `Mcp` facade alias, and adds an `mcp:use` scope to Passport's scopes when Passport is installed. The package adds nothing global beyond its own mount.
+
+### Added
+
+- **MCP server.** One laravel/mcp server at `mcp.path` (default `mcp/actions`), and at `mcp.tenant_path` for tenant-scoped actions, mounted after every other route and never over one. Each MCP-exposed Read and Write action is a tool, listed for each request under the rules agents follow: forbidden keys never appear, arguments are cut to the advertised schema, and `agentSchema()` input goes through `fromAgent()`. A call answers the sentence an agent reads, a refusal is an error result, and the hints follow the effect. Destructive and External actions are never listed or run. See docs/mcp.md.
+- **MCP tokens and throttle.** Any token guard named in `mcp.middleware` (default `auth:sanctum`). Over MCP an ability counts only when the token lists it by name; `*` never counts and a session grants nothing. A token bound with `tenant:{key}` reaches only its tenant's path, and the tenant path serves only tenant-scoped actions. Each person gets `mcp.per_minute` requests a minute, across all of their tokens and tenant URLs.
+- **MCP handshakes.** The `initialize` exchange and the 2026-07-28 exchange both work on one URL. The server's instructions are a language line in English and Arabic (`mcp.php`).
+- **Queued runs.** `Action::dispatch($input, $context)` queues the whole pipeline as the caller: actor, tenant, input, fixed input, locale, idempotency key and token grants, encrypted on the queue. Every check runs again in the worker. Whatever context the job's own code builds, its calls and the jobs it queues keep the caller's grants and tenant binding, and stay model-driven when a model queued the first job. While a Read's own code runs, `dispatch()` refuses an action that is not a Read, before anything is queued.
+- **Change feed.** Each completed write records the keys it touched, per tenant or per person, in the default cache store for `feed.window` seconds, and each `Actions::routes()` group gains `POST …/actions/_changes`. The feed sends keys only, and answers only a signed-in session.
+- **Feed client.** `createActionSync({ feed: { url, interval } })` and `useActionSync({ feed })` poll the feed while the page is visible and in use: every 15 seconds by default, never more than once a second, and paused after 10 minutes with no input. What writes made elsewhere touched is reloaded through the same path as a copilot row.
+- **Rows in order.** `messageSegments(message)` gives a message's words and rows in the order they streamed, so the sentence a model writes before it calls a tool shows above its rows. The panel recipe in docs/copilot.md uses it.
+- **Settled rows.** `actionRows()` and `messageSegments()` take `{ settled: true }`, which shows a row still `running` as `ended`. Pass it for every message except the one the chat is streaming, so rows cut short by Stop, a broken stream or a deadline stop spinning.
+- **Checks.** `actions:check` gains the Abilities, MCP guard, MCP route, Token routes and Cache store rows, and `actions:list` shows where each action is served over MCP, or why it is not.
+- **Boost and docs.** The `agentic-actions-development` Boost skill (add an action, wire an agent, add the copilot panel, expose actions over MCP) and four more guideline lines. docs/mcp.md walks through Sanctum tokens with the actions abilities and connecting Claude Code, Cursor and Claude Desktop.
+
+### Changed
+
+- A refresh held for a dirty editor runs by itself 150 ms after the last dirty editor turns clean, and `waiting` turns false, so the Refresh button goes away. `useActionSync({ blocked })` resumes the same way once its flag is false. `resumeWhenClean: false` keeps a held refresh until the next done row, the end of a turn or `apply()`, as before. `createActionSync()` cannot see its own `blocked()` flag change, so call `flush()` when it clears.
+
+### Fixed
+
+- The Read guard reads a statement as its connection's driver does. A backslash is a literal inside a SQLite or SQL Server string, so `like ? escape '\'` runs in a Read there instead of failing as a write.
+- On Postgres the Read guard allows a statement only when it reads the same with `standard_conforming_strings` on and off. A one-backslash string such as `like ? escape '\'` fails as a statement the guard could not check; escape with another character, such as `escape '!'`.
+- On MySQL and MariaDB the Read guard also reads a statement as a server with `ANSI_QUOTES` on reads it, so a batch can no longer hide from its readings on such a server.
+- On SQL Server the Read guard refuses a second statement in a Read's batch (T-SQL needs no semicolon between two), a batch whose first word SQL Server runs as a procedure, and a letter right after a number (`0x1truncate`).
+- The Read guard ends a `--` or `#` comment at a carriage return as well as at a line feed, on every driver, since Postgres ends a `--` comment at either.
+- A `with` whose CTE name is in brackets (`with [recent] as (…)`) runs in a Read instead of being refused.
+- A statement the Read guard cannot check (a quote or comment that does not close, an executable comment) fails with its own message, "A Read action sent a statement the Read guard could not check: [...]", instead of "A Read action tried to write".
+- `actions:run` reads an integer `--as`, `--tenant` or `--key`, as `$this->artisan()` passes one in a test. Before, the action ran without that user, tenant or key.
+- `useAction().validate()` puts a 401, 403, 404, 409 or 423 on `refusal`, as `run()` does, and clears it when the next check starts. Before, those statuses left the check's promise rejected.
+- `editors`, `actionParts`, the sync `createActionSync()` returns and the result of `useActionSync()` declare their functions as properties, so destructuring `apply` or passing `sync.onPart` on no longer trips `@typescript-eslint/unbound-method`.
+
+### Documentation
+
+- What hides an agent tool: only `shouldRegister()` or an `authorize()` without input. Role and permission checks belong in an `authorize()` without input; row checks go in `handle()` or an input-aware `authorize()` (docs/concepts.md).
+- Installing the package from a local path or symlink needs Vite's `resolve.dedupe` for `react`, `react-dom` and `@inertiajs/*`.
+- A recipe for `useAction()` forms, and a note that routes mounted inside a group whose own middleware checks membership give a non-member that middleware's answer first.
+- docs/copilot.md now says that a turn which fails before the model finishes its first step stores nothing, so the person's words are gone after a reload.
+
+## 0.2.0-alpha.1 - 2026-09-25
+
+The copilot in the UI: live rows while an agent works, and the page following its writes. It installs only from the private repository, and the API can change before 0.2.0.
+
+### Added
+
+- **Chat stream.** `Streaming\ActionsProtocol` streams an agent's turn in the UI message format `useChat` reads, built from an allowlist of parts. No tool part, argument, result, exception or provider text reaches the browser, and a failed turn ends with one fixed sentence. A closed tab never cuts a turn short.
+- **Live rows.** One `data-action` row per tool call, sent when the tool starts and again when it finishes, with its status (`running`, `done`, `refused`, `failed` or `ended`) and, on success, what it touched and a link. Label a row with `Action::activityLabel()`, let the page follow the link with `Action::$followLink`, and give a hand-written tool its row with `Contracts\DescribesActivity` and `Streaming\Activity::record()`.
+- **Chat input and reload.** `ChatRequest` reads only the newest message's text, up to `agents.max_message_length` characters (a new config key, 4000 by default); history comes only from the conversation store. `Transcript::forUseChat()` gives a reloaded chat the words of a conversation the store says is the user's.
+- **Page context.** `#[WithPageContext]`, wired with `actionMiddleware()`, tells the model the route name and component of the Inertia page that is open. `actions:check` and `assertAgentTools()` fail an agent that carries it without Inertia or without the wiring.
+- **npm.** The root gains `actionRows()`, `createActionSync()` and `editors`; `/inertia` gains `inertiaApply()`; `/react` gains `useActionSync()`, `useActionEdits()` and `<ActionActivity>`, under 3 KB gzipped; the new `/ai-sdk` entry has `actionsChat()`, `actionsTransport()`, `turnOutcome()` and `refusalMessage()`, with `ai` 7 as an optional peer.
+- **Languages and docs.** `activity.php`, `stream.php` and a `model.page` line in English and Arabic. `docs/copilot.md` walks through the chat endpoint and the panel, `docs/security.md` lists the copilot's guarantees, and the Boost guideline gains four lines.
+
+### Changed
+
+- `TouchedHandler`'s second argument is now `ActionDefinition | null`. Handlers registered with `onTouched()` receive `null` for touches from a copilot row. Handlers that ignore the argument are unaffected.
+- `Refusal::detailsPayload()` and `Refusal::listingItems()` are renamed `getDetails()` and `getListing()`, like PHP's own exception getters.
+- `sameOriginUrl()` and `applyActionPart()` accept only a string URL of the page's own origin over http or https, so a `blob:` URL, a non-string value, or a `javascript:` or `data:` URL on a page with an opaque origin is never kept as a link.
+- The actions manifest is version 2. A version-1 manifest is ignored, and the app scans, until `php artisan optimize` or `actions:cache` runs again.
+
+### Fixed
+
+- Discovery skips, with a warning, a class whose parent or trait, at any depth, uses a trait that is missing. Before, PHP older than 8.5 stopped when the scan loaded such a class.
+
+## 0.1.0-alpha.1 - 2026-09-24
+
+The first alpha. It installs only from the private repository, and the API can change before 0.1.0.
+
+- **Actions.** One `Action` class per operation, with an effect (`Read`, `Write`, `Destructive` or `External`), a JSON schema for its input and output, `authorize()` and `handle()`. Call it in-process with `run()`, or through any surface it is exposed on. Every caller goes through the same pipeline: exposure, token abilities, tenant membership, `authorize()`, validation, `handle()`, and the output schema as an allowlist.
+- **Exposure.** `#[Expose]` opens an action to the web, the CLI and laravel/ai agents. `actions.exposure.json` records what each action exposes, and `actions:check` fails until a change to it is reviewed and recorded with `--update`.
+- **Refusals.** `Refusal` says no in your own words, optionally on a field, and `toValidationException()` turns it into a field error in Livewire or a controller.
+- **Web and API.** `Actions::routes()` mounts a POST route per action inside your own route groups (web, a Sanctum `api.` group, a tenant group). JSON callers get the output or a 422 with `{message, errors}`, browser forms get errors and old input the way a form request does, and Precognition works. Generated routes require a signed-in user.
+- **Tokens.** Sanctum abilities per effect (`actions:read`, `actions:write`, `actions:destructive`, `actions:external`). Grants are read from the guard that authenticated the request, and a credential the package cannot read gets no access.
+- **Tenants.** Actions scoped to a tenant bound by primary key and resolved by route key, with membership and scope contracts and a bridge to spatie/laravel-permission teams.
+- **Read guard.** A Read cannot write through Laravel's database connection: a writing statement is refused before it runs, except on the tables your database cache, session and queue use and the ones you list.
+- **Agents.** With laravel/ai 1.x, an agent that uses `InteractsWithActions` and `#[UseToolset]` gets its actions as tools. A model's arguments are cut to the schema it was offered, and keys named like passwords, secrets or tokens, route parameters and the tenant's key are never offered.
+- **Console.** `actions:run` (with `--as`), `actions:list`, `actions:check`, `actions:cache`, `actions:clear`, `actions:typescript` and `make:agentic-action`. Actions are discovered under `app/` by default, and `php artisan optimize` caches the manifest.
+- **TypeScript.** `actions:typescript` writes a typed definition for each action's route. The npm client `@agentic-actions/client`, installed from `vendor/agentic-actions/laravel/js`, has no dependencies (`callAction()`, `onTouched()`, `uri()`), plus `/inertia` to reload what a call touched and `/react` for `useAction()`.
+- **Testing.** `Actions::fake()`, `assertToolset()` and `assertAgentTools()` for PHPUnit and Pest, and a `toContainActionTool` expectation for Pest.
+- **Languages.** Sentences in English and Arabic.
+- **Laravel Boost.** A guideline for AI coding assistants.

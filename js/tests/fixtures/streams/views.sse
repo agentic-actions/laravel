@@ -1,0 +1,42 @@
+data: {"type":"start","messageId":"id-1"}
+
+data: {"type":"start-step"}
+
+data: {"type":"data-action","id":"a:id-2","data":{"action":"post-stats","label":"Looking it up\u2026","status":"running","effect":"read"}}
+
+data: {"type":"data-action","id":"a:id-2","data":{"action":"post-stats","label":"Looked it up","status":"done","effect":"read"}}
+
+data: {"type":"data-view","id":"view:call_1","data":{"action":"post-stats","table":{"columns":[{"key":"title","label":"Title","type":"text"},{"key":"words","label":"Words","type":"integer","description":"Words in the post's body"},{"key":"share","label":"Share","type":"percent","description":"The post's share of all the author's words"}],"rows":[{"title":"Launch notes","words":3,"share":0.75},{"title":"Roadmap","words":1,"share":0.25}],"truncated":false,"chart":{"type":"bar","x":"title","y":["words"]},"caption":null},"at":"2026-09-30T12:00:00+00:00","ref":"id-3","labels":{"refresh":"Refresh","truncated":"Showing the first :count rows"}}}
+
+data: {"type":"data-action","id":"a:id-4","data":{"action":"posts","label":"Looking it up\u2026","status":"running","effect":"read"}}
+
+data: {"type":"data-action","id":"a:id-4","data":{"action":"posts","label":"Looked it up","status":"done","effect":"read"}}
+
+data: {"type":"data-view","id":"view:call_2","data":{"action":"posts","table":{"columns":[{"key":"team","label":"Team","type":"text","description":"The team the post belongs to"},{"key":"posts","label":"Posts","type":"integer"},{"key":"published","label":"Published","type":"integer"}],"rows":[{"team":"Blue","posts":1,"published":1},{"team":null,"posts":1,"published":0}],"truncated":false,"chart":{"type":"bar","x":"team","y":["posts","published"]},"caption":"Posts, Published by Team \u00b7 1 Sep 2026 \u2013 30 Sep 2026 \u00b7 the 50 highest by Posts"},"at":"2026-09-30T12:00:00+00:00","ref":"id-5","labels":{"refresh":"Refresh","truncated":"Showing the first :count rows"}}}
+
+data: {"type":"finish-step"}
+
+data: {"type":"start-step"}
+
+data: {"type":"text-start","id":"id-6"}
+
+data: {"type":"text-delta","id":"id-6","delta":"Launch"}
+
+data: {"type":"text-delta","id":"id-6","delta":" notes"}
+
+data: {"type":"text-delta","id":"id-6","delta":" is"}
+
+data: {"type":"text-delta","id":"id-6","delta":" your"}
+
+data: {"type":"text-delta","id":"id-6","delta":" longest"}
+
+data: {"type":"text-delta","id":"id-6","delta":" post."}
+
+data: {"type":"text-end","id":"id-6"}
+
+data: {"type":"finish-step"}
+
+data: {"type":"finish","finishReason":"stop"}
+
+data: [DONE]
+

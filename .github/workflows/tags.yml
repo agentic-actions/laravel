@@ -1,0 +1,241 @@
+name: tags
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The floor cell tests the package against the lowest dependencies; its analyser is the lowest PHPStan too,
+          # whose inference differs, so static analysis runs on the latest cells only.
+          - name: Laravel 12 floor - PHP 8.3
+            php: '8.3'
+            install: composer update --prefer-lowest --prefer-stable --prefer-dist --no-interaction --no-progress
+            analyse: false
+          - name: Laravel 12 latest - PHP 8.4
+            php: '8.4'
+            install: composer update --prefer-stable --prefer-dist --no-interaction --no-progress --with="laravel/framework:^12.62"
+            analyse: true
+          - name: Laravel 13 - PHP 8.4
+            php: '8.4'
+            install: composer update --prefer-stable --prefer-dist --no-interaction --no-progress --with="laravel/framework:^13.15"
+            analyse: true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: pdo_sqlite
+          tools: composer:v2
+          coverage: none
+
+      - name: Install dependencies
+        run: ${{ matrix.install }}
+
+      - name: Check code style
+        run: vendor/bin/pint --test
+
+      - name: Run static analysis
+        if: ${{ matrix.analyse }}
+        run: vendor/bin/phpstan --memory-limit=-1 --no-progress
+
+      - name: Run tests
+        run: vendor/bin/pest --exclude-group=database
+
+  databases:
+    name: ${{ matrix.database }}
+    runs-on: ubuntu-24.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - database: MySQL 8
+            connection: mysql
+            port: 3306
+            username: root
+          - database: Postgres 16
+            connection: pgsql
+            port: 5432
+            username: postgres
+          - database: MariaDB 11
+            connection: mariadb
+            port: 3307
+            username: root
+
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: password
+          MYSQL_DATABASE: testing
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -ppassword"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+      mariadb:
+        image: mariadb:11
+        env:
+          MARIADB_ROOT_PASSWORD: password
+          MARIADB_DATABASE: testing
+        ports:
+          - 3307:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: testing
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd=pg_isready
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      DB_CONNECTION: ${{ matrix.connection }}
+      DB_HOST: 127.0.0.1
+      DB_PORT: ${{ matrix.port }}
+      DB_DATABASE: testing
+      DB_USERNAME: ${{ matrix.username }}
+      DB_PASSWORD: password
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: '8.4'
+          extensions: pdo_mysql, pdo_pgsql
+          tools: composer:v2
+          coverage: none
+
+      - name: Install dependencies
+        run: composer update --prefer-stable --prefer-dist --no-interaction --no-progress --with="laravel/framework:^13.15"
+
+      - name: Run database tests
+        run: vendor/bin/pest --group=database
+
+  fresh-app:
+    name: Fresh app - ${{ matrix.mode }}
+    runs-on: ubuntu-24.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [plain, livewire]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: '8.4'
+          extensions: pdo_sqlite
+          tools: composer:v2
+          coverage: none
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+
+      - name: Walk the fresh-app path
+        run: bin/fresh-app ${{ matrix.mode }}
+
+      - name: Keep the fresh-app log
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fresh-app-${{ matrix.mode }}-log
+          path: build/fresh-app-${{ matrix.mode }}.log
+          if-no-files-found: ignore
+
+  js:
+    name: npm client
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm --prefix js ci
+
+      - name: Run checks
+        run: npm --prefix js run check
+
+  js-without-react:
+    name: npm client without React
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+
+      - name: Install dependencies without React
+        run: |
+          npm --prefix js ci
+          rm -rf js/node_modules/react js/node_modules/react-dom js/node_modules/@types/react js/node_modules/@inertiajs/react
+
+      - name: Build the root and /inertia
+        working-directory: js
+        run: |
+          cat > tsconfig.no-react.json <<'JSON'
+          {
+              "extends": "./tsconfig.build.json",
+              "compilerOptions": { "outDir": "build-no-react" },
+              "include": [],
+              "files": ["src/index.ts", "src/inertia.ts"]
+          }
+          JSON
+          npx tsc -p tsconfig.no-react.json

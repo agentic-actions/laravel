@@ -1,0 +1,32 @@
+data: {"type":"start","messageId":"id-1"}
+
+data: {"type":"start-step"}
+
+data: {"type":"data-action","id":"a:id-2","data":{"action":"create-post","label":"Saving\u2026","status":"running","effect":"write"}}
+
+data: {"type":"data-action","id":"a:id-2","data":{"action":"create-post","label":"Saving\u2026","status":"refused","effect":"write","note":"Not done"}}
+
+data: {"type":"finish-step"}
+
+data: {"type":"start-step"}
+
+data: {"type":"text-start","id":"id-3"}
+
+data: {"type":"text-delta","id":"id-3","delta":"You"}
+
+data: {"type":"text-delta","id":"id-3","delta":" already"}
+
+data: {"type":"text-delta","id":"id-3","delta":" have"}
+
+data: {"type":"text-delta","id":"id-3","delta":" that"}
+
+data: {"type":"text-delta","id":"id-3","delta":" post."}
+
+data: {"type":"text-end","id":"id-3"}
+
+data: {"type":"finish-step"}
+
+data: {"type":"finish","finishReason":"stop"}
+
+data: [DONE]
+

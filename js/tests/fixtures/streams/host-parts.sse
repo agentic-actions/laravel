@@ -1,0 +1,26 @@
+data: {"type":"start","messageId":"id-1"}
+
+data: {"type":"start-step"}
+
+data: {"type":"data-action","id":"a:id-2","data":{"action":"create-post","label":"Saving\u2026","status":"running","effect":"write"}}
+
+data: {"type":"data-action","id":"a:id-2","data":{"action":"create-post","label":"Draft saved","status":"done","effect":"write","touches":["posts"]}}
+
+data: {"type":"finish-step"}
+
+data: {"type":"start-step"}
+
+data: {"type":"text-start","id":"id-3"}
+
+data: {"type":"text-delta","id":"id-3","delta":"Saved."}
+
+data: {"type":"text-end","id":"id-3"}
+
+data: {"type":"data-blog-stats","data":{"drafts":1,"failed":false}}
+
+data: {"type":"finish-step"}
+
+data: {"type":"finish","finishReason":"stop"}
+
+data: [DONE]
+

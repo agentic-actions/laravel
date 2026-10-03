@@ -1,0 +1,93 @@
+{
+    "name": "@agentic-actions/client",
+    "version": "0.9.0-beta.1",
+    "description": "Typed calls and copilot rows for Agentic Actions for Laravel.",
+    "license": "MIT",
+    "keywords": ["laravel", "actions", "agents", "mcp", "inertia", "react", "ai-sdk"],
+    "homepage": "https://github.com/agentic-actions/laravel/tree/main/js#readme",
+    "bugs": {
+        "url": "https://github.com/agentic-actions/laravel/issues"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/agentic-actions/laravel.git",
+        "directory": "js"
+    },
+    "author": "Hussam Abd <Hussam3bd@gmail.com>",
+    "publishConfig": {
+        "access": "public"
+    },
+    "type": "module",
+    "sideEffects": [
+        "./dist/react.js"
+    ],
+    "files": [
+        "dist"
+    ],
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+        },
+        "./inertia": {
+            "types": "./dist/inertia.d.ts",
+            "import": "./dist/inertia.js"
+        },
+        "./react": {
+            "types": "./dist/react.d.ts",
+            "import": "./dist/react.js"
+        },
+        "./ai-sdk": {
+            "types": "./dist/ai-sdk.d.ts",
+            "import": "./dist/ai-sdk.js"
+        },
+        "./views": {
+            "types": "./dist/views.d.ts",
+            "import": "./dist/views.js"
+        },
+        "./package.json": "./package.json"
+    },
+    "scripts": {
+        "build": "tsc -p tsconfig.build.json",
+        "typecheck": "tsc -p tsconfig.json --noEmit",
+        "test:types": "tsc -p tests/types/tsconfig.json --noEmit",
+        "test:runtime": "npm run build && node --test --experimental-test-module-mocks 'tests/runtime/*.test.mjs'",
+        "check": "npm run typecheck && npm run test:types && npm run test:runtime"
+    },
+    "engines": {
+        "node": ">=22.3"
+    },
+    "peerDependencies": {
+        "@inertiajs/core": "^3.0",
+        "@inertiajs/react": "^3.0",
+        "ai": "^7.0",
+        "react": "^19.0",
+        "react-dom": "^19.0"
+    },
+    "peerDependenciesMeta": {
+        "@inertiajs/core": {
+            "optional": true
+        },
+        "@inertiajs/react": {
+            "optional": true
+        },
+        "ai": {
+            "optional": true
+        },
+        "react": {
+            "optional": true
+        },
+        "react-dom": {
+            "optional": true
+        }
+    },
+    "devDependencies": {
+        "@inertiajs/core": "3.7.0",
+        "@inertiajs/react": "3.7.0",
+        "@types/react": "^19.0.0",
+        "ai": "7.0.114",
+        "react": "^19.0.0",
+        "react-dom": "^19.0.0",
+        "typescript": "~5.9.3"
+    }
+}

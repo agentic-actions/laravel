@@ -1,0 +1,28 @@
+data: {"type":"start","messageId":"id-1"}
+
+data: {"type":"start-step"}
+
+data: {"type":"data-action","id":"a:id-2","data":{"action":"delete-post","label":"Removing\u2026","status":"running","effect":"destructive"}}
+
+data: {"type":"data-action","id":"a:id-2","data":{"action":"delete-post","label":"Removed","status":"done","effect":"destructive","touches":["posts"]}}
+
+data: {"type":"tool-output-available","toolCallId":"call_1","output":null}
+
+data: {"type":"finish-step"}
+
+data: {"type":"start-step"}
+
+data: {"type":"text-start","id":"id-3"}
+
+data: {"type":"text-delta","id":"id-3","delta":"Deleted"}
+
+data: {"type":"text-delta","id":"id-3","delta":" it."}
+
+data: {"type":"text-end","id":"id-3"}
+
+data: {"type":"finish-step"}
+
+data: {"type":"finish","finishReason":"stop"}
+
+data: [DONE]
+
