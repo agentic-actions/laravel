@@ -46,7 +46,7 @@ When `authorize()` has to take input, put the check on the caller in `shouldRegi
 
 ## Refusals
 
-An action says no from its own code with a `Refusal`. `on()` puts the message on a field, and `status()` sets the HTTP status, 409 by default. `Actions::refuse()` turns an exception your domain already throws into a refusal on every surface.
+An action says no from its own code with a `Refusal`. `on()` puts the message on a field, which answers 422 like a validation error; otherwise `status()` sets the HTTP status, 409 by default. `Actions::refuse()` turns an exception your domain already throws into a refusal on every surface.
 
 <CodeCard file="app/Actions/CreatePost.php">
 

@@ -7,6 +7,15 @@ description: How an action's effect decides which surfaces may reach it.
 
 An action says what it does to the world, a call says where it comes from, and the two together decide whether the call runs.
 
+<Figure caption="Which caller reaches which effect, once #[Expose] has opened its surface.">
+<Matrix corner="Effect" label="Which caller reaches which effect" :columns="['Web', 'CLI', 'Agents', 'MCP']" :rows="[
+  { label: 'Read', cells: ['yes', 'yes', 'yes', 'yes'] },
+  { label: 'Write', cells: ['yes', 'yes', 'yes', 'yes'] },
+  { label: 'Destructive', cells: ['yes', 'yes', 'confirm', 'no'] },
+  { label: 'External', cells: ['yes', 'yes', 'confirm', 'no'] },
+]" />
+</Figure>
+
 ## Four effects
 
 Every action declares one `$effect`. It picks the token ability a call needs, and whether a model may call the action at all. An action without one opens no remote surface and fails `actions:check`.
@@ -46,16 +55,7 @@ A surface is where a call comes from. Agent and Mcp are model-driven, and so is 
 
 A model-driven call reaches only Read and Write, and needs an actor unless the action sets `$guests`. The one exception is an agent offered a Destructive or External action through a named toolset: each of its calls runs only after the person confirms it. MCP has no confirmation step, so it never reaches them.
 
-<Figure caption="Which caller reaches which effect, once #[Expose] has opened its surface.">
-<Matrix corner="Effect" label="Which caller reaches which effect" :columns="['Web', 'CLI', 'Agents', 'MCP']" :rows="[
-  { label: 'Read', cells: ['yes', 'yes', 'yes', 'yes'] },
-  { label: 'Write', cells: ['yes', 'yes', 'yes', 'yes'] },
-  { label: 'Destructive', cells: ['yes', 'yes', 'confirm', 'no'] },
-  { label: 'External', cells: ['yes', 'yes', 'confirm', 'no'] },
-]" />
-</Figure>
-
-What the person sees while a call waits is in [Confirmations](/concepts/confirmations).
+What the person sees while a call waits is in [Confirmations and forms](/concepts/confirmations).
 
 ## Doors
 
