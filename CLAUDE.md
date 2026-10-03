@@ -17,7 +17,7 @@ Read this before any change. It is written so a new session, another agent or a 
 - `workbench/`: a small blog app (users, teams routed by slug, posts; `BlogAssistant`, `TeamAssistant`; five actions) with its committed `actions.exposure.json` and `resources/js/agentic/actions.ts`.
 - `config/agentic-actions.php`; `lang/{en,ar}` (a parity test covers both; a group of lines such as `oauth.abilities` is checked flattened); `resources/boost/` (the guideline, capped at 50 lines by a test, and the skill); `resources/views/consent.blade.php` (the OAuth consent page, loaded only while OAuth is on); `stubs/`; `database/migrations/` (published only on request, file by file: the conversations table under `agentic-actions-migrations`, the OAuth connections table under `agentic-actions-oauth-migrations`; never loaded).
 - `bin/fresh-app plain|livewire` builds a new Laravel app under `build/` and walks the whole setup path against a copy of this working tree. `bin/stream-probe` (with `stream-probe-browser.mjs` and `stream-probe-stubs/`) checks streaming over Laravel Herd's nginx and PHP-FPM with headless Chrome; its header has the usage, and it runs `herd link` and `herd secure`.
-- `docs/*.md` are the user docs.
+- `docs/*.md` are the user docs, and also build agentic-actions.com (VitePress, `docs/.vitepress/config.mts`). `docs/site/` holds the pages only the site has, which render empty on GitHub: the home page, and Getting started and the Changelog, which include the README's `getting-started` region and `CHANGELOG.md`; relative links in what they include resolve from the repository root, as on GitHub. A new docs page needs its sidebar entry in the config, and the nav's version is read from `js/package.json`.
 
 ## Commands
 
@@ -27,6 +27,7 @@ Run them from the repository root, with PHP 8.3+, Composer and Node 22 on the PA
 composer install && npm --prefix js ci   # setup
 composer check                           # Pint --test, PHPStan, Pest (serial)
 npm --prefix js run check                # typecheck, type tests, build, runtime tests
+npm --prefix docs ci && npm --prefix docs run docs:build   # the site; a dead link, #fragment or include fails it
 composer lint                            # applies Pint's fixes, then PHPStan
 vendor/bin/pest tests/Feature/Streaming/ConversationSlotTest.php   # one file
 vendor/bin/pest --filter=ConversationSlot                          # by name
@@ -35,7 +36,7 @@ bin/fresh-app plain                      # about 45 seconds each; run both befor
 bin/fresh-app livewire
 ```
 
-CI: `.github/workflows/push.yml` runs on every push and pull request (PHP 8.3 and 8.5 on Laravel 13, with laravel/ai and laravel/passport, and without either, and the npm client's check); `tags.yml` on a `v*` tag or by hand (the Laravel 12 floor on PHP 8.3 with `--prefer-lowest`, Laravel 12 latest and Laravel 13 on PHP 8.4, MySQL 8 and Postgres 16 running `--group=database`, both fresh-app modes, the npm client with and without React). To run a cell locally, run it in a clone under `build/` (git-ignored), never in your checkout, whose `vendor/` it would change. A clone takes HEAD, so commit first, copy the cell's install line from the workflow, and delete `build/cells` afterwards:
+CI: `.github/workflows/push.yml` runs on every push and pull request (PHP 8.3 and 8.5 on Laravel 13, with laravel/ai and laravel/passport, and without either, and the npm client's check); `tags.yml` on a `v*` tag or by hand (the Laravel 12 floor on PHP 8.3 with `--prefer-lowest`, Laravel 12 latest and Laravel 13 on PHP 8.4, MySQL 8 and Postgres 16 running `--group=database`, both fresh-app modes, the npm client with and without React); `docs.yml` builds the site on a pull request or push that touches `docs/`, the README, the CHANGELOG or `js/package.json`, and deploys main to GitHub Pages. To run a cell locally, run it in a clone under `build/` (git-ignored), never in your checkout, whose `vendor/` it would change. A clone takes HEAD, so commit first, copy the cell's install line from the workflow, and delete `build/cells` afterwards:
 
 ```bash
 git clone --quiet . build/cells/no-ai && cd build/cells/no-ai
@@ -67,7 +68,7 @@ DB_CONNECTION=pgsql DB_HOST=127.0.0.1 DB_PORT=5432 DB_DATABASE=agentic_actions_t
 ## How a change is made
 
 1. **Test first.** A behaviour change starts as a failing test; a security fix keeps its attack as a test under `tests/Feature/Security/`.
-2. **Checks green.** `composer check` and `npm --prefix js run check` pass before every commit, and a change that touches optional packages also passes the cell without them.
+2. **Checks green.** `composer check` and `npm --prefix js run check` pass before every commit, and a change that touches optional packages also passes the cell without them. A change to `docs/`, the README or the CHANGELOG also passes the site's build.
 3. **Docs and CHANGELOG with the code.** A user-visible change updates `docs/` and adds a line under the CHANGELOG's Unreleased section; a change an app must act on also gets an Upgrading note.
 4. **Release.** `chore(release): prepare X`: the CHANGELOG's Unreleased section becomes the version with its upgrade notes, `js/package.json` and the root of `js/package-lock.json` take the version without the "v", the README's pre-release note and install line follow, `composer.json`'s branch alias and SECURITY.md's supported line move with a new minor, and `js/dist` is rebuilt. Then the annotated tag (`vX.Y.Z-beta.N` for a beta), after `tags.yml` has passed on the commit.
 

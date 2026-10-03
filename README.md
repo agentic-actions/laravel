@@ -1,9 +1,11 @@
 # Agentic Actions for Laravel
 
+<!-- #region getting-started -->
 > **Beta.** 0.9.0-beta.2 is the current release. The API can still change before 1.0: [the changelog](https://github.com/agentic-actions/laravel/blob/main/CHANGELOG.md) lists every change and how to upgrade.
 
 Write an operation once, as an Action class. Mark it `#[Expose]` and the same class answers a web route (JSON and browser forms, with Precognition), an Artisan command, a tool call from a [laravel/ai](https://github.com/laravel/ai) agent or an MCP client, and a typed TypeScript function. Every caller goes through one pipeline: exposure, token abilities, tenant membership, `authorize()`, validation, `handle()`, and an allowlist on the output.
 
+<!-- #region create-post -->
 ```php
 <?php
 
@@ -76,6 +78,7 @@ final class CreatePost extends Action
     }
 }
 ```
+<!-- #endregion create-post -->
 
 That class is already a JSON endpoint:
 
@@ -291,6 +294,8 @@ final class CreatePostForm extends Component
 ### Other front ends
 
 `@agentic-actions/client` has no dependencies. `callAction(createPost(), { title, body })` posts JSON with an `Idempotency-Key` and, on the same origin, the XSRF header; it resolves the typed output or throws `ActionValidationError`, `ActionRefusedError` or `ActionFailedError`. After each success it hands the action's `$touches` (here `['posts']`) to every handler registered with `onTouched()`, so your own store or cache can refetch what went stale. On Inertia, `@agentic-actions/client/inertia` reloads the props those keys name, and `@agentic-actions/client/react` wraps Inertia's `useHttp` in `useAction()` ([recipe](https://github.com/agentic-actions/laravel/blob/main/docs/recipes.md#forms-on-inertia-react)).
+
+<!-- #endregion getting-started -->
 
 ## Agents
 

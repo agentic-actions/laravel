@@ -22,6 +22,13 @@ npm --prefix js run check  # typecheck, type tests, runtime tests
 
 `composer lint` applies Pint's fixes and runs PHPStan.
 
+The documentation site, agentic-actions.com, is built from `docs/*.md`, the README and the changelog. A change to any of them also passes the site's build, which fails on a dead link, a missing `#fragment` or an include it cannot find:
+
+```bash
+npm --prefix docs ci
+npm --prefix docs run docs:build   # or docs:dev to preview
+```
+
 `bin/fresh-app plain` and `bin/fresh-app livewire` create a brand-new Laravel application under `build/`, install the package from this checkout, and walk the whole setup path: the route lines, `make:agentic-action`, `actions:check --update`, the Blade form, a Sanctum token, `actions:run`, the TypeScript file and laravel/ai. Run them before a release.
 
 ## Conventions
