@@ -1,43 +1,217 @@
 /**
- * Near-black and warm grey, the system's own fonts, and no text heavier than
- * 500 outside <strong>. Link text measures at least 4.5:1 on every background
- * it sits on, in both themes (the values and ratios are in the comments).
+ * The site's tokens: a warm off-white ground (warm near-black in dark mode),
+ * white or near-black surfaces, near-black ink and a muted warm grey, thin warm
+ * lines, regular weights (400 and 500), the system's sans and a monospace for
+ * labels, buttons and diagram text.
+ *
+ * Six accents carry meaning and nothing else, as dots, pill borders and tinted
+ * fills, never as large blocks:
+ *
+ *   pass    passes, is allowed, ran          green
+ *   refuse  refused, never reached           red
+ *   wait    waits for the person             amber
+ *   agent   an agent, the copilot            violet
+ *   mcp     MCP and other outside clients    blue
+ *   tenant  a tenant (a team)                teal
+ *
+ * Each accent has a text-safe shade (--aa-<name>), a tinted fill
+ * (--aa-<name>-fill) and a line for borders and wires (--aa-<name>-line). Every
+ * text-safe shade measures at least 4.5:1 on the ground, the surface, the
+ * sunken fill and its own tint, in both themes (ratios beside each value:
+ * ground / surface / own fill).
  */
 :root {
-  --vp-font-family-base: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --aa-font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --aa-font-mono: ui-monospace, 'SF Mono', SFMono-Regular, 'JetBrains Mono', Menlo, Consolas, 'Liberation Mono', monospace;
 
-  /* 14.2:1 on #ffffff, 13.2:1 on #f6f6f7 */
-  --vp-c-brand-1: #2f2a25;
-  /* hover: 7.4:1 on #ffffff, 6.9:1 on #f6f6f7 */
-  --vp-c-brand-2: #5c544c;
-  /* button: #ffffff text at 14.2:1 */
-  --vp-c-brand-3: #2f2a25;
-  --vp-c-brand-soft: rgba(140, 125, 110, 0.16);
+  /* The type scale. Nothing in a diagram goes below --aa-fs-xs. */
+  --aa-fs-xs: 12px;
+  --aa-fs-sm: 13px;
+  --aa-fs-md: 15px;
+  --aa-fs-base: 16px;
+  --aa-fs-lg: 18px;
+  --aa-fs-xl: 22px;
+  --aa-fs-2xl: clamp(26px, 3.4vw, 36px);
+  --aa-fs-display: clamp(38px, 6.2vw, 68px);
+  --aa-tracking-label: 0.06em;
 
-  /* warm grey: 4.8:1 on #ffffff */
-  --vp-home-hero-name-color: #7a7067;
+  --aa-radius-sm: 6px;
+  --aa-radius: 10px;
+  --aa-radius-lg: 14px;
+
+  /* Light: ground, surfaces, ink, lines. */
+  --aa-ground: #f7f5f0;
+  --aa-surface: #ffffff;
+  --aa-sunken: #f1eee7;
+  /* 15.8:1 on the ground, 17.2:1 on the surface */
+  --aa-ink: #1d1b18;
+  /* 8.7:1 / 9.5:1 */
+  --aa-ink-2: #4a453f;
+  /* 5.4:1 / 5.8:1, 5.0:1 on the sunken fill */
+  --aa-muted: #6b645b;
+  --aa-line: #e6e1d8;
+  --aa-line-strong: #d3ccc0;
+  --aa-wire: #a59d91;
+  --aa-grid-dot: rgba(120, 105, 85, 0.16);
+  --aa-halftone: rgba(110, 95, 75, 0.34);
+  --aa-shadow: 0 1px 2px rgba(40, 30, 20, 0.05), 0 8px 24px -12px rgba(40, 30, 20, 0.12);
+
+  /* 5.5 / 6.0 / 5.3 */
+  --aa-pass: #16723a;
+  --aa-pass-fill: #e6f4ea;
+  /* 6.0 / 6.5 / 5.6 */
+  --aa-refuse: #b3261e;
+  --aa-refuse-fill: #fbe9e7;
+  /* 5.8 / 6.3 / 5.6 */
+  --aa-wait: #8a5300;
+  --aa-wait-fill: #fbf0dc;
+  /* 6.1 / 6.7 / 5.7 */
+  --aa-agent: #6a3fc8;
+  --aa-agent-fill: #efeafc;
+  /* 5.9 / 6.4 / 5.6 */
+  --aa-mcp: #1d5cb8;
+  --aa-mcp-fill: #e7f0fc;
+  /* 5.5 / 6.0 / 5.3 */
+  --aa-tenant: #0d6f68;
+  --aa-tenant-fill: #e2f3f1;
 }
 
 .dark {
-  /* 13.3:1 on #1b1b1f, 12.5:1 on #202127, 14.0:1 on #161618 */
+  --aa-ground: #151412;
+  --aa-surface: #1d1c19;
+  --aa-sunken: #24221e;
+  /* 15.2:1 on the ground, 14.1:1 on the surface */
+  --aa-ink: #ede9e2;
+  /* 10.4:1 / 9.7:1 */
+  --aa-ink-2: #c9c2b8;
+  /* 6.4:1 / 5.9:1, 5.5:1 on the sunken fill */
+  --aa-muted: #a0978b;
+  --aa-line: #2c2a25;
+  --aa-line-strong: #423e37;
+  --aa-wire: #6f685e;
+  --aa-grid-dot: rgba(220, 205, 185, 0.09);
+  --aa-halftone: rgba(225, 210, 190, 0.22);
+  --aa-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px -12px rgba(0, 0, 0, 0.5);
+
+  /* 8.9 / 8.3 / 6.3 */
+  --aa-pass: #5cc98a;
+  --aa-pass-fill: #263429;
+  /* 8.3 / 7.7 / 6.0 */
+  --aa-refuse: #ff8f84;
+  --aa-refuse-fill: #3d2c28;
+  /* 9.5 / 8.8 / 6.6 */
+  --aa-wait: #e9b04f;
+  --aa-wait-fill: #3a3121;
+  /* 8.0 / 7.4 / 5.8 */
+  --aa-agent: #b49cff;
+  --aa-agent-fill: #322e39;
+  /* 8.4 / 7.7 / 6.0 */
+  --aa-mcp: #7eb0ff;
+  --aa-mcp-fill: #2b3139;
+  /* 9.1 / 8.4 / 6.5 */
+  --aa-tenant: #4fc9bb;
+  --aa-tenant-fill: #243430;
+}
+
+:root {
+  --aa-pass-line: color-mix(in srgb, var(--aa-pass) 50%, transparent);
+  --aa-refuse-line: color-mix(in srgb, var(--aa-refuse) 50%, transparent);
+  --aa-wait-line: color-mix(in srgb, var(--aa-wait) 50%, transparent);
+  --aa-agent-line: color-mix(in srgb, var(--aa-agent) 50%, transparent);
+  --aa-mcp-line: color-mix(in srgb, var(--aa-mcp) 50%, transparent);
+  --aa-tenant-line: color-mix(in srgb, var(--aa-tenant) 50%, transparent);
+}
+
+/**
+ * A tone sets three local properties a component reads: --tone (text-safe),
+ * --tone-fill and --tone-line. Neutral is the muted grey.
+ */
+.aa-tone-neutral {
+  --tone: var(--aa-muted);
+  --tone-fill: var(--aa-sunken);
+  --tone-line: var(--aa-line-strong);
+}
+.aa-tone-pass {
+  --tone: var(--aa-pass);
+  --tone-fill: var(--aa-pass-fill);
+  --tone-line: var(--aa-pass-line);
+}
+.aa-tone-refuse {
+  --tone: var(--aa-refuse);
+  --tone-fill: var(--aa-refuse-fill);
+  --tone-line: var(--aa-refuse-line);
+}
+.aa-tone-wait {
+  --tone: var(--aa-wait);
+  --tone-fill: var(--aa-wait-fill);
+  --tone-line: var(--aa-wait-line);
+}
+.aa-tone-agent {
+  --tone: var(--aa-agent);
+  --tone-fill: var(--aa-agent-fill);
+  --tone-line: var(--aa-agent-line);
+}
+.aa-tone-mcp {
+  --tone: var(--aa-mcp);
+  --tone-fill: var(--aa-mcp-fill);
+  --tone-line: var(--aa-mcp-line);
+}
+.aa-tone-tenant {
+  --tone: var(--aa-tenant);
+  --tone-fill: var(--aa-tenant-fill);
+  --tone-line: var(--aa-tenant-line);
+}
+
+/**
+ * VitePress's own variables, mapped onto the tokens. Link and brand text
+ * measures at least 4.5:1 on every background it sits on: the brand ink is
+ * 13.0:1 on the light ground and 14.3:1 on the dark one.
+ */
+:root {
+  --vp-font-family-base: var(--aa-font-sans);
+  --vp-font-family-mono: var(--aa-font-mono);
+
+  --vp-c-bg: var(--aa-ground);
+  --vp-c-bg-alt: var(--aa-sunken);
+  --vp-c-bg-elv: var(--aa-surface);
+  --vp-c-bg-soft: var(--aa-sunken);
+
+  --vp-c-text-1: var(--aa-ink);
+  --vp-c-text-2: var(--aa-ink-2);
+  --vp-c-text-3: var(--aa-muted);
+
+  --vp-c-divider: var(--aa-line);
+  --vp-c-gutter: var(--aa-line);
+  --vp-c-border: var(--aa-line-strong);
+  --vp-c-default-soft: rgba(120, 105, 85, 0.12);
+
+  --vp-c-brand-1: #2f2a25;
+  /* hover: 6.8:1 on the ground */
+  --vp-c-brand-2: #5c544c;
+  --vp-c-brand-3: #2f2a25;
+  --vp-c-brand-soft: rgba(140, 125, 110, 0.16);
+
+  --vp-nav-bg-color: var(--aa-ground);
+  --vp-sidebar-bg-color: var(--aa-ground);
+  --vp-local-nav-bg-color: var(--aa-ground);
+
+  /* The high-contrast Shiki themes measure at least 5.0:1 on white and 8.0:1 on the dark surface. */
+  --vp-code-block-bg: var(--aa-surface);
+  --vp-code-copy-code-bg: var(--aa-sunken);
+}
+
+.dark {
+  --vp-c-default-soft: rgba(220, 205, 185, 0.1);
+
   --vp-c-brand-1: #e7e2db;
-  /* hover: 9.1:1 on #1b1b1f, 8.6:1 on #202127 */
+  /* hover: 9.8:1 on the ground */
   --vp-c-brand-2: #c4bcb2;
-  /* button: #1b1b1f text at 13.3:1, 9.1:1 on hover */
   --vp-c-brand-3: #e7e2db;
   --vp-c-brand-soft: rgba(200, 185, 170, 0.16);
 
-  /* warm grey: 5.9:1 on #1b1b1f */
-  --vp-home-hero-name-color: #a0968b;
-
-  --vp-button-brand-text: #1b1b1f;
-  --vp-button-brand-hover-text: #1b1b1f;
-  --vp-button-brand-active-text: #1b1b1f;
-}
-
-.VPHero .heading .name,
-.VPHero .heading .text {
-  font-weight: 400;
+  --vp-button-brand-text: #151412;
+  --vp-button-brand-hover-text: #151412;
+  --vp-button-brand-active-text: #151412;
 }
 
 :root .vp-doc h1,
@@ -45,16 +219,33 @@
 :root .vp-doc h3,
 :root .vp-doc h4,
 :root .vp-doc th,
-.VPFeature .box .title,
 :root .VPSidebarItem.level-0 > .item .text,
 :root .VPNavBarTitle .title,
 :root .VPDocAsideOutline .outline-title {
   font-weight: 500;
 }
 
+:root .vp-doc h1 {
+  letter-spacing: -0.02em;
+}
+
+/* Sidebar group titles in the monospace, as labels. */
+:root .VPSidebarItem.level-0 > .item .text {
+  font-family: var(--aa-font-mono);
+  font-size: var(--aa-fs-xs);
+  letter-spacing: var(--aa-tracking-label);
+  text-transform: uppercase;
+  color: var(--aa-muted);
+}
+
 /* Underlined, so the link reads as a link without a heavier weight. */
 :root .vp-doc a {
   font-weight: inherit;
+}
+
+/* Code blocks are surfaces: white or near-black, with a thin line. */
+:root .vp-doc div[class*='language-'] {
+  border: 1px solid var(--aa-line);
 }
 
 /* With a near-black brand, colour alone does not mark the current section. */
@@ -63,4 +254,25 @@
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 6px;
+}
+
+:root .VPNavBarTitle .logo {
+  height: 22px;
+}
+
+/* A visible focus ring everywhere, in the ink. */
+:root :focus-visible {
+  outline: 2px solid var(--aa-ink);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root *,
+  :root *::before,
+  :root *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
