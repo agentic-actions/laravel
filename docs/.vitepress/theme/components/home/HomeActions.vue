@@ -25,7 +25,7 @@ async function copy(): Promise<void> {
 const second =
   props.secondary === 'github'
     ? { text: 'GitHub', href: 'https://github.com/agentic-actions/laravel', external: true }
-    : { text: 'How it works', href: withBase('/concepts/how-it-works'), external: false }
+    : { text: 'How it works', href: withBase('/how-it-works/one-action'), external: false }
 </script>
 
 <template>

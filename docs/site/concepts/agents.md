@@ -51,7 +51,7 @@ See [What an agent's tool list shows](/concepts#what-an-agents-tool-list-shows) 
 
 ## Every call is a row
 
-The copilot streams the turn through `ActionsProtocol`. Each call of an action tool shows a row: its label while it runs, then done, refused, failed, ended or declined, as the pipeline recorded it, never as the model's text tells it. The label is the action's `activityLabel()`, or the package's sentence for its effect, and the stream never carries the tools' arguments, nor any result except the table a Read action shows ([Tables and charts](/concepts/tables)). See [Labels](/copilot#labels), [Statuses](/copilot#statuses) and [The stream](/copilot#the-stream).
+The copilot streams the turn through `ActionsProtocol`. Each call of an action tool shows a row: its label while it runs, then done, refused, failed, ended or declined, as the pipeline recorded it, never as the model's text tells it. The label is the action's `activityLabel()`, or the package's sentence for its effect, and the stream never carries the tools' arguments, nor any result except the table a Read action shows ([Tables and charts](/how-it-works/tables)). See [Labels](/copilot#labels), [Statuses](/copilot#statuses) and [The stream](/copilot#the-stream).
 
 <CodeCard file="routes/web.php">
 

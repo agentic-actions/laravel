@@ -14,7 +14,7 @@ An action says what it does to the world, a call says where it comes from, and t
   { label: 'Destructive', cells: ['yes', 'yes', 'confirm', 'no'] },
   { label: 'External', cells: ['yes', 'yes', 'confirm', 'no'] },
 ]" />
-<template #caption>Which caller reaches which effect, once #[Expose] has opened its surface; what the person sees while a call waits is in <a href="/concepts/confirmations">Confirmations and forms</a>.</template>
+<template #caption>Which caller reaches which effect, once #[Expose] has opened its surface; what the person sees while a call waits is in <a href="/how-it-works/confirmations">Confirmations and forms</a>.</template>
 </Figure>
 
 ## Four effects
