@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.9.0-beta.2 - 2026-10-03
+
+A turn laravel/ai queues keeps the limits of the token that queued it, which 0.9.0-beta.1 documented as a known limit.
+
+### Upgrading
+
+- Nothing to change: `^0.9@beta` reaches this version, and the npm client's API is unchanged.
 
 ### Fixed
 
