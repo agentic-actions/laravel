@@ -59,8 +59,12 @@ return [
     | Leave "model" null when the app has no tenants. Once it is set,
     | actions are tenant-scoped unless they set $tenantScoped = false, the
     | "parameter" route segment carries the tenant (resolved by route key),
-    | and "membership" must name a ChecksMembership class. "scope" names a
-    | ScopesToTenant class used by ActionContext::find().
+    | and "membership" must name a ChecksMembership class. "parameter" is
+    | "tenant" until you set it: name your routes' segment, such as "team"
+    | for teams/{team}. "scope" names a ScopesToTenant class that keeps
+    | ActionContext::find() and datasets to the tenant's rows; without it,
+    | or Actions::scopeUsing(), they throw MissingContext.
+    | See https://agentic-actions.com/concepts#tenants.
     |
     */
 
@@ -155,7 +159,8 @@ return [
     | token guard: inside MCP a session grants nothing. "tenant_pattern"
     | null derives one: digits for an incrementing route key, none otherwise.
     | Name a Passport guard here (auth:sanctum,api) and remote clients such
-    | as Claude sign in with OAuth: see docs/mcp.md.
+    | as Claude sign in with OAuth: see
+    | https://agentic-actions.com/mcp#connect-claude-chatgpt-and-other-remote-clients-oauth.
     |
     */
 

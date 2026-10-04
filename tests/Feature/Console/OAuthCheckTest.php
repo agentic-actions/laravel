@@ -143,7 +143,7 @@ it('warns about redirect domains that accept any site in production, not in loca
     app()->detectEnvironment(fn () => 'production');
 
     expect(oauthFindings())->toBe([
-        ['warn', 'OAuth', 'config/mcp.php redirect_domains accepts any site, so any site can register as a client. List the ones you allow (docs/mcp.md#harden-the-oauth-setup).'],
+        ['warn', 'OAuth', 'config/mcp.php redirect_domains accepts any site, so any site can register as a client. List the ones you allow (https://agentic-actions.com/mcp#harden-the-oauth-setup).'],
     ]);
 
     config(['mcp.redirect_domains' => ['https://claude.ai/', 'http://localhost']]);

@@ -42,7 +42,8 @@ it('names only commands the package registers', function () {
 });
 
 it('names only config keys the package has', function () {
-    preg_match_all('/\bagentic-actions(?:\.[a-z_]+)+/', boostSkill(), $matches);
+    // A key, not the site's host in a link.
+    preg_match_all('~(?<!//)\bagentic-actions(?:\.[a-z_]+)+~', boostSkill(), $matches);
 
     $keys = array_values(array_unique($matches[0]));
 

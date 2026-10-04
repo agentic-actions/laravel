@@ -29,7 +29,7 @@ final class ForbiddenKeys
     /**
      * The recipe every refusal about agent input names.
      */
-    private const RECIPE = 'the "Strict agent schemas (no ids)" recipe (docs/recipes.md#strict-agent-schemas-no-ids)';
+    private const RECIPE = 'the "Strict agent schemas (no ids)" recipe (https://agentic-actions.com/recipes#strict-agent-schemas-no-ids)';
 
     /**
      * Each route's parameters by route name or URI, memoized per request for a class and a route table.

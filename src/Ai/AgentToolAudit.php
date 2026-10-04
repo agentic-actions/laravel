@@ -123,7 +123,7 @@ final class AgentToolAudit
         }
 
         Assert::assertEmpty($violations, sprintf(
-            '%s offers input keys an agent may never be offered: [%s]. Remove them from the tool\'s schema, or follow the "Strict agent schemas (no ids)" recipe (docs/recipes.md#strict-agent-schemas-no-ids).',
+            '%s offers input keys an agent may never be offered: [%s]. Remove them from the tool\'s schema, or follow the "Strict agent schemas (no ids)" recipe (https://agentic-actions.com/recipes#strict-agent-schemas-no-ids).',
             $agent::class,
             implode(', ', $violations),
         ));

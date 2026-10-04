@@ -34,7 +34,7 @@ function schemaNode(Closure $schema): array
  */
 function inputMessage(string $class, string $path, string $reason): string
 {
-    return "{$class}: agents cannot be offered input [{$path}]: it {$reason}. The tool is left out. Remove the key from schema(), or follow the \"Strict agent schemas (no ids)\" recipe (docs/recipes.md#strict-agent-schemas-no-ids): agentSchema() plus fromAgent().";
+    return "{$class}: agents cannot be offered input [{$path}]: it {$reason}. The tool is left out. Remove the key from schema(), or follow the \"Strict agent schemas (no ids)\" recipe (https://agentic-actions.com/recipes#strict-agent-schemas-no-ids): agentSchema() plus fromAgent().";
 }
 
 it('catches the default globs, case-insensitively, at any depth', function () {
@@ -151,7 +151,7 @@ it('refuses forbidden output keys and file fields', function () {
     } catch (MisconfiguredExposure $exception) {
         expect($exception->getMessage())->toBe(implode("\n", [
             LeakyOutputNote::class.': agents cannot receive output [secret]: it matches agents.forbidden_output_keys. The tool is left out. Remove the key from outputSchema().',
-            LeakyOutputNote::class.': agents cannot send the file field [photo]. The tool is left out. Give agents an agentSchema() without it, following the "Strict agent schemas (no ids)" recipe (docs/recipes.md#strict-agent-schemas-no-ids).',
+            LeakyOutputNote::class.': agents cannot send the file field [photo]. The tool is left out. Give agents an agentSchema() without it, following the "Strict agent schemas (no ids)" recipe (https://agentic-actions.com/recipes#strict-agent-schemas-no-ids).',
         ]));
     }
 });

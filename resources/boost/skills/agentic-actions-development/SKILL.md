@@ -82,7 +82,7 @@ Mistakes to avoid: building the context from `auth()->user()` inside a tool or `
 
 ## 3. Add the copilot panel
 
-1. Write the chat endpoint of `docs/copilot.md`: `$chat = ChatRequest::from($request)`, answer 422 when `$chat->isEmpty()`, and stream with `->usingProtocol(new ActionsProtocol)` (`AgenticActions\Streaming\ChatRequest` and `AgenticActions\Streaming\ActionsProtocol`).
+1. Write the chat endpoint of https://agentic-actions.com/copilot#the-server: `$chat = ChatRequest::from($request)`, answer 422 when `$chat->isEmpty()`, and stream with `->usingProtocol(new ActionsProtocol)` (`AgenticActions\Streaming\ChatRequest` and `AgenticActions\Streaming\ActionsProtocol`).
 2. Give writes a row label with `activityLabel(ActionContext $context, bool $finished)`, returning fixed `__()` sentences.
 3. For `#[WithPageContext]` (`AgenticActions\Attributes\WithPageContext`), make the agent implement laravel/ai's `HasMiddleware` and return `[...$this->actionMiddleware()]` from `middleware()`.
 4. In React: `useChat` with a `Chat` built from `actionsChat()`, `<ActionActivity rows>` for the rows, `useActionSync({ feed: { url } })` with the group's `_changes` route, and `useActionEdits(form.isDirty)` on every form the copilot must not overwrite.
@@ -103,7 +103,7 @@ Mistakes to avoid: building the chat history from the request (history comes onl
 2. Set `agentic-actions.mcp.path` (default `mcp/actions`) for actions that are not tenant-scoped, and `agentic-actions.mcp.tenant_path`, such as `mcp/t/{tenant}`, for tenant-scoped ones. Keep `agentic-actions.mcp.middleware` on a token guard.
 3. Mint tokens with named abilities only: `actions:read`, `actions:write`, and `tenant:{key}` (the primary key) to bind one tenant. Never rely on the default `['*']`, which lists nothing over MCP.
 4. Add `abilities:` middleware to your other routes on the token guard, such as `GET api/user`, or delete them.
-5. Connect a client with the URL and a bearer header, as `docs/mcp.md` shows for Claude Code, Cursor and Claude Desktop.
+5. Connect a client with the URL and a bearer header, as https://agentic-actions.com/mcp#5-connect-a-client shows for Claude Code, Cursor and Claude Desktop.
 
 ```php
 $token = $user->createToken('Claude Code', ['actions:read', 'actions:write', 'tenant:'.$tenant->getKey()], now()->addDays(90));
@@ -180,7 +180,7 @@ Route::middleware(['auth', 'throttle:20,1'])->post('/assistant', function (Reque
 
 A confirmation lapses after `agentic-actions.approvals.ttl` seconds (1800), and is kept in the default cache store: use database, redis, memcached or dynamodb.
 
-Check: run `php artisan actions:check` (the Approvals, Summary and Cache store rows), and write a test that installs laravel/ai's `FakeTextGateway` on the provider (`Ai::textProvider()->useTextGateway(...)`) with a `ToolCall` for `delete-post`, posts a turn and asserts the post still exists and the stream holds a `data-approval` part, then posts the answer (an assistant message whose tool part is `approval-responded` with `approval: {id, approved: true}`) as the same user and asserts the post is gone, then posts it again and asserts 409. `docs/testing.md` has the whole test.
+Check: run `php artisan actions:check` (the Approvals, Summary and Cache store rows), and write a test that installs laravel/ai's `FakeTextGateway` on the provider (`Ai::textProvider()->useTextGateway(...)`) with a `ToolCall` for `delete-post`, posts a turn and asserts the post still exists and the stream holds a `data-approval` part, then posts the answer (an assistant message whose tool part is `approval-responded` with `approval: {id, approved: true}`) as the same user and asserts the post is gone, then posts it again and asserts 409. https://agentic-actions.com/testing#confirmations has the whole test.
 
 Mistakes to avoid: faking the agent for the confirm half (laravel/ai resumes approvals against the provider's gateway, so an agent-level fake tests the pause only), putting record values in `approvalReason()`, listing the chat route as a CSRF exception or authenticating it with a token (only the person's session answers), and a `prepareForValidation()` or `fromAgent()` that reads the clock (the input must be the same at the answer, or the call is refused).
 
@@ -234,21 +234,21 @@ A form waits `agentic-actions.approvals.ttl` seconds (1800), like a confirmation
 
 The same action asks over MCP with nothing more to write, when the action allows MCP and the client is on protocol 2026-07-28 and declares form elicitation: the client gets the form as an `InputRequiredResult` and calls the tool again with the answer. Other MCP clients get the refusal naming the fields. Everything in the form reaches an MCP client, so leave profile defaults out of `ask()` when `$context->surface === Surface::Mcp`.
 
-Check: run `php artisan actions:check` (the Approvals row), and write a test that installs laravel/ai's `FakeTextGateway` on the provider with a `ToolCall` for `draft-post` that leaves `body` and `status` out, posts a turn and asserts nothing was saved and the stream holds a `data-elicitation` part, then posts the answer as the same user (an assistant message whose tool part is `approval-responded` with `approval: {id, approved: true}` and `elicitation: {action: 'accept', content: {...}}`) and asserts the post holds the person's body and the `agent_conversation_messages` table does not. `docs/testing.md` has the whole test.
+Check: run `php artisan actions:check` (the Approvals row), and write a test that installs laravel/ai's `FakeTextGateway` on the provider with a `ToolCall` for `draft-post` that leaves `body` and `status` out, posts a turn and asserts nothing was saved and the stream holds a `data-elicitation` part, then posts the answer as the same user (an assistant message whose tool part is `approval-responded` with `approval: {id, approved: true}` and `elicitation: {action: 'accept', content: {...}}`) and asserts the post holds the person's body and the `agent_conversation_messages` table does not. https://agentic-actions.com/testing#asking-the-person has the whole test.
 
-Mistakes to avoid: asking for a secret (a password, a token, a PIN, a card number: such a call is refused; send the person to a page of the app instead, as `docs/asking.md` shows), building a choice, a default or the message from anything the model sent, putting a URL in the message or a title, echoing the person's values in `modelReply()` (the model then reads them), and expecting a form for an object or a list of objects (never asked: the call is refused, naming the fields).
+Mistakes to avoid: asking for a secret (a password, a token, a PIN, a card number: such a call is refused; send the person to a page of the app instead, as https://agentic-actions.com/asking#sensitive-data-send-the-person-to-a-page shows), building a choice, a default or the message from anything the model sent, putting a URL in the message or a title, echoing the person's values in `modelReply()` (the model then reads them), and expecting a form for an object or a list of objects (never asked: the call is refused, naming the fields).
 
 ## 7. Connect a remote MCP client (OAuth)
 
-A Claude custom connector or ChatGPT signs in with OAuth and takes no pasted token. Follow `docs/mcp.md`, "Connect Claude, ChatGPT and other remote clients (OAuth)":
+A Claude custom connector or ChatGPT signs in with OAuth and takes no pasted token. Follow https://agentic-actions.com/mcp#connect-claude-chatgpt-and-other-remote-clients-oauth:
 
 1. `composer require laravel/passport`, then `php artisan passport:install`.
 2. Add an `api` guard with the `passport` driver in `config/auth.php`, and name it after Sanctum's in `agentic-actions.mcp.middleware`: `['auth:sanctum,api', 'throttle:agentic-actions-mcp']`. That line turns OAuth on.
 3. Add `Route::middleware('throttle:60,1')->group(fn () => Mcp::oauthRoutes());` to `routes/ai.php`.
 4. Run `php artisan actions:install --mcp`, then `php artisan actions:check` (the OAuth row).
-5. Give people a "Connected apps" list: `AgenticActions\OAuth\McpConnection::for($user)->with('client', 'tenant')->get()`, with `->revoke()` to disconnect, and the MCP URL to paste into the connector, with a copy button (`docs/mcp.md`, "Connected apps").
+5. Give people a "Connected apps" list: `AgenticActions\OAuth\McpConnection::for($user)->with('client', 'tenant')->get()`, with `->revoke()` to disconnect, and the MCP URL to paste into the connector, with a copy button (https://agentic-actions.com/mcp#connected-apps).
 
-Mistakes to avoid: adding Passport's `HasApiTokens` beside Sanctum's on the user model (keep Sanctum's alone; it serves both guards), listing the Passport guard before Sanctum's (every Sanctum token then answers 401), leaving `auth:api` routes without `scope:` or `scopes:` middleware (a connector's token signs the person in there), and keeping Passport's one-year token lifetime (`docs/mcp.md`, "Harden the OAuth setup").
+Mistakes to avoid: adding Passport's `HasApiTokens` beside Sanctum's on the user model (keep Sanctum's alone; it serves both guards), listing the Passport guard before Sanctum's (every Sanctum token then answers 401), leaving `auth:api` routes without `scope:` or `scopes:` middleware (a connector's token signs the person in there), and keeping Passport's one-year token lifetime (https://agentic-actions.com/mcp#harden-the-oauth-setup).
 
 ## 8. Show a table
 
@@ -298,7 +298,7 @@ Mistakes to avoid: a table on a Write action (it shows none), a column key the r
 2. Declare `dimensions(): array` with `AgenticActions\Datasets\Dimension`: at most one `time()`, plus `text()` and `enum()` (a backed enum), each on a column of the model or `relation.column` through a public method declared to return `BelongsTo`. Inside a tenant, a related row is read in the tenant's scope too; name a relation whose rows every tenant shares (countries, the users who write) in `protected array $shared`.
 3. Declare `measures(): array` with `AgenticActions\Datasets\Measure`: `count`, `countDistinct`, `sum`, `avg`, `min`, `max`, `->where($column, $value)` on a count or a sum, `->money('EUR')`, and `ratio($name, $label, $numerator, $denominator)`. Give each a snake-case name, a label in `__()`, and a `description()` where the name does not say it all.
 4. Write `authorize()` as usual, and `scope(Builder $query, ActionContext $context): void` for conditions of your own, such as the actor's rows. Do not write `schema()`, `rules()`, `columns()`, `handle()`, `agentSchema()` or `outputSchema()`: the package generates them.
-5. Give the connection a statement time limit (`docs/data.md`, "Give the datasets connection a time limit"), or run datasets on a replica that has one with `agentic-actions.datasets.connection`.
+5. Give the connection a statement time limit (https://agentic-actions.com/data#give-the-datasets-connection-a-time-limit), or run datasets on a replica that has one with `agentic-actions.datasets.connection`.
 
 ```php
 #[Expose(web: true, agents: ['default'])]
