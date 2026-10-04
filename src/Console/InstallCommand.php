@@ -191,8 +191,9 @@ final class InstallCommand extends Command
     /**
      * The route lines for routes/web.php, what to set, the commands that come next and, with a copilot, the schedule
      * that prunes the tables it showed, leaving out what the app already has: generated routes, a tenant model, Sanctum's trait on the user model, an MCP tenant path, each
-     * OAuth step taken, a discovered action and a snapshot actions:check finds current (a new action makes it stale,
-     * so the update follows it). The agent steps wait for laravel/ai. With nothing left, it prints nothing.
+     * OAuth step taken, a discovered agent with a toolset, a discovered action and a snapshot actions:check finds current (a new action makes it stale,
+     * so the update follows it). The agent steps wait for laravel/ai. With nothing left, it prints nothing. Each pointer
+     * to the docs is a page of the site, since the app has no docs/ folder.
      *
      * @param  list<string>  $features
      */
@@ -208,6 +209,7 @@ final class InstallCommand extends Command
         $oauth = $uses('mcp') && McpMount::oauth();
         $connectors = 'For Claude and ChatGPT connectors (OAuth): ';
         $ai = $uses('copilot') && $packages->laravelAi() !== PackageStatus::Missing;
+        $tenants = $uses('tenancy') && config('agentic-actions.tenant.model') === null;
 
         try {
             $scan = $this->laravel->make(Scanner::class)->scan(
@@ -223,20 +225,21 @@ final class InstallCommand extends Command
             $web && $uses('tenancy') ? "routes/web.php   Route::middleware('auth')->prefix('{$this->tenantPrefix($routes, $parameter)}')->name('{$plural}.')->group(fn () => Actions::routes(tenant: true));" : null,
             $web && $uses('tenancy') ? "routes/web.php   Route::middleware('auth')->group(fn () => Actions::routes(tenant: false));" : null,
             $web ? 'Each routes file needs: use AgenticActions\Facades\Actions;' : null,
-            $uses('tenancy') && config('agentic-actions.tenant.model') === null ? 'config/agentic-actions.php   set tenant.model, tenant.parameter and tenant.membership (docs/concepts.md#tenants)' : null,
-            $ai ? 'php artisan make:agent Assistant, then the chat route of docs/copilot.md' : null,
+            $tenants ? 'config/agentic-actions.php   set tenant.model, tenant.parameter, tenant.membership and tenant.scope (https://agentic-actions.com/concepts#tenants)' : null,
+            $tenants ? "tenant.scope keeps \$context->find() and datasets to the tenant's rows: until it or Actions::scopeUsing() is set, they throw MissingContext" : null,
+            $ai && ($scan === null || $scan->agents === []) ? 'php artisan make:agent Assistant, then the chat route of https://agentic-actions.com/copilot#the-server' : null,
             $ai ? "routes/console.php   Schedule::command('model:prune', ['--model' => [\\AgenticActions\\Streaming\\AgenticView::class]])->daily();" : null,
-            $ai && $uses('tenancy') ? 'Continue each conversation with Actions::conversation($agent, $user, $tenant) (docs/copilot.md#one-conversation-per-tenant)' : null,
+            $ai && $uses('tenancy') ? 'Continue each conversation with Actions::conversation($agent, $user, $tenant) (https://agentic-actions.com/copilot#one-conversation-per-tenant)' : null,
             $uses('approvals') && ! in_array(config('cache.stores.'.config('cache.default').'.driver'), ['database', 'redis', 'memcached', 'dynamodb'], true)
                 ? '.env   CACHE_STORE=database, or another store every server shares, for confirmations' : null,
-            $uses('mcp') && ! $passport && ! $this->usesTrait(HasApiTokens::class) ? 'app/Models/User.php   use Laravel\Sanctum\HasApiTokens; (docs/mcp.md)' : null,
+            $uses('mcp') && ! $passport && ! $this->usesTrait(HasApiTokens::class) ? 'app/Models/User.php   use Laravel\Sanctum\HasApiTokens; (https://agentic-actions.com/mcp#recipe-tokens-and-clients)' : null,
             $uses('mcp') && $uses('tenancy') && config('agentic-actions.mcp.tenant_path') === null ? "config/agentic-actions.php   mcp.tenant_path, such as mcp/t/{{$parameter}}" : null,
-            $uses('mcp') && $packages->passport() === PackageStatus::Missing ? $connectors.'composer require laravel/passport, then docs/mcp.md#connect-claude-chatgpt-and-other-remote-clients-oauth' : null,
+            $uses('mcp') && $packages->passport() === PackageStatus::Missing ? $connectors.'composer require laravel/passport, then https://agentic-actions.com/mcp#connect-claude-chatgpt-and-other-remote-clients-oauth' : null,
             $uses('mcp') && $packages->passport() !== PackageStatus::Missing && ! $oauth
                 ? $connectors."a passport guard in config/auth.php, then config/agentic-actions.php   mcp.middleware => ['".($passport ? 'auth:api' : 'auth:sanctum,api')."', 'throttle:agentic-actions-mcp'], and run this again" : null,
             $oauth && ! (config('passport.private_key') || is_readable(Passport::keyPath('oauth-private.key'))) ? 'php artisan passport:install' : null,
             $oauth && ! $this->laravel->make('router')->has(Discovery::METADATA) ? "routes/ai.php   Route::middleware('throttle:60,1')->group(fn () => Mcp::oauthRoutes());" : null,
-            $oauth ? 'Before real people connect: docs/mcp.md#harden-the-oauth-setup' : null,
+            $oauth ? 'Before real people connect: https://agentic-actions.com/mcp#harden-the-oauth-setup' : null,
             $scan?->actions === [] ? 'php artisan make:agentic-action CreatePost' : null,
             $scan === null || $scan->actions === [] || $this->laravel->make(Checks::class)->snapshot($scan) !== [] ? 'php artisan actions:check --update' : null,
         ]);

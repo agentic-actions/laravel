@@ -38,7 +38,7 @@ use Tests\Fixtures\Views\PostStats;
 use Workbench\App\Models\Team;
 use Workbench\App\Models\User;
 
-const STRICT_RECIPE = 'the "Strict agent schemas (no ids)" recipe (docs/recipes.md#strict-agent-schemas-no-ids): agentSchema() plus fromAgent().';
+const STRICT_RECIPE = 'the "Strict agent schemas (no ids)" recipe (https://agentic-actions.com/recipes#strict-agent-schemas-no-ids): agentSchema() plus fromAgent().';
 
 beforeEach(function () {
     $this->fixtures = dirname(__DIR__, 2).'/Fixtures';
@@ -402,7 +402,7 @@ describe('agent rows', function () {
 
     it('fails a file field offered to agents', function () {
         expect(inRow(findingsFor([FileForAgents::class]), 'Schema'))->toBe([
-            ['fail', 'Schema', FileForAgents::class.': agents cannot send the file field [attachment]. Give agents an agentSchema() without it, following the "Strict agent schemas (no ids)" recipe (docs/recipes.md#strict-agent-schemas-no-ids).'],
+            ['fail', 'Schema', FileForAgents::class.': agents cannot send the file field [attachment]. Give agents an agentSchema() without it, following the "Strict agent schemas (no ids)" recipe (https://agentic-actions.com/recipes#strict-agent-schemas-no-ids).'],
         ]);
     });
 

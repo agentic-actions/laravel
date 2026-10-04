@@ -9,6 +9,9 @@
 ### Fixed
 
 - **The npm client installed from `vendor/` brings no packages of its own.** The client's `package.json` listed its build and test toolchain as devDependencies, which npm installs for a folder linked with `file:` inside the app, so an app that installed the client from `vendor/agentic-actions/laravel/js` also got second copies of `ai` and Inertia under the client's folder: Vite could bundle a second `@inertiajs/react`, and the documented copilot panel failed to type-check against the app's `ai`. The client's `package.json` now declares only its optional peers, so every import resolves to the app's own copy. The toolchain moved to a private npm workspace at the repository root, which the Composer package leaves out; contributors run `npm ci` at the root instead of `npm --prefix js ci`.
+- **The package points at the docs site, not at files the app does not have.** `actions:install`'s next steps, `actions:check`'s rows, the agent-schema refusals, the published config's comments and the Boost skill named paths such as `docs/mcp.md`; each now names the page and heading on https://agentic-actions.com. A test checks that every page and heading they name exists.
+- **`actions:install`'s tenancy step names `tenant.scope`.** It listed `tenant.model`, `tenant.parameter` and `tenant.membership` only, so the first `$context->find()` answered 500 with `MissingContext`. It now names all four and says what the scope does, and the published config says that `tenant.parameter` is `tenant` until you set it to your routes' segment, such as `team`.
+- **`actions:install` stops suggesting `make:agent` once the app has an agent.** It printed the step on every run with a copilot; it now leaves it out once a discovered agent carries `#[UseToolset]`, as Setup describes.
 
 ### Documentation
 

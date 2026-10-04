@@ -42,7 +42,7 @@ function summaryFindings(array $classes, array $rows = ['Summary']): array
 
 it('fails an action with input and no approvalSummary(), though its key is not named like an id', function () {
     expect(summaryFindings([UnsummarizedDelete::class], ['Summary', 'Ids']))->toBe([
-        ['fail', 'Summary', UnsummarizedDelete::class.': agents are offered [post], and a person confirms this action on a card, but approvalSummary() is not written, so the card cannot say what the call acts on. Build it from the validated input and the record authorize() allowed (docs/copilot.md#confirmations).'],
+        ['fail', 'Summary', UnsummarizedDelete::class.': agents are offered [post], and a person confirms this action on a card, but approvalSummary() is not written, so the card cannot say what the call acts on. Build it from the validated input and the record authorize() allowed (https://agentic-actions.com/copilot#confirmations).'],
     ]);
 });
 

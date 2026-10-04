@@ -84,7 +84,7 @@ final class Checks
     /**
      * The recipe every finding about agent input names.
      */
-    private const RECIPE = 'the "Strict agent schemas (no ids)" recipe (docs/recipes.md#strict-agent-schemas-no-ids)';
+    private const RECIPE = 'the "Strict agent schemas (no ids)" recipe (https://agentic-actions.com/recipes#strict-agent-schemas-no-ids)';
 
     /**
      * Create the checks.
@@ -754,7 +754,7 @@ final class Checks
             $offered = "{$subject['entry']->class}: agents are offered [".implode(', ', $keys).'], and a person confirms this action on a card, but ';
 
             if (! self::overrides($subject['reflection'], 'approvalSummary')) {
-                $findings[] = self::fail('Summary', $offered.'approvalSummary() is not written, so the card cannot say what the call acts on. Build it from the validated input and the record authorize() allowed (docs/copilot.md#confirmations).');
+                $findings[] = self::fail('Summary', $offered.'approvalSummary() is not written, so the card cannot say what the call acts on. Build it from the validated input and the record authorize() allowed (https://agentic-actions.com/copilot#confirmations).');
             }
 
             if ($subject['timing'] !== AuthorizeTiming::Late) {
@@ -937,7 +937,7 @@ final class Checks
             $limit = $driver === 'sqlite' ? 'SQLite sets none' : rescue(fn (): ?string => self::timeLimit(DB::connection($name)), null, false);
 
             if (is_string($limit)) {
-                $findings[] = self::warn('Tables & datasets', "{$on}, which has no statement time limit ({$limit}), so a question runs as long as it takes. Give it one (docs/data.md#give-the-datasets-connection-a-time-limit).");
+                $findings[] = self::warn('Tables & datasets', "{$on}, which has no statement time limit ({$limit}), so a question runs as long as it takes. Give it one (https://agentic-actions.com/data#give-the-datasets-connection-a-time-limit).");
             }
         }
 
@@ -1329,7 +1329,7 @@ final class Checks
             ...($routes ? [] : [self::warn('OAuth', "The MCP paths read Passport tokens, but no client can discover how to sign in. In routes/ai.php: Route::middleware('throttle:60,1')->group(fn () => Mcp::oauthRoutes());")]),
             ...($this->router->has('login') ? [] : [self::warn('OAuth', 'No route is named login, so a signed-out person has nowhere to sign in before approving a client.')]),
             ...((new \DateTime('@0'))->add($lifetime)->getTimestamp() <= 86400 ? [] : [self::warn('OAuth', 'Passport\'s access tokens last ['.CarbonInterval::instance($lifetime)->forHumans().'], so a leaked connector token works that long. In AppServiceProvider::boot(): Passport::tokensExpireIn(CarbonInterval::hour()); it applies to every Passport client.')]),
-            ...($this->app->environment('local', 'testing') || ! in_array('*', (array) config('mcp.redirect_domains', []), true) ? [] : [self::warn('OAuth', 'config/mcp.php redirect_domains accepts any site, so any site can register as a client. List the ones you allow (docs/mcp.md#harden-the-oauth-setup).')]),
+            ...($this->app->environment('local', 'testing') || ! in_array('*', (array) config('mcp.redirect_domains', []), true) ? [] : [self::warn('OAuth', 'config/mcp.php redirect_domains accepts any site, so any site can register as a client. List the ones you allow (https://agentic-actions.com/mcp#harden-the-oauth-setup).')]),
         ];
     }
 

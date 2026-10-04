@@ -117,7 +117,7 @@ it('publishes laravel/ai\'s tables for a copilot, and runs the migrations once t
 
     $this->artisan('actions:install', ['--copilot' => true])
         ->expectsOutputToContain("laravel/ai's conversation tables")
-        ->expectsOutputToContain('php artisan make:agent Assistant, then the chat route of docs/copilot.md')
+        ->expectsOutputToContain('php artisan make:agent Assistant, then the chat route of https://agentic-actions.com/copilot#the-server')
         ->expectsConfirmation('Would you like to run all pending database migrations?', $answer)
         ->assertSuccessful();
 
@@ -135,8 +135,9 @@ it('publishes the conversation store for a copilot with tenants, after laravel/a
     $this->artisan('actions:install', ['--web' => true, '--copilot' => true, '--tenancy' => true, '--no-interaction' => true])
         ->expectsOutputToContain('The agentic_conversations table')
         ->expectsOutputToContain("routes/web.php   Route::middleware('auth')->group(fn () => Actions::routes(tenant: false));")
-        ->expectsOutputToContain('config/agentic-actions.php   set tenant.model, tenant.parameter and tenant.membership')
-        ->expectsOutputToContain('Continue each conversation with Actions::conversation($agent, $user, $tenant)')
+        ->expectsOutputToContain('config/agentic-actions.php   set tenant.model, tenant.parameter, tenant.membership and tenant.scope (https://agentic-actions.com/concepts#tenants)')
+        ->expectsOutputToContain('tenant.scope keeps $context->find() and datasets to the tenant\'s rows: until it or Actions::scopeUsing() is set, they throw MissingContext')
+        ->expectsOutputToContain('Continue each conversation with Actions::conversation($agent, $user, $tenant) (https://agentic-actions.com/copilot#one-conversation-per-tenant)')
         ->expectsConfirmation('Would you like to run all pending database migrations?', 'yes')
         ->assertSuccessful();
 
@@ -278,10 +279,22 @@ it('says to require laravel/ai when it is missing, publishes none of its tables 
         ->and(RecordingCommand::$calls)->toBe([]);
 });
 
+it('leaves out make:agent once a discovered agent uses a toolset', function () {
+    $this->skipUnlessAi();
+
+    config(['agentic-actions.discovery.paths' => [...config('agentic-actions.discovery.paths'), dirname(__DIR__, 2).'/Fixtures/Discovery/Agents']]);
+
+    $this->artisan('actions:install', ['--copilot' => true, '--no-interaction' => true])
+        ->expectsOutputToContain("Schedule::command('model:prune'")
+        ->doesntExpectOutputToContain('make:agent Assistant')
+        ->expectsConfirmation('Would you like to run all pending database migrations?', 'no')
+        ->assertSuccessful();
+});
+
 it('publishes Sanctum\'s table for MCP when Sanctum is installed', function () {
     $this->artisan('actions:install', ['--mcp' => true, '--no-interaction' => true])
         ->expectsOutputToContain("Sanctum's personal_access_tokens table")
-        ->expectsOutputToContain('app/Models/User.php   use Laravel\Sanctum\HasApiTokens;')
+        ->expectsOutputToContain('app/Models/User.php   use Laravel\Sanctum\HasApiTokens; (https://agentic-actions.com/mcp#recipe-tokens-and-clients)')
         ->expectsConfirmation('Would you like to run all pending database migrations?', 'no')
         ->assertSuccessful();
 
@@ -416,7 +429,7 @@ describe('OAuth', function () {
 
         $this->artisan('actions:install', ['--mcp' => true])
             ->expectsOutputToContain('The agentic_mcp_connections table')
-            ->expectsOutputToContain('Before real people connect: docs/mcp.md#harden-the-oauth-setup')
+            ->expectsOutputToContain('Before real people connect: https://agentic-actions.com/mcp#harden-the-oauth-setup')
             ->doesntExpectOutputToContain('passport:install')
             ->doesntExpectOutputToContain('Mcp::oauthRoutes()')
             ->doesntExpectOutputToContain('For Claude and ChatGPT connectors')
@@ -470,7 +483,7 @@ describe('OAuth', function () {
         $this->usePackages(['laravel/passport' => PackageStatus::Missing]);
 
         $this->artisan('actions:install', ['--mcp' => true, '--no-interaction' => true])
-            ->expectsOutputToContain('For Claude and ChatGPT connectors (OAuth): composer require laravel/passport, then docs/mcp.md#connect-claude-chatgpt-and-other-remote-clients-oauth')
+            ->expectsOutputToContain('For Claude and ChatGPT connectors (OAuth): composer require laravel/passport, then https://agentic-actions.com/mcp#connect-claude-chatgpt-and-other-remote-clients-oauth')
             ->doesntExpectOutputToContain('a passport guard')
             ->expectsConfirmation('Would you like to run all pending database migrations?', 'no')
             ->assertSuccessful();

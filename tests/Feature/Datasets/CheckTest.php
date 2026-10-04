@@ -98,7 +98,7 @@ it('warns about a dataset connection with no statement time limit, and fails one
 
     expect(datasetFindings([Posts::class], 'Tables & datasets'))->toBe($findings);
 })->with([
-    'SQLite' => [['database.connections.local' => ['driver' => 'sqlite', 'database' => ':memory:'], 'agentic-actions.datasets.connection' => 'local'], [['warn', 'Tables & datasets', 'The datasets [posts] run on the connection [local], which has no statement time limit (SQLite sets none), so a question runs as long as it takes. Give it one (docs/data.md#give-the-datasets-connection-a-time-limit).']]],
+    'SQLite' => [['database.connections.local' => ['driver' => 'sqlite', 'database' => ':memory:'], 'agentic-actions.datasets.connection' => 'local'], [['warn', 'Tables & datasets', 'The datasets [posts] run on the connection [local], which has no statement time limit (SQLite sets none), so a question runs as long as it takes. Give it one (https://agentic-actions.com/data#give-the-datasets-connection-a-time-limit).']]],
     'SQL Server' => [['database.connections.reports' => ['driver' => 'sqlsrv'], 'agentic-actions.datasets.connection' => 'reports'], [['fail', 'Tables & datasets', 'The datasets [posts] run on the connection [reports], whose driver [sqlsrv] datasets do not support: use SQLite, MySQL, MariaDB or Postgres.']]],
 ]);
 
@@ -127,7 +127,7 @@ it('reads the statement time limit the connection\'s session sets on MySQL, Mari
         }
     }
 
-    expect($without)->toBe([['warn', 'Tables & datasets', 'The datasets [posts] run on the connection ['.config('database.default')."], which has no statement time limit ({$setting} is 0), so a question runs as long as it takes. Give it one (docs/data.md#give-the-datasets-connection-a-time-limit)."]])
+    expect($without)->toBe([['warn', 'Tables & datasets', 'The datasets [posts] run on the connection ['.config('database.default')."], which has no statement time limit ({$setting} is 0), so a question runs as long as it takes. Give it one (https://agentic-actions.com/data#give-the-datasets-connection-a-time-limit)."]])
         ->and($with)->toBe([]);
 })->group('database');
 
