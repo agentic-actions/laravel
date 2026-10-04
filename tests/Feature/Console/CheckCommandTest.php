@@ -17,6 +17,9 @@ use Tests\Fixtures\Actions\LateAuthorize;
 use Tests\Fixtures\Actions\ListNotes;
 use Tests\Fixtures\Actions\PlainNote;
 use Tests\Fixtures\Actions\TeamNote;
+use Tests\Fixtures\Ai\MixedAgent;
+use Tests\Fixtures\Ai\NotesAgent;
+use Tests\Fixtures\Ai\OwnToolsAgent;
 use Tests\Fixtures\Checks\EmptyRequiredOutput;
 use Tests\Fixtures\Checks\FileForAgents;
 use Tests\Fixtures\Checks\ForbiddenSecret;
@@ -285,6 +288,20 @@ describe('toolset rows', function () {
         expect(inRow(findingsFor([CreateNote::class, ListNotes::class]), 'Toolsets'))->toBe([
             ['warn', 'Toolsets', 'The [default] toolset holds 2 actions, more than agents.max_tools_per_toolset (1). An agent reads every tool on every turn: split the toolset, or raise the limit.'],
         ]);
+    });
+
+    it('warns about an agent whose own tools() replaces the trait\'s and never calls actionTools()', function () {
+        $this->skipUnlessAi();
+
+        expect(inRow(findingsFor([CreateNote::class, OwnToolsAgent::class]), 'Toolsets'))->toBe([
+            ['warn', 'Toolsets', OwnToolsAgent::class.': it declares its own tools(), which replaces the one InteractsWithActions gives it, and that tools() never calls $this->actionTools(), so the agent receives none of its toolsets\' actions. Delete the tools() it declares, or merge the package\'s tools into it: return [...$this->actionTools(), ...].'],
+        ]);
+    });
+
+    it('passes an agent on the trait\'s tools(), and one whose own tools() spreads actionTools()', function () {
+        $this->skipUnlessAi();
+
+        expect(inRow(findingsFor([CreateNote::class, NotesAgent::class, MixedAgent::class]), 'Toolsets'))->toBe([]);
     });
 });
 

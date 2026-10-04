@@ -1,8 +1,14 @@
 <?php
 
+use AgenticActions\ActionContext;
+use AgenticActions\Ai\Concerns\InteractsWithActions;
+use AgenticActions\Attributes\UseToolset;
 use AgenticActions\Facades\Actions;
 use Illuminate\Support\Facades\Auth;
 use Laravel\Ai\AnonymousAgent;
+use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\HasTools;
+use Laravel\Ai\Promptable;
 use Laravel\Ai\Providers\Tools\ToolSearch;
 use PHPUnit\Framework\AssertionFailedError;
 use Tests\Fixtures\Ai\CreateNoteTool;
@@ -10,6 +16,7 @@ use Tests\Fixtures\Ai\LeakyTool;
 use Tests\Fixtures\Ai\MixedAgent;
 use Tests\Fixtures\Ai\NotesAgent;
 use Tests\Fixtures\Ai\NoteWriter;
+use Tests\Fixtures\Ai\OwnToolsAgent;
 use Tests\Fixtures\Ai\SearchMixedAgent;
 use Tests\Fixtures\Ai\SubAgentMixedAgent;
 use Tests\Fixtures\Ai\SupportAgent;
@@ -19,8 +26,9 @@ use Workbench\App\Models\User;
 
 /*
  * Actions::assertAgentTools(): one agent's tools, resolved as laravel/ai resolves them before a turn, have unique
- * names, offer no forbidden key and stay within agents.max_tools_per_toolset, and an agent carrying
- * #[WithPageContext] returns the PageContext middleware.
+ * names, offer no forbidden key and stay within agents.max_tools_per_toolset, an agent on InteractsWithActions returns
+ * at least one of the action tools its toolsets give the person, and an agent carrying #[WithPageContext] returns the
+ * PageContext middleware.
  */
 
 beforeEach(function () {
@@ -89,6 +97,46 @@ it('counts action tools per toolset, not across toolsets', function () {
     Actions::assertAgentTools(new SupportAgent($this->user));
 
     expect(fn () => Actions::assertAgentTools(new NotesAgent($this->user)))->toThrow(AssertionFailedError::class, 'default (6)');
+});
+
+describe('an agent whose own tools() leaves out its action tools', function () {
+    it('fails when its toolsets give the person action tools and its tools() returns none of them', function () {
+        expect(fn () => Actions::assertAgentTools(new OwnToolsAgent($this->user)))
+            ->toThrow(AssertionFailedError::class, OwnToolsAgent::class.' carries #[UseToolset], whose toolsets give this person 6 action tools, but its tools() returns none of them: a tools() the class declares replaces the one InteractsWithActions gives it. Delete the tools() it declares, or merge the package\'s tools into it: return [...$this->actionTools(), ...].');
+    });
+
+    it('passes when its toolsets give this person no action tools', function () {
+        expect(Actions::tools(ActionContext::agent(null), ['default']))->toBe([]);
+
+        Actions::assertAgentTools(new OwnToolsAgent);
+    });
+
+    it('passes when its tools() keeps some of its action tools', function () {
+        $agent = new #[UseToolset] class($this->user) implements Agent, HasTools
+        {
+            use InteractsWithActions;
+            use Promptable;
+
+            public function __construct(public User $user) {}
+
+            public function instructions(): string
+            {
+                return 'You help the signed-in author.';
+            }
+
+            public function tools(): iterable
+            {
+                return array_slice($this->actionTools(), 0, 1);
+            }
+
+            protected function actionContext(): ActionContext
+            {
+                return ActionContext::agent($this->user);
+            }
+        };
+
+        Actions::assertAgentTools($agent);
+    });
 });
 
 describe('the page context', function () {

@@ -5,6 +5,7 @@
 ### Upgrading
 
 - An app that installs the npm client from `vendor/` (`"file:vendor/agentic-actions/laravel/js"`): after `composer update`, run `npm dedupe` once and commit `package-lock.json`. An older lock file keeps the copies of `ai`, Inertia or React that npm placed under `vendor/agentic-actions/laravel/js/node_modules`, and `npm install` alone leaves them there; `npm dedupe` removes them. An app that installs the client from npm has nothing to change.
+- `assertAgentTools()` can now fail a test that passed: it fails an agent whose own `tools()` returns none of the action tools its toolsets give the person. Delete that `tools()`, or return `[...$this->actionTools(), ...]` from it.
 
 ### Fixed
 
@@ -12,6 +13,7 @@
 - **The package points at the docs site, not at files the app does not have.** `actions:install`'s next steps, `actions:check`'s rows, the agent-schema refusals, the published config's comments and the Boost skill named paths such as `docs/mcp.md`; each now names the page and heading on https://agentic-actions.com. A test checks that every page and heading they name exists.
 - **`actions:install`'s tenancy step names `tenant.scope`.** It listed `tenant.model`, `tenant.parameter` and `tenant.membership` only, so the first `$context->find()` answered 500 with `MissingContext`. It now names all four and says what the scope does, and the published config says that `tenant.parameter` is `tenant` until you set it to your routes' segment, such as `team`.
 - **`actions:install` stops suggesting `make:agent` once the app has an agent.** It printed the step on every run with a copilot; it now leaves it out once a discovered agent carries `#[UseToolset]`, as Setup describes.
+- **An agent whose own `tools()` leaves out its action tools is caught.** A `tools()` the class declares replaces the one `InteractsWithActions` gives it, as in a class started from `make:agent`, so the agent ran with none of its toolsets' actions while `actions:check` and `assertAgentTools()` passed. `assertAgentTools()` now fails when the agent returns none of the action tools its toolsets give that person (an agent whose toolsets give that person none still passes), and `actions:check` warns in its Toolsets row about an agent on the trait whose `tools()` never calls `$this->actionTools()`.
 
 ### Documentation
 

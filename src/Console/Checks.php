@@ -68,6 +68,7 @@ use Laravel\Sanctum\Http\Middleware\CheckForAnyAbility;
 use Laravel\Sanctum\Sanctum;
 use ReflectionAttribute;
 use ReflectionClass;
+use ReflectionMethod;
 use Throwable;
 
 /**
@@ -418,7 +419,8 @@ final class Checks
     }
 
     /**
-     * Toolsets: a toolset an agent receives that no action joins, one no agent receives, and one that is too large.
+     * Toolsets: a toolset an agent receives that no action joins, an agent whose own tools() leaves its toolsets out,
+     * one no agent receives, and one that is too large.
      *
      * @param  list<Subject>  $subjects
      * @return list<Finding>
@@ -441,6 +443,10 @@ final class Checks
                 if (! isset($members[$toolset])) {
                     $findings[] = self::fail('Toolsets', "{$agent}: #[UseToolset] names [{$toolset}], which no action joins.");
                 }
+            }
+
+            if (self::shadowsActionTools($agent)) {
+                $findings[] = self::warn('Toolsets', "{$agent}: it declares its own tools(), which replaces the one InteractsWithActions gives it, and that tools() never calls \$this->actionTools(), so the agent receives none of its toolsets' actions. Delete the tools() it declares, or merge the package's tools into it: return [...\$this->actionTools(), ...].");
             }
         }
 
@@ -468,6 +474,29 @@ final class Checks
         }
 
         return $findings;
+    }
+
+    /**
+     * Whether an agent on InteractsWithActions has a tools() whose source never names actionTools() or a parent's
+     * tools(): one the class declares replaces the trait's, so the toolsets never reach the model. Read from the
+     * source, so a warning: a tools() that reaches actionTools() through another method is flagged too.
+     */
+    private static function shadowsActionTools(string $agent): bool
+    {
+        if (! class_exists($agent) || ! in_array(InteractsWithActions::class, class_uses_recursive($agent), true)) {
+            return false;
+        }
+
+        $method = new ReflectionMethod($agent, 'tools');
+
+        if (($file = $method->getFileName()) === false) {
+            return false;
+        }
+
+        $lines = array_slice(file($file) ?: [], $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1);
+        $source = implode('', $lines);
+
+        return ! str_contains($source, 'actionTools(') && ! str_contains($source, 'parent::tools(');
     }
 
     /**
