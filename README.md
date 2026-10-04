@@ -1,11 +1,17 @@
 # Agentic Actions for Laravel
 
+[![The Agentic Actions demo's Acme task board with the copilot panel open on the right. The panel shows the request "Add three launch tasks for Marcus", one row per action call (the first reads "Not done", the other three "Created a task"), and the reply naming the three tasks. The To do column shows the three new cards, assigned to Marcus Reed. The panel's notice says the demo is scripted and the actions are real.](https://agentic-actions.com/images/demo-board.png)](https://demo.agentic-actions.com)
+
+The demo's copilot follows a script. The actions it runs are real.
+
 <!-- #region getting-started -->
 > **Beta.** 0.9.0-beta.3 is the current release. The API can still change before 1.0: [the changelog](https://github.com/agentic-actions/laravel/blob/main/CHANGELOG.md) lists every change and how to upgrade.
 
 **Try it first** at [demo.agentic-actions.com](https://demo.agentic-actions.com): a team task board built with the package, where you get a private sandbox for 24 hours with no sign-up. Its forms, its copilot and MCP clients all call the same actions. The source is [agentic-actions/demo](https://github.com/agentic-actions/demo).
 
-Write an operation once, as an Action class. Mark it `#[Expose]` and the same class answers a web route (JSON and browser forms, with Precognition), an Artisan command, a tool call from a [laravel/ai](https://github.com/laravel/ai) agent or an MCP client, and a typed TypeScript function. Every caller goes through one pipeline: exposure, token abilities, tenant membership, `authorize()`, validation, `handle()`, and an allowlist on the output.
+Write an operation once, as an Action class, and the same class answers an Artisan command and a queued job. Mark it `#[Expose]` and it also answers a web route (JSON and browser forms, with Precognition), a tool call from a [laravel/ai](https://github.com/laravel/ai) agent or an MCP client, and a typed TypeScript function. Every caller goes through one pipeline: exposure, token abilities, tenant membership, `authorize()`, validation, `handle()`, and an allowlist on the output.
+
+The idea comes from [Agent-Native](https://agent-native.com), an open-source TypeScript framework where one action, written with `defineAction()`, powers the UI, the agent, HTTP, MCP, A2A and the CLI.
 
 The class below drafts a blog post. It uses a `Post` model and a `posts()` relation on `User`, which a new app does not have yet: [Try it in a new app](#try-it-in-a-new-app) adds them.
 
