@@ -14,6 +14,7 @@ use PHPUnit\Framework\AssertionFailedError;
 use Tests\Fixtures\Ai\CreateNoteTool;
 use Tests\Fixtures\Ai\LeakyTool;
 use Tests\Fixtures\Ai\MixedAgent;
+use Tests\Fixtures\Ai\NoHasToolsAgent;
 use Tests\Fixtures\Ai\NotesAgent;
 use Tests\Fixtures\Ai\NoteWriter;
 use Tests\Fixtures\Ai\OwnToolsAgent;
@@ -103,6 +104,11 @@ describe('an agent whose own tools() leaves out its action tools', function () {
     it('fails when its toolsets give the person action tools and its tools() returns none of them', function () {
         expect(fn () => Actions::assertAgentTools(new OwnToolsAgent($this->user)))
             ->toThrow(AssertionFailedError::class, OwnToolsAgent::class.' carries #[UseToolset], whose toolsets give this person 6 action tools, but its tools() returns none of them: a tools() the class declares replaces the one InteractsWithActions gives it. Delete the tools() it declares, or merge the package\'s tools into it: return [...$this->actionTools(), ...].');
+    });
+
+    it('fails an agent on the trait that does not implement HasTools, naming the interface rather than a tools() it lacks', function () {
+        expect(fn () => Actions::assertAgentTools(new NoHasToolsAgent($this->user)))
+            ->toThrow(AssertionFailedError::class, NoHasToolsAgent::class.' carries #[UseToolset] and uses InteractsWithActions, but does not implement Laravel\\Ai\\Contracts\\HasTools, so laravel/ai never asks it for its tools. Add implements HasTools to the class.');
     });
 
     it('passes when its toolsets give this person no action tools', function () {

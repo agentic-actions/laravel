@@ -20,9 +20,13 @@ use Tests\Fixtures\Actions\LateAuthorize;
 use Tests\Fixtures\Actions\ListNotes;
 use Tests\Fixtures\Actions\PlainNote;
 use Tests\Fixtures\Actions\TeamNote;
+use Tests\Fixtures\Ai\AliasedToolsAgent;
 use Tests\Fixtures\Ai\MixedAgent;
+use Tests\Fixtures\Ai\NoHasToolsAgent;
 use Tests\Fixtures\Ai\NotesAgent;
 use Tests\Fixtures\Ai\OwnToolsAgent;
+use Tests\Fixtures\Ai\ParentToolsAgent;
+use Tests\Fixtures\Ai\TraitlessToolsetAgent;
 use Tests\Fixtures\Checks\EmptyRequiredOutput;
 use Tests\Fixtures\Checks\FileForAgents;
 use Tests\Fixtures\Checks\ForbiddenSecret;
@@ -326,14 +330,30 @@ describe('toolset rows', function () {
         $this->skipUnlessAi();
 
         expect(inRow(findingsFor([CreateNote::class, OwnToolsAgent::class]), 'Toolsets'))->toBe([
-            ['warn', 'Toolsets', OwnToolsAgent::class.': it declares its own tools(), which replaces the one InteractsWithActions gives it, and that tools() never calls $this->actionTools(), so the agent receives none of its toolsets\' actions. Delete the tools() it declares, or merge the package\'s tools into it: return [...$this->actionTools(), ...].'],
+            ['warn', 'Toolsets', OwnToolsAgent::class.': its own tools() replaces the one InteractsWithActions gives it, and its source calls neither $this->actionTools() nor the trait\'s tools(), so its toolsets\' actions may never reach the model. Delete the tools() it declares, or merge the package\'s tools into it: return [...$this->actionTools(), ...].'],
         ]);
     });
 
-    it('passes an agent on the trait\'s tools(), and one whose own tools() spreads actionTools()', function () {
+    it('passes an agent on the trait\'s tools(), and one whose own tools() spreads actionTools(), a parent\'s tools() or the trait\'s tools() under an alias', function () {
         $this->skipUnlessAi();
 
-        expect(inRow(findingsFor([CreateNote::class, NotesAgent::class, MixedAgent::class]), 'Toolsets'))->toBe([]);
+        expect(inRow(findingsFor([CreateNote::class, NotesAgent::class, MixedAgent::class, ParentToolsAgent::class, AliasedToolsAgent::class]), 'Toolsets'))->toBe([]);
+    });
+
+    it('fails an agent on the trait that does not implement HasTools', function () {
+        $this->skipUnlessAi();
+
+        expect(inRow(findingsFor([CreateNote::class, NoHasToolsAgent::class]), 'Toolsets'))->toBe([
+            ['fail', 'Toolsets', NoHasToolsAgent::class.': it uses InteractsWithActions but does not implement Laravel\\Ai\\Contracts\\HasTools, so laravel/ai never asks it for its tools and none of its toolsets\' actions reach the model. Add implements HasTools to the class.'],
+        ]);
+    });
+
+    it('warns about an agent carrying #[UseToolset] without InteractsWithActions', function () {
+        $this->skipUnlessAi();
+
+        expect(inRow(findingsFor([CreateNote::class, TraitlessToolsetAgent::class]), 'Toolsets'))->toBe([
+            ['warn', 'Toolsets', TraitlessToolsetAgent::class.': it carries #[UseToolset] but does not use InteractsWithActions, which turns its toolsets into tools, so the attribute alone gives it none of its toolsets\' actions. Add use InteractsWithActions; and an actionContext() (https://agentic-actions.com/copilot#the-server).'],
+        ]);
     });
 });
 

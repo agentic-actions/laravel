@@ -85,9 +85,10 @@ final class AgentToolAudit
     }
 
     /**
-     * Fail when an agent on InteractsWithActions with a #[UseToolset] returns none of the action tools its toolsets
-     * give this person: a tools() the class declares replaces the trait's. A toolset that gives this person no action
-     * tools passes, and so does a tools() that keeps some of them.
+     * Fail when an agent on InteractsWithActions with a #[UseToolset] does not implement HasTools, whose tools() is
+     * the only one laravel/ai reads, or returns none of the action tools its toolsets give this person: a tools() the
+     * class declares replaces the trait's. A toolset that gives this person no action tools passes, and so does a
+     * tools() that keeps some of them.
      *
      * @param  list<Tool>  $tools
      */
@@ -96,6 +97,11 @@ final class AgentToolAudit
         if (Toolsets::declared($agent::class) === null || ! in_array(InteractsWithActions::class, class_uses_recursive($agent), true)) {
             return;
         }
+
+        Assert::assertInstanceOf(HasTools::class, $agent, sprintf(
+            '%s carries #[UseToolset] and uses InteractsWithActions, but does not implement Laravel\\Ai\\Contracts\\HasTools, so laravel/ai never asks it for its tools. Add implements HasTools to the class.',
+            $agent::class,
+        ));
 
         $offered = (new ReflectionMethod($agent, 'actionTools'))->invoke($agent);
         $reached = array_filter($tools, fn (Tool $tool): bool => $tool instanceof ActionTool);

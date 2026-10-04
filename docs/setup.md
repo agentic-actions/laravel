@@ -26,7 +26,7 @@ The npm client, `@agentic-actions/client`, installs from the Composer package (`
 | `@agentic-actions/client/ai-sdk` | `ai` 7, and `@ai-sdk/react` for `useChat` |
 | `@agentic-actions/client/views` | React 19, without Inertia, for `<ActionTable>` ([tables](data.md#on-the-page)) |
 
-`/react` needs React 19 because Inertia 3's React adapter does. The client's `engines` field asks for Node 22.3 or later on the machine that installs and builds your front end.
+`/react` needs React 19 because Inertia 3's React adapter does. npm reads these peer ranges even when you use only the root, so on an app still on Inertia 2 it moves your `@inertiajs/core` to 3 to meet them, with a peer warning in a React app and silently in a Vue app. Upgrade to Inertia 3 before you install the client, or, for an app that uses only the root, add `legacy-peer-deps=true` to the app's `.npmrc`, so `npm install` and `npm ci` leave your Inertia as it is. The client's `engines` field asks for Node 22.3 or later on the machine that installs and builds your front end.
 
 ## actions:install
 
