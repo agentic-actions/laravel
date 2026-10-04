@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Documentation
+
+- Two new pages: Troubleshooting, each error message with its cause and its fix, and The TypeScript client, the generated file, `callAction()`, its errors, touches and `useAction()`.
+- Getting started works in a new app, and shows a plain agent with its imports and what an Idempotency-Key requires of each caller. Setup adds deploying and removing the package.
+- Concepts shows a tenant model, its membership and scope classes, mounting the routes and a tenant-scoped action. MCP starts from an app without tenants and covers sign-in without a starter kit and a Connected apps page. Testing adds PHPUnit versions, queued runs and tokens in tests.
+- `CONTRIBUTING.md` gives contributors the workflow, the CI cells and how to run them, with issue and pull request templates.
+
 ## 0.9.0-beta.2 - 2026-10-03
 
 A turn laravel/ai queues keeps the limits of the token that queued it, which 0.9.0-beta.1 documented as a known limit.

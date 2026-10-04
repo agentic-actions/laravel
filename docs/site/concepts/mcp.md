@@ -13,7 +13,7 @@ MCP clients such as Claude Code, Cursor and Claude Desktop reach your actions th
 
 ## One server, one tool per action
 
-The server answers at `mcp/actions`. When your actions are tenant-scoped, set `mcp.tenant_path` (such as `mcp/t/{tenant}`) and they are served there instead, one URL per tenant. Each Read or Write action whose `#[Expose]` allows MCP is one tool. See [Where it is mounted](/mcp#where-it-is-mounted).
+The server answers at `mcp/actions`. When your actions are tenant-scoped, set `mcp.tenant_path` (such as `mcp/t/{team}`, with your `tenant.parameter` in the braces) and they are served there instead, one URL per tenant. Each Read or Write action whose `#[Expose]` allows MCP is one tool. See [Where it is mounted](/mcp#where-it-is-mounted).
 
 ## A token names what it reaches
 

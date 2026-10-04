@@ -69,14 +69,24 @@ composer remove --dev laravel/ai laravel/passport --no-interaction --no-progress
 vendor/bin/pint --test && vendor/bin/pest --exclude-group=database --testsuite=Unit,Feature
 ```
 
+### The Laravel 12 floor
+
+A tag also runs the suite on the oldest versions the package supports: Laravel 12.62, and the lowest laravel/ai and laravel/mcp it allows. When your change uses a framework, laravel/ai or laravel/mcp API that may be newer than that, run the floor cell on PHP 8.3, in a clone as above:
+
+```bash
+git clone --quiet . build/cells/floor && cd build/cells/floor
+composer update --prefer-lowest --prefer-stable --prefer-dist --no-interaction --no-progress
+vendor/bin/pint --test && vendor/bin/pest --exclude-group=database
+```
+
 ### The database group
 
-The cases that behave differently on a database server, such as the Read guard, datasets, conversation slots and OAuth connections, are in the `database` group. A tag runs the group on MySQL 8, Postgres 16 and MariaDB 11; a pull request does not. When your change touches SQL, create an empty `agentic_actions_testing` database on each server and run the group against it, with `DB_PORT` set to where each one listens:
+The cases that behave differently on a database server, such as the Read guard, datasets, conversation slots and OAuth connections, are in the `database` group. A tag runs the group on MySQL 8, Postgres 16 and MariaDB 11; a pull request does not. When your change touches SQL, create an empty `agentic_actions_testing` database on each server and run the group against it, with `DB_PORT` set to where each one listens (MariaDB on 3307, as in CI, so it can run beside MySQL):
 
 ```bash
 DB_CONNECTION=mysql DB_HOST=127.0.0.1 DB_PORT=3306 DB_DATABASE=agentic_actions_testing DB_USERNAME=root DB_PASSWORD= vendor/bin/pest --group=database
 DB_CONNECTION=pgsql DB_HOST=127.0.0.1 DB_PORT=5432 DB_DATABASE=agentic_actions_testing DB_USERNAME=postgres DB_PASSWORD= vendor/bin/pest --group=database
-DB_CONNECTION=mariadb DB_HOST=127.0.0.1 DB_PORT=3306 DB_DATABASE=agentic_actions_testing DB_USERNAME=root DB_PASSWORD= vendor/bin/pest --group=database
+DB_CONNECTION=mariadb DB_HOST=127.0.0.1 DB_PORT=3307 DB_DATABASE=agentic_actions_testing DB_USERNAME=root DB_PASSWORD= vendor/bin/pest --group=database
 ```
 
 ### Trying a change by hand
@@ -89,14 +99,19 @@ vendor/bin/testbench actions:list
 vendor/bin/testbench actions:run create-post --as=1 title=Hello body=World
 ```
 
-The app has no sign-in screen, so call it over HTTP with a token:
+The app has no sign-in screen, so call it over HTTP with a token. Mint one, then start the server, which keeps running:
 
 ```bash
 vendor/bin/testbench tinker --execute 'echo Workbench\App\Models\User::find(1)->createToken("dev", ["actions:write"])->plainTextToken;'
 vendor/bin/testbench serve
+```
+
+In a second terminal, post another title, since the author already has a post titled Hello:
+
+```bash
 curl -X POST http://127.0.0.1:8000/api/actions/create-post \
   -H 'Authorization: Bearer <token>' -H 'Accept: application/json' -H 'Content-Type: application/json' \
-  -d '{"title":"Hello","body":"World"}'
+  -d '{"title":"Hello over HTTP","body":"World"}'
 ```
 
 These commands leave a `.env`, a database and caches in the Testbench skeleton (`vendor/orchestra/testbench-core/laravel`), and the tests then read them: several fail for reasons that have nothing to do with your change. Purge the skeleton before you run the tests again:
@@ -115,16 +130,16 @@ The site's build, under [Checks](#checks), fails on a dead link, a missing `#fra
 
 ## Releases
 
-The maintainers release. A `chore(release): prepare X` commit turns `## Unreleased` into the version and moves the version lines, then an annotated `vX.Y.Z` tag publishes it, and Packagist and npm follow the tag. A pull request does not bump a version, edit those lines or push a tag.
+The maintainers release. A `chore(release): prepare X` commit turns `## Unreleased` into the version and moves the version lines, then an annotated `vX.Y.Z` tag (`vX.Y.Z-beta.N` for a beta) releases it: Packagist reads the tag, and the maintainers publish the npm client at the same version. A pull request does not bump a version, edit those lines or push a tag.
 
-A tag runs cells that a pull request does not: the Laravel 12 floor (`--prefer-lowest` on PHP 8.3), Laravel 12 latest, the database group, the npm client without React, and both `bin/fresh-app` walks. So when your change touches the setup path (`actions:install`, `make:agentic-action` and its stub, `actions:check`, `actions:typescript`, or the README's Getting started), run `bin/fresh-app plain` and `bin/fresh-app livewire` yourself, and when it touches SQL, run [the database group](#the-database-group).
+A tag runs cells that a pull request does not: [the Laravel 12 floor](#the-laravel-12-floor), Laravel 12 latest, the database group, the npm client without React, and both `bin/fresh-app` walks. So when your change touches the setup path (`actions:install`, `make:agentic-action` and its stub, `actions:check`, `actions:typescript`, or the README's Getting started), run `bin/fresh-app plain` and `bin/fresh-app livewire` yourself, and when it touches SQL, run [the database group](#the-database-group).
 
 ## Conventions
 
 - PHP follows laravel/ai's style: a one-sentence docblock on every method, array shapes in `@param` and `@return`, curly braces always, typed parameters and returns, constructor promotion, and inline comments only where the logic is not obvious. Classes are `final` unless they are meant to be extended.
 - Tests use Pest, Testbench, the real HTTP kernel and laravel/ai's own fakes. Do not mock the package's own classes: when a test needs another implementation of a package contract, write a small real class under `tests/Fixtures`. Tests that need laravel/ai call `$this->skipUnlessAi()`, so Unit and Feature also run without it ([Tests](#tests) has the cell that checks it).
 - Examples, fixtures and docs stay generic: posts, teams, a blog assistant, `__()` for sentences, and "tenant" for whatever an app calls its tenants.
-- `js/dist` is committed, because apps can also install the npm client from `vendor/agentic-actions/laravel/js`; npm publishes the same `dist`. Rebuild it with `npm --prefix js run build` before a release commit.
+- `js/dist` is committed, because apps can also install the npm client from `vendor/agentic-actions/laravel/js`; npm publishes the same `dist`. The npm client's check rebuilds it, so a change to `js/src` commits the `dist` it rebuilt, and a release commit rebuilds it once more (`npm --prefix js run build`).
 - Stage files by path. Do not use `git add -A` or `git add .`.
 - Code that exists only because of how another package behaves today carries one docblock line, `@upstream {reason}`, where the reason is a single neutral sentence about what this package does (for example `@upstream A blank tool-call id is treated as absent.`), never how the other package behaves wrongly. Each marker cites the pull request to that package that would make it unnecessary, once one is open.
 - Docs, docblocks, language lines, tests, fixtures and commit messages state this package's own guarantees, never another package's shortcomings.
