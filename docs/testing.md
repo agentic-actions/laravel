@@ -136,7 +136,64 @@ it('keeps the exposure snapshot current', function () {
 
 ## Confirmations
 
-A confirmation spans two requests: the turn that pauses, and the answer that resumes it. Script the model on the provider instead of faking the agent: laravel/ai resumes approvals against the provider's gateway, so an agent-level fake such as `BlogAssistant::fake()` tests the pause only. laravel/ai's `FakeTextGateway`, installed with `Ai::textProvider()->useTextGateway()`, answers each step in turn. Turn off title generation, which asks the same provider. Post a turn and assert that nothing ran and that the stream holds a `data-approval` part, post the answer as the same user and assert that the action ran, then post it again and assert 409:
+A confirmation spans two requests: the turn that pauses, and the answer that resumes it. Script the model on the provider instead of faking the agent: laravel/ai resumes approvals against the provider's gateway, so an agent-level fake such as `BlogAssistant::fake()` tests the pause only. laravel/ai's `FakeTextGateway`, installed with `Ai::textProvider()->useTextGateway()`, answers each step in turn. Turn off title generation, which asks the same provider. Post a turn and assert that nothing ran and that the stream holds a `data-approval` part, post the answer as the same user and assert that the action ran, then post it again and assert 409.
+
+### PHPUnit
+
+```php
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Post;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Ai\Ai;
+use Laravel\Ai\Gateway\FakeTextGateway;
+use Laravel\Ai\Responses\Data\ToolCall;
+use Tests\TestCase;
+
+final class DeletePostConfirmationTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_a_post_is_deleted_only_after_the_author_confirms(): void
+    {
+        config(['ai.conversations.generate_title' => false]);
+
+        $user = User::factory()->create();
+        $post = Post::factory()->for($user)->create();
+
+        Ai::textProvider()->useTextGateway(new FakeTextGateway([
+            new ToolCall('call_1', 'delete-post', ['post' => $post->id]),
+            'Deleted.',
+        ]));
+
+        $pause = $this->actingAs($user)->postJson('/assistant', ['messages' => [
+            ['id' => 'm1', 'role' => 'user', 'parts' => [['type' => 'text', 'text' => 'Delete my launch notes.']]],
+        ]]);
+
+        $this->assertStringContainsString('"type":"data-approval"', $pause->streamedContent());
+        $this->assertModelExists($post);
+
+        $answer = ['messages' => [
+            ['id' => 'm2', 'role' => 'assistant', 'parts' => [[
+                'type' => 'tool-delete-post',
+                'toolCallId' => 'call_1',
+                'state' => 'approval-responded',
+                'approval' => ['id' => 'call_1', 'approved' => true],
+            ]]],
+        ]];
+
+        $this->postJson('/assistant', $answer)->streamedContent();
+        $this->assertModelMissing($post);
+
+        $this->postJson('/assistant', $answer)->assertStatus(409);
+    }
+}
+```
+
+### Pest
 
 ```php
 use App\Models\Post;
@@ -183,7 +240,77 @@ A streamed turn runs only when the test reads it, so call `streamedContent()` on
 
 ## Asking the person
 
-A form for missing fields ([asking the person](asking.md)) spans the same two requests, so script the model on the provider the same way. Have it call the action without a field, assert that nothing ran and that the stream holds a `data-elicitation` part, then post the person's answer: the tool part approved, with MCP's `ElicitResult` beside it under `elicitation`. Assert that the action ran once with the person's value, and that the value appears nowhere in the stored conversation, which is what the model reads on its next step and on every later turn:
+A form for missing fields ([asking the person](asking.md)) spans the same two requests, so script the model on the provider the same way. Have it call the action without a field, assert that nothing ran and that the stream holds a `data-elicitation` part, then post the person's answer: the tool part approved, with MCP's `ElicitResult` beside it under `elicitation`. Assert that the action ran once with the person's value, and that the value appears nowhere in the stored conversation, which is what the model reads on its next step and on every later turn.
+
+### PHPUnit
+
+```php
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Post;
+use App\Models\User;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Laravel\Ai\Ai;
+use Laravel\Ai\Gateway\FakeTextGateway;
+use Laravel\Ai\Responses\Data\ToolCall;
+use Tests\TestCase;
+
+final class DraftPostFormTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_the_body_the_person_typed_is_saved_and_never_read_by_the_model(): void
+    {
+        config(['ai.conversations.generate_title' => false]);
+
+        $user = User::factory()->create();
+
+        Ai::textProvider()->useTextGateway(new FakeTextGateway([
+            new ToolCall('call_1', 'draft-post', ['title' => 'Launch notes']),
+            'Drafted.',
+        ]));
+
+        $pause = $this->actingAs($user)->postJson('/assistant', ['messages' => [
+            ['id' => 'm1', 'role' => 'user', 'parts' => [['type' => 'text', 'text' => 'Draft a post called Launch notes.']]],
+        ]]);
+
+        $this->assertStringContainsString('"type":"data-elicitation"', $pause->streamedContent());
+        $this->assertSame(0, Post::count());
+
+        $answer = ['messages' => [
+            ['id' => 'm2', 'role' => 'assistant', 'parts' => [[
+                'type' => 'tool-draft-post',
+                'toolCallId' => 'call_1',
+                'state' => 'approval-responded',
+                'approval' => ['id' => 'call_1', 'approved' => true],
+                'elicitation' => ['action' => 'accept', 'content' => [
+                    'title' => 'Launch notes',
+                    'body' => 'What shipped this week.',
+                    'status' => 'draft',
+                ]],
+            ]]],
+        ]];
+
+        $this->withHeader('Precognition', 'true')->postJson('/assistant', $answer)->assertNoContent();
+        $this->assertSame(0, Post::count());
+
+        $this->withoutHeader('Precognition')->postJson('/assistant', $answer)->streamedContent();
+
+        $this->assertSame('What shipped this week.', Post::sole()->body);
+        $this->assertStringNotContainsString(
+            'What shipped this week.',
+            DB::table('agent_conversation_messages')->get()->toJson(),
+        );
+
+        $this->postJson('/assistant', $answer)->assertStatus(409);
+    }
+}
+```
+
+### Pest
 
 ```php
 use App\Models\Post;
@@ -244,24 +371,28 @@ When the test suite discovers an action whose `#[Expose]` names a surface the ru
 
 ## Queued runs
 
-`CreatePost::dispatch($input, $context)` pushes an `AgenticActions\Queue\RunAction` job, so `Queue::fake()` works as for any job:
+`ImportPosts::dispatch($input, $context)` queues a job that runs the whole pipeline in a worker, as the caller. The job's class belongs to the package's internals, so assert on the run instead of on the job.
+
+On the `sync` connection, which a new app's `phpunit.xml` sets with `QUEUE_CONNECTION=sync`, the job is serialized and runs at once. `Actions::fake()` answers a queued run in the worker as it answers a direct one, and records the context the worker built: its `surface` is `Surface::Queue`, which tells a queued call from one made with `run()`, and its actor and tenant are the ones restored from the job.
 
 ```php
-use AgenticActions\Queue\RunAction;
-use Illuminate\Support\Facades\Queue;
+use AgenticActions\ActionContext;
+use AgenticActions\Facades\Actions;
+use AgenticActions\Surface;
+use App\Actions\ImportPosts;
 
-Queue::fake();
+$fake = Actions::fake();
 
-// ... the code under test calls ImportPosts::dispatch($input, $context) ...
+// ... the code under test calls ImportPosts::dispatch(['url' => 'https://example.com/feed.xml'], ActionContext::http($user)) ...
 
-Queue::assertPushed(RunAction::class, fn (RunAction $job): bool => $job->action === ImportPosts::class
-    && $job->input['url'] === 'https://example.com/feed.xml'
-    && $job->grants === ['actions:read', 'actions:write']);
+$fake->assertRan(ImportPosts::class, fn (array $input, ActionContext $context): bool => $context->surface === Surface::Queue
+    && $context->actor->is($user)
+    && $input['url'] === 'https://example.com/feed.xml');
 ```
 
-The job's public properties are what the worker runs with: `action`, `input`, `fixed`, `actor`, `tenant`, `locale`, `grants` (null when the caller had no token limits, such as a session), `origin` (the caller's surface) and `idempotencyKey`. `Actions::fake()` answers a queued run in the worker as it answers a direct one.
+`Queue::fake()` keeps the job from running, so the fake then records nothing. The assertions Laravel makes without naming a job class still work, such as `Queue::assertCount(1)` and `Queue::assertNothingPushed()`.
 
-`Queue::fake()` serializes nothing, so it cannot show what survives the queue: the actor and tenant restored from the database, the encrypted payload, or an input that fails to serialize. A test of those runs a real connection: `sync`, or `database` followed by `$this->artisan('queue:work', ['--once' => true])`.
+The worker runs every check again as the caller: the token limits the caller had, membership, `authorize()` and validation (see [Concepts](concepts.md#queued-runs)). To test those checks, drop `Actions::fake()` and let the job run for real: on `sync`, or on `database` followed by `$this->artisan('queue:work', ['--once' => true])`. A refusal ends the job, so assert on the database.
 
 ## MCP in tests
 
