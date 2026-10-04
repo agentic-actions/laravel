@@ -58,7 +58,20 @@ The package mounts after every other route and never replaces one. When a route 
 
 ## Tokens and abilities
 
-`mcp.middleware` defaults to `['auth:sanctum', 'throttle:agentic-actions-mcp']`. Any configured guard that is not a session guard works; `actions:check` fails when an MCP guard uses the session driver, and warns when a Sanctum or Passport guard's user model uses neither Sanctum's nor Passport's `HasApiTokens`, since no token then signs anyone in. A request without a valid credential is answered 401 with a `WWW-Authenticate: Bearer` header, and never reaches the server.
+`mcp.middleware` defaults to `['auth:sanctum', 'throttle:agentic-actions-mcp']`. Any configured guard that is not a session guard works; `actions:check` fails when an MCP guard uses the session driver, and warns when a Sanctum or Passport guard's user model uses neither Sanctum's nor Passport's `HasApiTokens`, since no token then signs anyone in. A request that accepts JSON, as every MCP client's does, and has no valid credential is answered 401 with a `WWW-Authenticate: Bearer` header, and never reaches the server.
+
+A request that does not accept JSON, such as a bare `curl -X POST`, gets Laravel's answer to a signed-out browser instead: a redirect to the `login` route, or a 500 when the app has none. To answer every request on the MCP paths with the 401, add their prefix to the JSON rule in `bootstrap/app.php` (a new app already has the `api/*` part; `mcp/*` covers both default paths):
+
+```php
+use Illuminate\Foundation\Configuration\Exceptions;
+use Illuminate\Http\Request;
+
+->withExceptions(function (Exceptions $exceptions): void {
+    $exceptions->shouldRenderJsonWhen(
+        fn (Request $request) => $request->is('api/*', 'mcp/*') || $request->expectsJson(),
+    );
+})
+```
 
 The abilities are the ones HTTP uses, read through the same `ReadsTokenGrants` reader:
 
@@ -102,6 +115,34 @@ Which clients show the form, as of 26 September 2026: the MCP Inspector 2.8.0's 
 
 Every MCP request counts against `mcp.per_minute` (60 by default), per person: all of one person's tokens and tenant URLs share one budget. Past it, the answer is 429 before the server runs.
 
+- **What counts.** Each request a client sends: `initialize`, its notifications, every `tools/list` page and every `tools/call`. A model's turn can make several calls, and a client may list the tools again on its own, so leave room. A request without a valid credential is answered 401 before the throttle, and does not count.
+- **At the limit.** The 429 carries `Retry-After` and `X-RateLimit-Limit`, as any Laravel throttle does.
+- **The number.** `per_minute` is a plain value in `config/agentic-actions.php`, with no environment variable.
+
+For a budget of your own, register a named limiter and put it in `mcp.middleware` in place of `throttle:agentic-actions-mcp`:
+
+```php
+// app/Providers/AppServiceProvider.php
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
+
+public function boot(): void
+{
+    RateLimiter::for('mcp', fn (Request $request): Limit => Limit::perMinute(120)->by('mcp:'.$request->user()?->getAuthIdentifier()));
+}
+```
+
+```php
+// config/agentic-actions.php
+'mcp' => [
+    // ...
+    'middleware' => ['auth:sanctum', 'throttle:mcp'],
+],
+```
+
+Authentication runs before the throttle, so `$request->user()` is the token's person.
+
 ## Handshakes and language
 
 Both handshakes work on one URL: the `initialize` exchange (protocol versions 2025-11-25 and 2025-06-18), and the 2026-07-28 exchange, where each request carries its protocol version in `_meta` and the matching headers. The package adds nothing to either.
@@ -110,7 +151,7 @@ Sentences and the server's instructions follow the person's `HasLocalePreference
 
 ## Recipe: tokens and clients
 
-The package ships no token page and no command that mints tokens: minting is your app's decision. This recipe uses Sanctum and an app whose actions are tenant-scoped, with tenants routed by slug.
+The package ships no token page and no command that mints tokens: minting is your app's decision. This recipe uses Sanctum. Each step gives the app without tenants first, served at `mcp/actions`, then what changes when actions are tenant-scoped, with tenants routed by slug.
 
 ### 1. Give the app a token guard
 
@@ -129,65 +170,119 @@ class User extends Authenticatable
 }
 ```
 
-`install:api` also adds `GET /api/user` under `auth:sanctum`. It checks no ability, so `actions:check` lists it. Delete it, or register Sanctum's `abilities` alias for `CheckAbilities` in `bootstrap/app.php`, add `->middleware('abilities:profile:read')`, and mint that ability only where it is meant.
+`install:api` also adds `GET /api/user` under `auth:sanctum`. It checks no ability, so `actions:check` lists it. Delete it, or give it an ability and mint that ability only where it is meant. Register Sanctum's alias in `bootstrap/app.php`:
+
+```php
+use Illuminate\Foundation\Configuration\Middleware;
+use Laravel\Sanctum\Http\Middleware\CheckAbilities;
+
+->withMiddleware(function (Middleware $middleware): void {
+    $middleware->alias(['abilities' => CheckAbilities::class]);
+})
+```
+
+and check it on the route:
+
+```php
+// routes/api.php
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
+
+Route::get('/user', fn (Request $request) => $request->user())
+    ->middleware(['auth:sanctum', 'abilities:profile:read']);
+```
 
 ### 2. Point the package at the paths
+
+**Without tenants**, nothing changes: `mcp.path` is `mcp/actions` by default and serves every MCP action, and the default `middleware` names Sanctum's guard.
+
+**With tenants**, tenant-scoped actions need a path of their own (the [tenant model and membership](concepts.md#tenants) are set up first):
 
 ```php
 // config/agentic-actions.php
 'mcp' => [
-    'path' => null,
+    'path' => 'mcp/actions',              // account-level actions; null when every MCP action is tenant-scoped
     'tenant_path' => 'mcp/t/{tenant}',
 ],
 ```
 
-The segment's name is `tenant.parameter`. The default `middleware` needs no change. After a change on an app with cached routes, run `php artisan route:cache` and reload PHP-FPM.
+The segment's name is `tenant.parameter`. Keep `path` while the app has account-level actions that allow MCP: a null `path` takes them off MCP. After a change on an app with cached routes, run `php artisan route:cache` and reload PHP-FPM.
 
-`php artisan actions:list` now shows `mcp  open  POST mcp/t/{tenant}` for each MCP-exposed action, and `php artisan actions:check` passes the MCP guard and MCP route rows.
+`php artisan actions:list` now shows `mcp  open  POST mcp/actions` (or `POST mcp/t/{tenant}` for a tenant-scoped action) for each MCP-exposed action, and `php artisan actions:check` passes the MCP guard and MCP route rows.
 
 ### 3. Mint a token
 
-Name the abilities, bind the token to one tenant, and give it an expiry:
+Name the abilities and give the token an expiry:
 
 ```php
 // php artisan tinker, or your app's own "Connect an AI client" page
-$tenant = Tenant::where('slug', 'acme')->firstOrFail();
+$token = $user->createToken('Claude Code', ['actions:read', 'actions:write'], now()->addDays(90));
+
+$token->plainTextToken;   // shown once: "1|…"
+```
+
+With tenants, bind the token to one tenant too:
+
+```php
+$tenant = Team::where('slug', 'acme')->firstOrFail();
 
 $token = $user->createToken(
     'Claude Code',
     ['actions:read', 'actions:write', 'tenant:'.$tenant->getKey()],   // the primary key, never the slug
     now()->addDays(90),
 );
-
-$token->plainTextToken;   // shown once: "1|…"
 ```
 
-A read-only client gets `['actions:read', 'tenant:…']`. Revoke with `$user->tokens()->where('name', 'Claude Code')->delete()`. A page in your app for this lets the person choose read or read and write, sets the expiry, lists tokens with their last use (`last_used_at`), and revokes them.
+A bound token reaches only that tenant's path, never `mcp/actions` ([Tenants](#tenants)). A read-only client gets `['actions:read']`, plus its `tenant:…`. Revoke with `$user->tokens()->where('name', 'Claude Code')->delete()`. A page in your app for this lets the person choose read or read and write, sets the expiry, lists tokens with their last use (`last_used_at`), and revokes them.
+
+Once the token expires, every request answers 401 and the client stops connecting. Mint a new one and replace the header in the client's settings.
 
 ### 4. Check it with curl
 
 ```sh
-curl -s http://example.test/mcp/t/acme \
+curl -s http://example.test/mcp/actions \
   -H 'Authorization: Bearer 1|…' \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json, text/event-stream' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
 
-The answer lists one tool per MCP-exposed tenant-scoped Read and Write action. A wrong token answers 401; a tenant the person does not belong to answers an empty list.
+The answer lists one tool per MCP-exposed Read and Write action the token reaches. A wrong or expired token answers 401. With tenants, send it to `http://example.test/mcp/t/acme`: it lists the tenant-scoped actions, and a tenant the person does not belong to answers an empty list.
+
+Call a tool the same way:
+
+```sh
+curl -s http://example.test/mcp/actions \
+  -H 'Authorization: Bearer 1|…' \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"create-post","arguments":{"title":"Hello","body":"My first post."}}}'
+```
+
+No `initialize` is needed first: each request is answered on its own. The call answers one of three results, as [What a call answers](#what-a-call-answers) says:
+
+| The call | `result.content[0].text` | `result.isError` |
+|---|---|---|
+| a Write that ran | `Done.`, or your `modelReply()` | false |
+| a Read that ran | `Found.`, a line of three dashes, then the output as JSON | false |
+| refused, invalid, denied or not found | the sentence, such as `Not done. Rejected: title (required).` | true |
+
+A tool the token cannot reach, such as a Write for a read-only token, is not on its list, so the call gets a JSON-RPC error instead of a result, with HTTP 400: `{"error":{"code":-32602,"message":"Tool [create-post] not found."}}`.
 
 ### 5. Connect a client
 
-The URL is the tenant path with a real segment, and the credential is a bearer header. Locally, use Herd's `http://` URL; with an `https://` Herd site, Node-based clients must trust Herd's certificate authority (for example through `NODE_EXTRA_CA_CERTS`).
+The URL is `mcp/actions` on your app, or the tenant path with a real segment (`mcp/t/acme`), and the credential is a bearer header. Locally, use Herd's `http://` URL; with an `https://` Herd site, Node-based clients must trust Herd's certificate authority (for example through `NODE_EXTRA_CA_CERTS`).
 
 **Claude Code:**
 
 ```sh
-claude mcp add --transport http my-app http://example.test/mcp/t/acme \
+claude mcp add --transport http my-app http://example.test/mcp/actions \
   --header "Authorization: Bearer 1|…"
 ```
 
-`/mcp` inside Claude Code shows the server and its tools. `--scope project` writes `.mcp.json` for your team; keep the token out of the repository by writing the header value as `"Bearer ${MY_APP_MCP_TOKEN}"` there, which Claude Code reads from the environment.
+`/mcp` inside Claude Code shows the server and its tools. `--scope project` writes `.mcp.json` for your team; keep the token out of the repository by writing the header value as `"Bearer ${MY_APP_MCP_TOKEN}"` there, which Claude Code reads from the environment. When the token expires, set the new one in that variable, or run `claude mcp remove my-app` and add it again.
+
+Once the app has [OAuth](#connect-claude-chatgpt-and-other-remote-clients-oauth), Claude Code can sign in instead of carrying a pasted token: add the server without `--header`, then choose Authenticate for it in `/mcp`. The person approves on the consent screen, which names "an app on this device" as where the answer goes, and Claude Code refreshes its token itself. Its callback is a `http://localhost` address, which [Harden](#harden-the-oauth-setup) step 2's allowlist keeps.
 
 **Cursor** (`.cursor/mcp.json` in the project, or `~/.cursor/mcp.json`):
 
@@ -195,7 +290,7 @@ claude mcp add --transport http my-app http://example.test/mcp/t/acme \
 {
     "mcpServers": {
         "my-app": {
-            "url": "http://example.test/mcp/t/acme",
+            "url": "http://example.test/mcp/actions",
             "headers": { "Authorization": "Bearer 1|…" }
         }
     }
@@ -209,7 +304,7 @@ claude mcp add --transport http my-app http://example.test/mcp/t/acme \
     "mcpServers": {
         "my-app": {
             "command": "npx",
-            "args": ["-y", "mcp-remote", "http://example.test/mcp/t/acme", "--header", "Authorization:${MCP_AUTH}", "--allow-http"],
+            "args": ["-y", "mcp-remote", "http://example.test/mcp/actions", "--header", "Authorization:${MCP_AUTH}", "--allow-http"],
             "env": { "MCP_AUTH": "Bearer 1|…" }
         }
     }
@@ -239,12 +334,35 @@ It is optional. Nothing changes until a Passport guard is named in `agentic-acti
 - Behind a load balancer or proxy that ends TLS, `bootstrap/app.php` trusts it (`$middleware->trustProxies(at: …)`), so the metadata names the `https://` URL people enter.
 - The user model keeps Sanctum's `HasApiTokens` and nothing more: that trait serves Passport's guard too. Do not add Passport's `HasApiTokens` or `OAuthenticatable` beside it; the two traits cannot be combined on one class. An app without Sanctum uses Passport's trait and `OAuthenticatable`, as Passport's docs say.
 
+No starter kit? Any session sign-in works, as long as its route is named `login` and it ends with `redirect()->intended()`, which takes the person back to the consent screen they were sent from:
+
+```php
+// routes/web.php
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Route;
+
+Route::view('/login', 'auth.login')->middleware('guest')->name('login');   // a form posting email and password, with @csrf
+
+Route::post('/login', function (Request $request) {
+    $credentials = $request->validate(['email' => ['required', 'email'], 'password' => ['required']]);
+
+    if (! Auth::attempt($credentials)) {
+        return back()->withErrors(['email' => __('These credentials do not match our records.')])->onlyInput('email');
+    }
+
+    $request->session()->regenerate();
+
+    return redirect()->intended('/');
+})->middleware(['guest', 'throttle:5,1']);
+```
+
 ### Connect
 
 Three files are edited by hand: `config/auth.php`, `config/agentic-actions.php` and `routes/ai.php`.
 
 1. `composer require laravel/passport`
-2. `php artisan passport:install` (the keys and Passport's tables).
+2. `php artisan passport:install` (the keys and Passport's tables). It asks two questions: answer yes to running the migrations, and no to the "personal access" grant client. Connectors register their own clients through `oauth/register`, and the package needs no personal access client.
 3. In `config/auth.php`, under `guards`:
 
     ```php
@@ -292,7 +410,7 @@ Passport::authorizationView(fn (array $parameters): Response => Inertia::render(
 
 `toArray()` holds `app`, `client`, `redirect` (`host`, `local`), `tenant` (a name, or null), `abilities`, `person`, and `approve` and `deny`, each with a `url`, a `method` and the `fields` to post. Post Allow and Deny as plain HTML forms with those fields as hidden inputs, never as an Inertia visit or `fetch()`: the answer redirects to the client. An app that followed laravel/mcp's docs (`view('mcp.authorize', $parameters)`) switches to `Consent`, which names the tenant and where the answer goes.
 
-The package refuses, with one and the same 403 page, an unknown tenant or one the person does not belong to, a client registered with a grant type other than authorization code and refresh, a client with a redirect address outside plain ASCII or holding a backslash, and a client the person connected asking without one of the package's URLs. A request for a package URL without S256 PKCE, or with a scope the path does not take, answers 400.
+The package refuses, with one and the same 403 page, an unknown tenant or one the person does not belong to, a client registered with a grant type other than authorization code and refresh, a client with a redirect address outside plain ASCII or holding a backslash, and a client the person connected asking without one of the package's URLs. A request for a package URL without S256 PKCE, or with a scope the path does not take, answers 400. laravel/mcp's own scope, `mcp:use`, is accepted beside the path's scopes and grants nothing: a client that asks for it alone connects, and lists no tools.
 
 ### What a connection reaches
 
@@ -321,6 +439,9 @@ Before real people connect:
 1. **Short tokens.** Passport's tokens last a year by default. An hour, with 30-day refresh tokens that rotate, keeps a leaked token short-lived while Claude refreshes on its own. In `AppServiceProvider::boot()`:
 
     ```php
+    use Carbon\CarbonInterval;
+    use Laravel\Passport\Passport;
+
     Passport::tokensExpireIn(CarbonInterval::hour());
     Passport::refreshTokensExpireIn(CarbonInterval::days(30));
     ```
@@ -335,7 +456,23 @@ Before real people connect:
 
     Add `custom_schemes` only for the desktop apps you allow (`cursor` for Cursor). `actions:check` warns on `*` outside local and testing.
 
-3. **Rate limits for remote clients.** Every Claude user reaches your app from Anthropic's addresses, so a limit per address is shared by all of them. Raise the throttle around `Mcp::oauthRoutes()` with a named limiter as connectors grow. For Passport's `oauth/token`, an app with many connected people registers Passport's routes itself (`Passport::ignoreRoutes()`) with a limiter keyed by `client_id`. The MCP throttle itself counts per person, after sign-in.
+3. **Rate limits for remote clients.** Every Claude user reaches your app from Anthropic's addresses, so a limit per address is shared by all of them. As connectors grow, replace `throttle:60,1` around `Mcp::oauthRoutes()` with a named limiter:
+
+    ```php
+    // app/Providers/AppServiceProvider.php, in boot()
+    use Illuminate\Cache\RateLimiting\Limit;
+    use Illuminate\Http\Request;
+    use Illuminate\Support\Facades\RateLimiter;
+
+    RateLimiter::for('mcp-oauth', fn (Request $request): Limit => Limit::perMinute(300)->by($request->ip()));
+    ```
+
+    ```php
+    // routes/ai.php
+    Route::middleware('throttle:mcp-oauth')->group(fn () => Mcp::oauthRoutes());
+    ```
+
+    For Passport's `oauth/token`, an app with many connected people registers Passport's routes itself (`Passport::ignoreRoutes()`) with a limiter keyed by `client_id`. The MCP throttle itself counts per person, after sign-in ([Throttle](#throttle)).
 
 4. **Quiet logs.** A bearer token Passport's guard cannot read, an expired one included, is otherwise logged as an error. In `bootstrap/app.php`:
 
@@ -374,32 +511,50 @@ Show the URL to paste into a connector too, with a copy button: `route('agentic-
 
 ### A public URL for a local test
 
-With Herd, a short-lived tunnel reaches the site with no app change:
+The challenge and the metadata name the URL the app sees, built from the request's host and scheme. A tunnel ends TLS, and passes the public host and scheme in `X-Forwarded-Host` and `X-Forwarded-Proto`, which Laravel reads only from a proxy it trusts. Trust the tunnel, which connects from the same machine, in `bootstrap/app.php`:
+
+```php
+use Illuminate\Foundation\Configuration\Middleware;
+
+->withMiddleware(function (Middleware $middleware): void {
+    $middleware->trustProxies(at: '127.0.0.1');
+})
+```
+
+Then open the tunnel. With Herd, which picks the site by its host name, the tunnel sets the Host header to the site's and passes its own host in `X-Forwarded-Host`:
 
 ```sh
 cloudflared tunnel --url https://blog.test --http-host-header blog.test --no-tls-verify
 ```
 
-The connector URL is then `https://<tunnel>/mcp/t/acme`. Keep the tunnel short-lived, and never open one on an app with a known password. Without Herd, `trustProxies` for the tunnel's address.
+Without Herd:
+
+```sh
+php artisan serve
+cloudflared tunnel --url http://127.0.0.1:8000
+```
+
+Before adding the connector, run check 2 of [When Claude cannot connect](#when-claude-cannot-connect) on the tunnel's URL: `resource` must be `https://<tunnel>/mcp/t/acme`, not `blog.test` or `http://`. The connector URL is then `https://<tunnel>/mcp/t/acme`. Keep the tunnel short-lived, and never open one on an app with a known password.
 
 ### When Claude cannot connect
 
 | What happens | Cause | Fix |
 |---|---|---|
 | "Couldn't reach the MCP server" | the app is not public over HTTPS; a firewall, WAF or bot rule blocks Anthropic's addresses (`160.79.104.0/21`) on the MCP, `.well-known` or `oauth` paths; the host has no IPv4 address | serve it publicly; allow those addresses on those paths; add an A record |
-| sign-in never starts, or fails at once | no `Mcp::oauthRoutes()` (the 401 has no `resource_metadata`); the metadata's `resource` is `http://` or differs from the URL entered (a proxy that ends TLS without `trustProxies`, a trailing slash, another host) | `routes/ai.php`; `trustProxies` for any proxy; enter the URL exactly as the app shows it |
+| sign-in never starts, or fails at once | no `Mcp::oauthRoutes()` (the 401 has no `resource_metadata`); the metadata's `resource` is `http://` or differs from the URL entered (a proxy or tunnel that ends TLS or rewrites the host without `trustProxies`, a trailing slash, another host) | `routes/ai.php`; `trustProxies` for any proxy; enter the URL exactly as the app shows it |
 | registration fails | `mcp.redirect_domains` does not list the client's callback | add its prefix ([Harden](#harden-the-oauth-setup) step 2) |
 | the page after sign-in answers 500 at `oauth/token`, or the MCP URL answers 500 where it should answer 401 | Passport has no keys on the server (a deploy without them); `actions:check` fails | `passport:keys` in the deploy, or `PASSPORT_PRIVATE_KEY` and `PASSPORT_PUBLIC_KEY` |
 | a signed-out person lands nowhere | no route named `login` | add one |
 | "This app cannot be connected to this address" | an unknown tenant, or one the person is not in; a client connected elsewhere asking without the URL; a client with other grants or an unusual redirect address | paste the URL from the app's page; remove and add the connector |
 | 400 at `oauth/authorize` | the client did not use S256, or asked for scopes the path does not take | a client the package does not support |
-| connected, but no tools | no Passport guard in `mcp.middleware`, or `auth:api,sanctum`; the client sent no `resource`, so no connection; a changed tenant slug in the saved URL; the person left the tenant; the path had only Read actions when they connected | fix the guard list; connect again; see `actions:check` |
+| connected, but no tools | no Passport guard in `mcp.middleware`, or `auth:api,sanctum`; the client sent no `resource`, so no connection; the client asked only for `mcp:use`; a changed tenant slug in the saved URL; the person left the tenant; the path had only Read actions when they connected | fix the guard list; connect again; see `actions:check` |
 
 Three `curl` checks show what a client sees:
 
 ```sh
-# The challenge: a 401 naming the metadata and the path's scopes.
-curl -si -X POST https://example.com/mcp/t/acme | grep -i www-authenticate
+# The challenge: a 401 naming the metadata and the path's scopes. Without the Accept header,
+# the request is answered as a signed-out browser's (see Tokens and abilities).
+curl -si -X POST https://example.com/mcp/t/acme -H 'Accept: application/json, text/event-stream' | grep -i www-authenticate
 
 # The path's metadata: resource equals the URL entered, scopes_supported the path's.
 curl -s https://example.com/.well-known/oauth-protected-resource/mcp/t/acme
@@ -407,6 +562,8 @@ curl -s https://example.com/.well-known/oauth-protected-resource/mcp/t/acme
 # The authorization server: the endpoints, and S256.
 curl -s https://example.com/.well-known/oauth-authorization-server
 ```
+
+The authorization server's `scopes_supported` lists laravel/mcp's `mcp:use`, as does the metadata at `/.well-known/oauth-protected-resource` with no path. That is expected: clients take a path's scopes from its 401 and its own metadata, the first two checks.
 
 ### Testing OAuth
 
