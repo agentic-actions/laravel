@@ -213,6 +213,7 @@ export default defineConfigWithTheme<ThemeConfig>({
     nav: [
       { text: 'How it works', link: '/how-it-works/one-action', activeMatch: '^/how-it-works/' },
       { text: 'Guide', link: '/getting-started', activeMatch: '^/(?!changelog|how-it-works/)[^/]+' },
+      { text: 'Demo', link: 'https://demo.agentic-actions.com' },
       { text: 'Changelog', link: '/changelog' },
       {
         text: release,

@@ -1,13 +1,14 @@
 <script setup lang="ts">
 /**
- * HomeActions: the home page's two buttons (Get started, GitHub) and the
- * install command with a copy button. The command comes from the config's
- * themeConfig.install, which follows js/package.json's version.
+ * HomeActions: the home page's two buttons (Get started, then the hosted
+ * demo, GitHub or How it works) and the install command with a copy button.
+ * The command comes from the config's themeConfig.install, which follows
+ * js/package.json's version.
  */
 import { ref } from 'vue'
 import { useData, withBase } from 'vitepress'
 
-const props = withDefaults(defineProps<{ secondary?: 'github' | 'concepts' }>(), { secondary: 'github' })
+const props = withDefaults(defineProps<{ secondary?: 'demo' | 'github' | 'concepts' }>(), { secondary: 'demo' })
 
 const { theme } = useData()
 const copied = ref(false)
@@ -22,10 +23,11 @@ async function copy(): Promise<void> {
   }
 }
 
-const second =
-  props.secondary === 'github'
-    ? { text: 'GitHub', href: 'https://github.com/agentic-actions/laravel', external: true }
-    : { text: 'How it works', href: withBase('/how-it-works/one-action'), external: false }
+const second = {
+  demo: { text: 'Try the demo', href: 'https://demo.agentic-actions.com', external: true },
+  github: { text: 'GitHub', href: 'https://github.com/agentic-actions/laravel', external: true },
+  concepts: { text: 'How it works', href: withBase('/how-it-works/one-action'), external: false },
+}[props.secondary]
 </script>
 
 <template>
