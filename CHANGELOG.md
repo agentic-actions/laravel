@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.9.0-beta.3 - 2026-10-04
+
+The npm client installed from the Composer package brings no packages of its own, the installer and `actions:check` point at agentic-actions.com and catch two wiring mistakes, and the documentation was rewritten after readers followed it in fresh apps.
 
 ### Upgrading
 

@@ -1,6 +1,6 @@
 {
     "name": "@agentic-actions/client",
-    "version": "0.9.0-beta.2",
+    "version": "0.9.0-beta.3",
     "description": "Typed calls and copilot rows for Agentic Actions for Laravel.",
     "license": "MIT",
     "keywords": ["laravel", "actions", "agents", "mcp", "inertia", "react", "ai-sdk"],
