@@ -39,12 +39,12 @@ beforeEach(function () {
 });
 
 it('passes for an agent whose tools are all action tools', function () {
-    expect(fn () => Actions::assertAgentTools(new NotesAgent($this->user)))->not->toThrow(Throwable::class)
-        ->and(fn () => Actions::assertAgentTools(new SupportAgent($this->user)))->not->toThrow(Throwable::class);
+    Actions::assertAgentTools(new NotesAgent($this->user));
+    Actions::assertAgentTools(new SupportAgent($this->user));
 });
 
 it('passes for an agent with no tools at all', function () {
-    expect(fn () => Actions::assertAgentTools(new NoteWriter))->not->toThrow(Throwable::class);
+    Actions::assertAgentTools(new NoteWriter);
 });
 
 it('fails for a hand-written tool named like an action tool', function () {
@@ -86,8 +86,9 @@ it('fails when a toolset holds more action tools than the limit', function () {
 it('counts action tools per toolset, not across toolsets', function () {
     config(['agentic-actions.agents.max_tools_per_toolset' => 2]);
 
-    expect(fn () => Actions::assertAgentTools(new SupportAgent($this->user)))->not->toThrow(Throwable::class)
-        ->and(fn () => Actions::assertAgentTools(new NotesAgent($this->user)))->toThrow(AssertionFailedError::class, 'default (6)');
+    Actions::assertAgentTools(new SupportAgent($this->user));
+
+    expect(fn () => Actions::assertAgentTools(new NotesAgent($this->user)))->toThrow(AssertionFailedError::class, 'default (6)');
 });
 
 describe('the page context', function () {
@@ -101,7 +102,7 @@ describe('the page context', function () {
     });
 
     it('passes for an agent carrying #[WithPageContext] whose middleware() returns actionMiddleware()', function () {
-        expect(fn () => Actions::assertAgentTools(new PageAgent($this->user)))->not->toThrow(Throwable::class);
+        Actions::assertAgentTools(new PageAgent($this->user));
     });
 
     it('fails for an agent carrying #[WithPageContext] whose middleware() leaves it out', function () {
@@ -110,7 +111,7 @@ describe('the page context', function () {
     });
 
     it('asks nothing of an agent without the attribute', function () {
-        expect(fn () => Actions::assertAgentTools(new StreamAgent($this->user, wired: false)))->not->toThrow(Throwable::class)
-            ->and(fn () => Actions::assertAgentTools(new NotesAgent($this->user)))->not->toThrow(Throwable::class);
+        Actions::assertAgentTools(new StreamAgent($this->user, wired: false));
+        Actions::assertAgentTools(new NotesAgent($this->user));
     });
 });
