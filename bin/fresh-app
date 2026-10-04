@@ -332,11 +332,27 @@ contains 'You already have a post with that title.'
 item 11 "php artisan actions:typescript writes a file for the npm root and the web mount"
 
 quietly "npm install the app's own packages" npm install --no-audit --no-fund
+
+# Installed from vendor/, the client brings nothing of its own: no package of the toolchain the repository's root
+# package.json holds lands in the app, and the client gets no node_modules, so its imports resolve to the app's copies.
+# npm may also add platform binaries of the app's own packages on a second install, so the count it prints is no
+# measure of this.
+read -r -a toolchain <<<"$(php -r 'echo implode(" ", array_keys(json_decode(file_get_contents($argv[1]), true)["devDependencies"] ?? []));' "$repo/package.json")"
+(( ${#toolchain[@]} > 0 )) || fail "$repo/package.json lists no devDependencies to look for"
+had=' '
+for name in "${toolchain[@]}"; do
+    [[ -e "$app/node_modules/$name" ]] && had+="$name "
+done
+
 quietly 'npm install ./vendor/agentic-actions/laravel/js' npm install --no-audit --no-fund ./vendor/agentic-actions/laravel/js
 
-# Installed from vendor/, the client is the one package npm adds: nothing of its own comes with it, so its imports
-# resolve to the app's copies.
-contains 'added 1 package'
+for name in "${toolchain[@]}"; do
+    if [[ -e "$app/node_modules/$name" && "$had" != *" $name "* ]]; then
+        fail "installing the client added $name, a package of its own toolchain"
+    fi
+done
+[[ ! -e "$installed/js/node_modules" ]] || { out="$(ls "$installed/js/node_modules")"; fail 'installing the client gave it a node_modules of its own'; }
+ok "the client brought none of its toolchain (${toolchain[*]})"
 
 expect_exit 0 'actions:typescript' artisan actions:typescript
 contains 'Wrote resources/js/agentic/actions.ts.'
