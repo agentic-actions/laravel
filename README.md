@@ -7,6 +7,8 @@
 
 Write an operation once, as an Action class. Mark it `#[Expose]` and the same class answers a web route (JSON and browser forms, with Precognition), an Artisan command, a tool call from a [laravel/ai](https://github.com/laravel/ai) agent or an MCP client, and a typed TypeScript function. Every caller goes through one pipeline: exposure, token abilities, tenant membership, `authorize()`, validation, `handle()`, and an allowlist on the output.
 
+The class below drafts a blog post. It uses a `Post` model and a `posts()` relation on `User`, which a new app does not have yet: [Try it in a new app](#try-it-in-a-new-app) adds them.
+
 <!-- #region create-post -->
 ```php
 <?php
@@ -94,6 +96,8 @@ curl https://example.com/api/actions/create-post \
 {"id":1,"title":"Hello"}
 ```
 
+`/api/actions/…` is the mount for token clients, and `$TOKEN` a Sanctum token: [Installation](#installation) mounts it and [Token client](#token-client) mints one.
+
 And a plain Blade form can post to it:
 
 ```blade
@@ -137,6 +141,8 @@ use AgenticActions\Facades\Actions;
 Route::middleware('auth')->group(fn () => Actions::routes());
 ```
 
+`auth` is your app's own sign-in, so these routes assume an app that has one, such as a starter kit. A signed-out browser is redirected to the route named `login`; in an app without one, that redirect fails with `Route [login] not defined`.
+
 For token clients, run `php artisan install:api`, add the `HasApiTokens` trait to your `User` model as it asks, then in `routes/api.php`:
 
 ```php
@@ -146,6 +152,11 @@ Route::middleware('auth:sanctum')->name('api.')->group(fn () => Actions::routes(
 ```
 
 Until one of these lines exists, `php artisan actions:list` prints both whenever an action is open on the web.
+
+`install:api` changes two more things:
+
+- **MCP gets its guard.** The package's MCP server authenticates with `auth:sanctum` (`mcp.middleware`) and mounts once that guard exists. From then on every exposed Read or Write action with a description, `create-post` included, is also a tool at `POST /mcp/actions`, for a token that names the action's ability, here `actions:write` ([MCP](https://github.com/agentic-actions/laravel/blob/main/docs/mcp.md)). The snapshot below (`actions.exposure.json`) records that an action allows MCP, not whether MCP is mounted, so no diff shows this; `php artisan actions:list` shows the mount. To keep one action off MCP, name its surfaces, as in `#[Expose(web: true)]` ([exposure](https://github.com/agentic-actions/laravel/blob/main/docs/concepts.md#exposure)). To keep MCP off for the whole app, set `AGENTIC_ACTIONS_MCP=false`.
+- **`GET /api/user` appears.** It authenticates with the same guard and checks no ability, so an MCP token reaches it too, and `php artisan actions:check` warns: "The route [GET|HEAD api/user] authenticates with the MCP guard [sanctum] and checks no ability". Delete the route unless you use it, or guard it with an ability as [step 1 of the MCP recipe](https://github.com/agentic-actions/laravel/blob/main/docs/mcp.md#1-give-the-app-a-token-guard) shows.
 
 Then record what your actions expose:
 
@@ -178,9 +189,74 @@ export default defineConfig({
 
 `php artisan make:agentic-action CreatePost` writes a new action that is discovered but exposed nowhere, whose `authorize()` returns false until you decide who may run it. Actions are discovered under `app/`; `php artisan vendor:publish --tag=agentic-actions-config` publishes the config if yours live elsewhere. The tags `agentic-actions-lang` and `agentic-actions-stubs` publish the sentences callers and agents read, and the stub `make:agentic-action` writes from.
 
+## Try it in a new app
+
+`CreatePost` needs a posts table, a `Post` model and a `posts()` relation on `User`. `php artisan actions:check` does not look for them, so without them the first call fails.
+
+```bash
+php artisan make:model Post -m
+```
+
+In the migration it writes, under `database/migrations/`:
+
+```php
+Schema::create('posts', function (Blueprint $table) {
+    $table->id();
+    $table->foreignId('user_id')->constrained()->cascadeOnDelete();
+    $table->string('title');
+    $table->text('body');
+    $table->string('excerpt')->nullable();
+    $table->string('status');
+    $table->timestamps();
+});
+```
+
+In `app/Models/Post.php`:
+
+```php
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class Post extends Model
+{
+    protected $fillable = ['title', 'body', 'excerpt', 'status'];
+}
+```
+
+In `app/Models/User.php`:
+
+```php
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+public function posts(): HasMany
+{
+    return $this->hasMany(Post::class);
+}
+```
+
+Then save `CreatePost` as `app/Actions/CreatePost.php` and run it as user 1. A new app's `DatabaseSeeder` creates that user:
+
+```bash
+php artisan migrate
+php artisan db:seed
+php artisan actions:run create-post title=Hello "body=My first post." --as=1
+```
+
+```json
+{
+    "id": 1,
+    "title": "Hello"
+}
+```
+
 ## Calling an action
 
 ### Blade
+
+Put the form in a view, such as `resources/views/posts/create.blade.php`, and serve it behind the same sign-in in `routes/web.php`: `Route::view('/posts/create', 'posts.create')->middleware('auth');`.
 
 ```blade
 <form method="POST" action="{{ route('actions.create-post') }}">
@@ -210,6 +286,12 @@ A Sanctum token calls the `api.` mount. Sanctum's default token (`['*']`) passes
 
 ```php
 $token = $user->createToken('importer', ['actions:read', 'actions:write'])->plainTextToken;
+```
+
+To mint one for user 1 while you try it, from the shell:
+
+```bash
+php artisan tinker --execute 'echo App\Models\User::find(1)->createToken("importer", ["actions:read", "actions:write"])->plainTextToken;'
 ```
 
 | Ability | Reaches |
@@ -246,6 +328,8 @@ curl https://example.com/api/actions/create-post \
   -d '{"title": "Hello", "body": "My first post."}'
 ```
 
+What the `api.` mount answers:
+
 | Case | Status | Body |
 |---|---|---|
 | Success | 200 | `{"id": 1, "title": "Hello"}`: only the keys `outputSchema()` declares, or `{}` |
@@ -257,7 +341,61 @@ curl https://example.com/api/actions/create-post \
 | `authorize()` said no | 403 | `{"message": "You are not allowed to do this."}` |
 | No user | 401 | `{"message": "Unauthenticated."}` |
 
-`Idempotency-Key` is optional. An action that needs one calls `$context->requireIdempotencyKey()`, which answers 428 when the header is missing. Send `Precognition: true` to validate without running the action.
+The web mount sits in the `web` middleware group, so a JSON caller there needs the session cookie and the `X-XSRF-TOKEN` header, which `callAction()` sends on the same origin. Without them Laravel answers 419 before the action is reached. Use the `api.` mount for curl and other servers.
+
+Send `Precognition: true` to validate without running the action.
+
+#### Idempotency-Key
+
+The header is optional. The package passes the key to the action on `$context` and stores nothing: it never deduplicates a call or replays a response, so a retry with the same key runs the action again. An action that must not run twice for one key calls `$context->requireIdempotencyKey()`, which refuses with a 428 when the caller sent no key and otherwise returns a key namespaced by action, actor and tenant. Store that key and look for it first. For `CreatePost`, with a `$table->uuid('idempotency_key')->nullable()->unique()` column listed in `$fillable`, `handle()` becomes:
+
+```php
+public function handle(ActionContext $context, ValidatedInput $input): Post
+{
+    $author = $context->actor(User::class);
+    $key = $context->requireIdempotencyKey();
+    $post = $author->posts()->where('idempotency_key', $key)->first();
+
+    if ($post !== null) {
+        return $post; // a retry: the first call's post
+    }
+
+    if ($author->posts()->where('title', $input->string('title')->toString())->exists()) {
+        throw Refusal::make(__('You already have a post with that title.'))->on('title');
+    }
+
+    return $author->posts()->create([...$input->all(), 'status' => 'draft', 'idempotency_key' => $key]);
+}
+```
+
+When two requests with one key race, the unique column lets only one of them save. An action's `$idempotent` property is a different thing: it is only the hint MCP clients read (`idempotentHint`), and changes nothing the package does.
+
+### Artisan
+
+```bash
+php artisan actions:run create-post title=Hello "body=My first post." --as=1
+php artisan actions:run create-post --input='{"title": "Hello", "body": "My first post."}' --as=1
+```
+
+`actions:run` goes through the whole pipeline on the console surface and prints the same allowlisted JSON the route returns (a table, for an action that shows one). Values are `key=value` pairs, and a dotted key nests (`tags.0=news`).
+
+| Option | What it sets |
+|---|---|
+| `--as=` | The actor, by identifier, through the default guard's user provider. Without it the action runs without a user. |
+| `--tenant=` | The tenant, by its route key, as it appears in the URL (a slug, for a model that routes by slug). |
+| `--locale=` | The locale; `app.locale` by default. |
+| `--key=` | The idempotency key, as the `Idempotency-Key` header would send it. |
+| `--input=` | A JSON object; `key=value` pairs are applied on top of it. |
+
+Scripts can read the exit code:
+
+| Exit code | Meaning |
+|---|---|
+| 0 | Done |
+| 1 | Refused (a `Refusal`, or not found), or the command's own arguments were wrong: no such action, user or tenant |
+| 2 | Invalid input |
+| 3 | `authorize()` said no |
+| 4 | The action threw |
 
 ### Livewire
 
@@ -296,6 +434,17 @@ final class CreatePostForm extends Component
 ### Other front ends
 
 `@agentic-actions/client` has no dependencies. `callAction(createPost(), { title, body })` posts JSON with an `Idempotency-Key` and, on the same origin, the XSRF header; it resolves the typed output or throws `ActionValidationError`, `ActionRefusedError` or `ActionFailedError`. After each success it hands the action's `$touches` (here `['posts']`) to every handler registered with `onTouched()`, so your own store or cache can refetch what went stale. On Inertia, `@agentic-actions/client/inertia` reloads the props those keys name, and `@agentic-actions/client/react` wraps Inertia's `useHttp` in `useAction()` ([recipe](https://github.com/agentic-actions/laravel/blob/main/docs/recipes.md#forms-on-inertia-react)).
+
+`resources/js/agentic/actions.ts` is generated, and you commit it. Run `php artisan actions:typescript` again after changing an action or its routes, and run `php artisan actions:typescript --check` in CI: it writes nothing, and fails when the committed file is stale. An action mounted in several groups gets the URL of its route in the `web` middleware group, or else the first one registered.
+
+## Next
+
+- How it works, with diagrams: [one action, every caller](https://agentic-actions.com/how-it-works/one-action), [the pipeline](https://agentic-actions.com/how-it-works/pipeline), [effects and surfaces](https://agentic-actions.com/how-it-works/effects) and [tenants](https://agentic-actions.com/how-it-works/tenants).
+- [Setup](https://github.com/agentic-actions/laravel/blob/main/docs/setup.md): what each feature needs, and what `actions:install` does.
+- [The copilot](https://github.com/agentic-actions/laravel/blob/main/docs/copilot.md): an agent that calls your actions, streamed into your page.
+- [MCP](https://github.com/agentic-actions/laravel/blob/main/docs/mcp.md): connect Claude Code, Cursor, Claude Desktop and OAuth clients.
+- [Tenants](https://github.com/agentic-actions/laravel/blob/main/docs/concepts.md#tenants): run every action inside one team.
+- [Testing](https://github.com/agentic-actions/laravel/blob/main/docs/testing.md): fakes and assertions for actions, agents and tokens.
 
 <!-- #endregion getting-started -->
 
@@ -409,9 +558,17 @@ The `ActionAssertions` trait adds `assertToolset()` and `assertAgentTools()` to 
 - [Recipes](https://github.com/agentic-actions/laravel/blob/main/docs/recipes.md): strict agent schemas, controllers and Livewire, discovery layouts, custom token guards
 - [Migrating from laravel-actions](https://github.com/agentic-actions/laravel/blob/main/docs/migrating-from-laravel-actions.md)
 
+## Contributing
+
+Bug reports, fixes and documentation changes are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) has the local setup and the checks a pull request passes.
+
+## Getting help
+
+Ask a question or report a bug in [GitHub Issues](https://github.com/agentic-actions/laravel/issues). Include the package version, your Laravel and PHP versions, the smallest set of steps that shows the problem, and the output of `php artisan about` (its Agentic Actions section) and `php artisan actions:check`.
+
 ## Security
 
-Please report vulnerabilities privately, as [SECURITY.md](SECURITY.md) describes.
+Please report vulnerabilities privately, as [SECURITY.md](SECURITY.md) describes, never in a public issue.
 
 ## License
 
