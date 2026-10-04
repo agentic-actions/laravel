@@ -410,7 +410,7 @@ $this->withToken($token)
     ->assertOk();
 ```
 
-A session in a test (`$this->actingAs($user)`) has full access, as it does in the app.
+A session in a test (`$this->actingAs($user)`) has full access, as it does in the app. A token request leaves Sanctum's guard as the test's default guard, so a session request after it in the same test names its guard: `$this->actingAs($user, 'web')`. Without the name, the person is signed in on Sanctum's guard with no token, has no abilities, and every action answers 404.
 
 ## The Read guard and faked events
 

@@ -45,14 +45,15 @@ composer remove --dev laravel/ai laravel/passport --no-interaction --no-progress
 vendor/bin/pint --test && vendor/bin/pest --exclude-group=database --testsuite=Unit,Feature
 ```
 
-The floor cell runs on PHP 8.3: `composer update --prefer-lowest --prefer-stable --prefer-dist --no-interaction --no-progress`, then `vendor/bin/pint --test && vendor/bin/pest --exclude-group=database`. The database cells run in the checkout, against a local MySQL 8, Postgres 16 and MariaDB 11. Create the database once on each (the MySQL line works for MariaDB too), then run the group on each:
+The floor cell runs on PHP 8.3: `composer update --prefer-lowest --prefer-stable --prefer-dist --no-interaction --no-progress`, then `vendor/bin/pint --test && vendor/bin/pest --exclude-group=database`. The database cells run in the checkout, against a local MySQL 8, Postgres 16 and MariaDB 11. Create the database once on each (MariaDB listens on 3307 here, as in CI, so it runs beside MySQL), then run the group on each:
 
 ```bash
 php -r 'new PDO("mysql:host=127.0.0.1", "root", "")->exec("create database if not exists agentic_actions_testing");'
+php -r 'new PDO("mysql:host=127.0.0.1;port=3307", "root", "")->exec("create database if not exists agentic_actions_testing");'
 php -r 'new PDO("pgsql:host=127.0.0.1;dbname=postgres", "postgres", "")->exec("create database agentic_actions_testing");'
 DB_CONNECTION=mysql DB_HOST=127.0.0.1 DB_PORT=3306 DB_DATABASE=agentic_actions_testing DB_USERNAME=root DB_PASSWORD= vendor/bin/pest --group=database
 DB_CONNECTION=pgsql DB_HOST=127.0.0.1 DB_PORT=5432 DB_DATABASE=agentic_actions_testing DB_USERNAME=postgres DB_PASSWORD= vendor/bin/pest --group=database
-DB_CONNECTION=mariadb DB_HOST=127.0.0.1 DB_PORT=3306 DB_DATABASE=agentic_actions_testing DB_USERNAME=root DB_PASSWORD= vendor/bin/pest --group=database
+DB_CONNECTION=mariadb DB_HOST=127.0.0.1 DB_PORT=3307 DB_DATABASE=agentic_actions_testing DB_USERNAME=root DB_PASSWORD= vendor/bin/pest --group=database
 ```
 
 ## Hard rules
@@ -69,7 +70,7 @@ DB_CONNECTION=mariadb DB_HOST=127.0.0.1 DB_PORT=3306 DB_DATABASE=agentic_actions
 ## How a change is made
 
 1. **Test first.** A behaviour change starts as a failing test; a security fix keeps its attack as a test under `tests/Feature/Security/`.
-2. **Checks green.** `composer check` and `npm --prefix js run check` pass before every commit, and a change that touches optional packages also passes the cell without them. A change to `docs/`, the README or the CHANGELOG also passes the site's build.
+2. **Checks green.** `composer check` and `npm --prefix js run check` pass before every commit. A change to `js/src` commits the `js/dist` that check rebuilt, and a change that touches optional packages also passes the cell without them. A change to `docs/`, the README or the CHANGELOG also passes the site's build.
 3. **Docs and CHANGELOG with the code.** A user-visible change updates `docs/` and adds a line under the CHANGELOG's Unreleased section; a change an app must act on also gets an Upgrading note.
 4. **Release.** `chore(release): prepare X`: the CHANGELOG's Unreleased section becomes the version with its upgrade notes, `js/package.json` and the root of `js/package-lock.json` take the version without the "v", the README's pre-release note and install line follow, `composer.json`'s branch alias and SECURITY.md's supported line move with a new minor, and `js/dist` is rebuilt. Then the annotated tag (`vX.Y.Z-beta.N` for a beta), after `tags.yml` has passed on the commit.
 

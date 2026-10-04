@@ -51,7 +51,7 @@ The action's `authorize()` returned false. `make:agentic-action` writes one that
 
 ### A second React or Inertia
 
-React reports an invalid hook call. Or an action succeeds but the page does not reload its props. Or `tsc` reports TS2345 on the options passed to `useChat`, because two copies of `ai` declare the same types.
+React reports an invalid hook call. Or an action succeeds but the page does not reload its props. Or `tsc` reports TS2345 on the `actionsChat()` options passed to `new Chat()`, because two copies of `ai` declare `ChatInit`.
 
 In each case Vite or TypeScript loads a package from `vendor/agentic-actions/laravel/js/node_modules` as well as from your app's `node_modules`. That folder exists when Composer installs the package from a `path` repository, which symlinks a checkout with its own `node_modules`. It also exists when npm installs the client's own development packages for a `file:` dependency. Check whether it is there:
 
@@ -59,7 +59,7 @@ In each case Vite or TypeScript loads a package from `vendor/agentic-actions/lar
 ls vendor/agentic-actions/laravel/js/node_modules
 ```
 
-Fix: dedupe each package that folder holds, `ai` included, in `vite.config.ts`, as [Installation](../README.md#installation) shows. Dedupe changes what Vite bundles, not what `tsc` reads: for the type check, install the client from npm at the version `composer show agentic-actions/laravel` prints, without the `v`. Its React, Inertia and `ai` are peer dependencies, so your app's copies are the only ones.
+Fix: dedupe each package that folder holds, `ai` included, in `vite.config.ts`, as [Installation](../README.md#installation) shows. Dedupe changes what Vite bundles, not what `tsc` reads: for the type check, install the client from npm at the version `composer show agentic-actions/laravel` prints, without the `v`; its React, Inertia and `ai` are peer dependencies. The lockfile can still keep a copy the `file:` install brought in, such as an older `@inertiajs/core` beside the one your `@inertiajs/react` uses. Then run `npm dedupe`, or delete `node_modules` and `package-lock.json` and run `npm install`, and check that `npm ls @inertiajs/core ai` lists one version of each.
 
 ## Actions and schemas
 
@@ -228,6 +228,16 @@ App\Actions\UpdateProfile: agents cannot be offered input [api_token]: it matche
 
 In production the tool is left out quietly, and the error is reported at most once an hour per class.
 
+### The reply stopped before it finished
+
+```text
+The reply stopped before it finished. Anything already saved stays saved.
+```
+
+Every turn that fails shows the person only this sentence. The real error goes to your exception handler, so locally it is in `storage/logs/laravel.log`, for example `Laravel\Ai\Exceptions\ProviderConnectionException: Could not connect to AI provider [openai].` The usual causes are a missing or wrong provider key, a provider that cannot be reached, a 401 or 429 from it, and a hand-written tool that throws (an action tool answers the model with its failed sentence instead).
+
+Fix: set laravel/ai's default provider and its key, as [the copilot](copilot.md) says at the top, and for anything else read the reported exception. What the person keeps from a failed turn is in [reloading the chat](copilot.md#reloading-the-chat). To reword the sentence, publish the language files (`php artisan vendor:publish --tag=agentic-actions-lang`) and edit `stream.interrupted`.
+
 ## Tenants
 
 ### MissingContext: the action is tenant-scoped
@@ -265,7 +275,7 @@ The action context has no tenant of type [App\Models\Team].
 Every call under `teams/{team}` answers `{"message": "Not found."}`, even for a member. The usual causes:
 
 - No membership check. Without `tenant.membership` or `Actions::membershipUsing()`, nobody is a member. `actions:check` fails on this: `tenant.model is set, but no membership check is: set tenant.membership in config/agentic-actions.php, or call Actions::membershipUsing().`
-- A membership closure that returns something other than `true`, such as a model or `1`. Only `true` admits.
+- An untyped membership closure that returns something other than `true`, such as a model or `1`. Only `true` admits ([the rules](concepts.md#membership-and-scope-classes)).
 - `{team:slug}` in the prefix. The package resolves the segment with the model's own route key and ignores a binding field. Write `teams/{team}`, and return `'slug'` from the model's `getRouteKeyName()` ([what your tenant model needs](concepts.md#what-your-tenant-model-needs)).
 - A token bound to another tenant, as in [404 for a token](#404-not-found-for-a-token).
 

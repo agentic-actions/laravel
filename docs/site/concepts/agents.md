@@ -47,7 +47,7 @@ final class BlogAssistant implements Agent, Conversational, HasTools
 
 </CodeCard>
 
-See [What an agent's tool list shows](/concepts#what-an-agents-tool-list-shows) in Concepts.
+[Agents](/getting-started#agents) in Getting started has a plain agent with its imports, and [the server](/copilot#the-server) has this copilot's whole class. See [What an agent's tool list shows](/concepts#what-an-agents-tool-list-shows) in Concepts.
 
 ## Every call is a row
 

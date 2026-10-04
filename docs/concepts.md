@@ -69,7 +69,7 @@ The closure returns true when the value passes. The third argument is the messag
 
 ## Schema to rules
 
-`schema()` is compiled to Laravel validation rules for every call, and `rules()` appends its own per key. The strict type rules run after step 7 of [the pipeline](#the-pipeline) has converted strings where no information is lost, so a form's `"12"` passes as an integer. A `default()` is advertised to agents and in TypeScript, never merged into the input.
+`schema()` is compiled to Laravel validation rules for every call, and `rules()` appends its own per key. The strict type rules run after step 7 of [the pipeline](#the-pipeline) has converted strings where no information is lost, so a form's `"12"` passes as an integer. A `default()` is advertised to agents and MCP clients, never merged into the input.
 
 | `schema()` declares | Rules |
 |---|---|
@@ -358,10 +358,10 @@ throw Refusal::make(__('You already have a post with that title.'))->on('title')
 A JSON caller receives a refusal without a field as `{"message": "…", "code": "…", "details": {}}` with its status, and `code` is `make()`'s first argument. `Refusal::make(__('…'))` therefore sends the translated sentence as the code. When API clients branch on the code, pass a key and a default sentence instead, and the message is translated in the caller's locale:
 
 ```php
-throw Refusal::make('posts.duplicate_title', 'You already have a post with that title.')->on('title');
+throw Refusal::make('posts.publish_limit', 'You have published the most posts your plan allows today.');
 ```
 
-A refusal on a field reaches a JSON caller as a 422 validation error on that field, and a browser visit as a validation error in the action's error bag. `Actions::translateUsing(fn (string $key, ?string $default, array $replace, string $locale): string => …)` hands your refusal keys to your own translator; the package's own keys stay with Laravel's.
+The code reaches only a refusal without a field. A refusal on a field reaches a JSON caller as a 422 validation error on that field, with no `code`, and a browser visit as a validation error in the action's error bag. `Actions::translateUsing(fn (string $key, ?string $default, array $replace, string $locale): string => …)` hands your refusal keys to your own translator; the package's own keys stay with Laravel's.
 
 Code that catches a `Refusal` reads it with `key()`, `field()`, `statusCode()`, `getDetails()`, `getListing()`, `translate($locale)`, and `toValidationException()` for a Livewire or Blade form.
 
@@ -422,7 +422,7 @@ A tenant is the model your app's rows belong to, such as a team. Four keys in `c
 
 ### What your tenant model needs
 
-- **A route key.** The URL segment is resolved through the model's own route binding, so the model sets its key: `getRouteKeyName()` returning `'slug'`, or UUID primary keys. Write the prefix as `teams/{team}`. A binding field in the prefix, such as `{team:slug}`, is not read: with the default `id` route key, members get a 404 at `/teams/acme` while `/teams/1` answers, and `actions:check` passes. An unknown key is a 404. The MCP tenant path and `actions:run --tenant=acme` take the same route key.
+- **A route key.** The URL segment is resolved through the model's own route binding, so the model sets its key: `getRouteKeyName()` returning `'slug'`, or UUID primary keys. Write the prefix as `teams/{team}`. A binding field in the prefix, such as `{team:slug}`, is not read: with the default `id` route key, members get a 404 at `/teams/acme` while `/teams/1` answers, and `actions:check` passes. An unknown key is a 404, except on Postgres, where a key the column cannot hold, such as a slug for an integer `id`, fails the query and answers 500. The MCP tenant path and `actions:run --tenant=acme` take the same route key.
 - **A primary key.** A token binds to a tenant by its primary key, with the ability `tenant:{key}` (`tenant:1`, never the slug).
 - **A foreign key on the rows it owns.** Your scope filters by it, and the package reads its name from the model's `getForeignKey()` (`team_id` for `Team`). No `schema()` or `agentSchema()` key may be named after it or after the parameter (`team`): the tenant comes from the URL or the token, never from input, and `actions:check` fails such a key.
 - **Membership, stored your way.** The package stores none. A `team_user` table (`team_id`, `user_id`) and two relations are enough; a starter kit with teams already has `belongsToTeam()`.
@@ -531,8 +531,8 @@ final class TeamScope implements ScopesToTenant
 
 Give the scope one arm per model your actions find; a model that belongs to the team through another, such as a comment through its post, gets an arm with `whereHas()`. The rules:
 
-- **Only `true` admits.** The answer is compared with `=== true`, so `1` or a model is a no.
-- **`$effect` is null when the question is the tenant as a whole**: when an MCP client lists its tools on the tenant path, and when a person approves an OAuth client for a tenant. A call asks with its action's effect, and so does each action a tool list weighs, so one MCP `tools/list` asks with `null` first, then once per action with its effect, such as `Read`, then `Write`. A no to `null` gives that client an empty list. To let some members only read, answer `null` and `Effect::Read` with true for them, and the other effects with false. The change feed asks with `Read`.
+- **Only `true` admits.** The answer is compared with `=== true`. Return a real boolean: with the `bool` return type the contract requires, PHP turns `1` into `true` (in a file without `strict_types`), and a model throws a `TypeError`. An untyped `membershipUsing()` closure that returns anything but `true` is a no.
+- **`$effect` is null when the question is the tenant as a whole**: on every request to the MCP tenant path, a `tools/call` included, and when a person approves an OAuth client for a tenant. A call then asks again with its action's effect, and so does each action a tool list weighs, so one MCP `tools/list` asks with `null` first, then once per action with its effect, such as `Read`, then `Write`. A no to `null` gives that client an empty list, and every call it makes there answers "Tool not found", while the same token's HTTP call asks only with the action's effect. To let some members only read, answer `null` and `Effect::Read` with true for them, and the other effects with false. The change feed asks with `Read`.
 - **Membership is side-effect free.** It runs on every surface, often several times in one request.
 - **A scope throws for a model it does not handle.** `find()` and [datasets](data.md), with their relations, all read through it, so a missing arm stops loudly instead of reading every team's rows. It returns a query for the model it was given. Which rows are the team's is its decision: see [what `find()` guarantees](security.md).
 - **A configured class wins.** While `tenant.membership` names a class, `Actions::membershipUsing()` is never called, and the same holds for `tenant.scope` and `Actions::scopeUsing()`.
@@ -603,6 +603,31 @@ Route::middleware('auth:sanctum')->name('api.')->group(fn () => Actions::routes(
 
 A token bound with `tenant:{key}` then reaches only its own team's `api/teams/{team}` routes: never another team's, and never the account-level group. Give each `Actions::routes()` group its own name prefix, as these do. Every group gains the change feed's route, named `_changes` within the group, so two groups under one name prefix share a route name, which `route:cache` refuses. `actions:check` fails a tenant-scoped action whose generated route has no `{team}`.
 
+### A tenant-scoped action
+
+An action is tenant-scoped unless it says otherwise, so `CreatePost` from [Getting started](../README.md#try-it-in-a-new-app), without its `$tenantScoped = false` line, runs inside a team: `POST /teams/acme/actions/create-post` on the web group above, `/api/teams/acme/actions/create-post` for a token. The team comes from the URL or the token, never from input, so the action reads it from the context and sets the foreign key itself. The posts table gains the column, `$table->foreignId('team_id')->constrained()->cascadeOnDelete();`, and `Post`'s `$fillable` lists `team_id`, which input can never carry, since no `schema()` key may be named after it. `handle()` becomes:
+
+```php
+use App\Models\Team;
+
+public function handle(ActionContext $context, ValidatedInput $input): Post
+{
+    $author = $context->actor(User::class);
+
+    if ($author->posts()->where('title', $input->string('title')->toString())->exists()) {
+        throw Refusal::make(__('You already have a post with that title.'))->on('title');
+    }
+
+    return $author->posts()->create([
+        ...$input->all(),
+        'team_id' => $context->tenant(Team::class)->getKey(),
+        'status' => 'draft',
+    ]);
+}
+```
+
+Membership is checked before `authorize()` runs, so `authorize()` stays as it was. `$context->find()` is the one read the scope narrows for you; a query of your own filters by the tenant itself, as a Read that lists the team's posts does: `Post::query()->where('team_id', $context->tenant(Team::class)->getKey())->latest()->get()`.
+
 ### When your own middleware checks membership first
 
 An unknown team and a team the person does not belong to get the same 404, so a stranger cannot tell which tenants exist. That holds when the package is the first to check membership. Inside a group whose own middleware already checks it, a starter kit's team middleware for example, a non-member gets that middleware's answer, often a 403, before the package's check runs. To keep the uniform 404, mount `Actions::routes(tenant: true)` in a group that authenticates and leaves membership to `tenant.membership`.
@@ -668,7 +693,7 @@ Set `'tenancy' => App\Tenancy\TeamContext::class` in `config/agentic-actions.php
 ImportPosts::dispatch(['url' => $url], ActionContext::fromRequest($request))->onQueue('imports');
 ```
 
-The job keeps the caller's actor and tenant, the input and the fixed input, the locale, the idempotency key and the token grants the caller had, and every check runs again in the worker: the token, membership, `authorize()` and validation. A call the job's own code makes, and a job it queues, reads the same grants, whatever context that code builds. It gets its own request id. `dispatch()` returns Laravel's `PendingDispatch`, so `onQueue()`, `delay()` and `afterCommit()` chain as usual, and, like `run()`, it is reached by discovery alone. The input must serialize: pass scalars and arrays, and store an uploaded file first and pass its path. A job queued by an agent's tool or inside an MCP call stays model-driven in the worker, so it still reaches only Read and Write actions. A refusal ends the job; a crash fires `ActionFailed` and fails it, and the worker retries it per its `--tries`, so an action that may run twice declares `$idempotent` and takes an idempotency key. While a Read's own code runs, `dispatch()` refuses an action that is not a Read. [Testing](testing.md#queued-runs) shows how to test a queued run.
+The job keeps the caller's actor and tenant, the input and the fixed input, the locale, the idempotency key and the token grants the caller had, and every check runs again in the worker: the token, membership, `authorize()` and validation. A call the job's own code makes, and a job it queues, reads the same grants, whatever context that code builds. It gets its own request id. `dispatch()` returns Laravel's `PendingDispatch`, so `onQueue()`, `delay()` and `afterCommit()` chain as usual, and, like `run()`, it is reached by discovery alone. The input must serialize: pass scalars and arrays, and store an uploaded file first and pass its path. A job queued by an agent's tool or inside an MCP call stays model-driven in the worker, so it still reaches only Read and Write actions. A refusal ends the job; a crash fires `ActionFailed` and fails it, and the worker retries it per its `--tries`, so an action that may run twice calls `$context->requireIdempotencyKey()` and stores the key ([context](#context)); `$idempotent` is only a hint to MCP clients. While a Read's own code runs, `dispatch()` refuses an action that is not a Read. [Testing](testing.md#queued-runs) shows how to test a queued run.
 
 ## The change feed
 

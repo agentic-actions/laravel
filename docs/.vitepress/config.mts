@@ -24,10 +24,19 @@ export interface ThemeConfig extends DefaultTheme.Config {
   install: string
 }
 
+/** The root files the site includes, and the page each one is. A README fragment must be in its getting-started region. */
+const includedPages: Record<string, string> = {
+  'README.md': '/getting-started',
+  'CHANGELOG.md': '/changelog',
+  'CONTRIBUTING.md': '/contributing',
+}
+
 /**
  * The docs link to each other as GitHub URLs or relative paths, so they work on
  * GitHub and Packagist. On the site, a link to another page of the docs stays
- * on the site, and a link that leaves docs/ goes to the file on GitHub.
+ * on the site, a link to a file the site includes (the README, the CHANGELOG,
+ * CONTRIBUTING) goes to the page that includes it, and any other link that
+ * leaves docs/ goes to the file on GitHub.
  *
  * The pages under docs/site/ exist only for the site and include a file from
  * the repository's root (the README or the CHANGELOG), so their relative links
@@ -64,6 +73,11 @@ function siteHref(href: string, source: string): string {
   }
 
   const fromRoot = resolved.slice('../'.length)
+
+  // (c) A file the site includes is its page; checkLinks fails a fragment the page lacks.
+  if (includedPages[fromRoot]) {
+    return `${includedPages[fromRoot]}${hash}`
+  }
 
   return `${repository}/${fromRoot.endsWith('/') ? 'tree' : 'blob'}/main/${fromRoot}${hash}`
 }

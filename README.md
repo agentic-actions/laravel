@@ -156,7 +156,7 @@ Until one of these lines exists, `php artisan actions:list` prints both whenever
 `install:api` changes two more things:
 
 - **MCP gets its guard.** The package's MCP server authenticates with `auth:sanctum` (`mcp.middleware`) and mounts once that guard exists. From then on every exposed Read or Write action with a description, `create-post` included, is also a tool at `POST /mcp/actions`, for a token that names the action's ability, here `actions:write` ([MCP](https://github.com/agentic-actions/laravel/blob/main/docs/mcp.md)). The snapshot below (`actions.exposure.json`) records that an action allows MCP, not whether MCP is mounted, so no diff shows this; `php artisan actions:list` shows the mount. To keep one action off MCP, name its surfaces, as in `#[Expose(web: true)]` ([exposure](https://github.com/agentic-actions/laravel/blob/main/docs/concepts.md#exposure)). To keep MCP off for the whole app, set `AGENTIC_ACTIONS_MCP=false`.
-- **`GET /api/user` appears.** It authenticates with the same guard and checks no ability, so an MCP token reaches it too, and `php artisan actions:check` warns: "The route [GET|HEAD api/user] authenticates with the MCP guard [sanctum] and checks no ability". Delete the route unless you use it, or guard it with an ability as [step 1 of the MCP recipe](https://github.com/agentic-actions/laravel/blob/main/docs/mcp.md#1-give-the-app-a-token-guard) shows.
+- **`GET /api/user` appears.** It authenticates with the same guard and checks no ability, so an MCP token reaches it too, and once an action allows MCP, `php artisan actions:check` warns: "The route [GET|HEAD api/user] authenticates with the MCP guard [sanctum] and checks no ability". The warning stays with `AGENTIC_ACTIONS_MCP=false`, since any Sanctum token still reaches the route. Delete the route unless you use it, or guard it with an ability as [step 1 of the MCP recipe](https://github.com/agentic-actions/laravel/blob/main/docs/mcp.md#1-give-the-app-a-token-guard) shows.
 
 Then record what your actions expose:
 
@@ -368,7 +368,16 @@ public function handle(ActionContext $context, ValidatedInput $input): Post
 }
 ```
 
-When two requests with one key race, the unique column lets only one of them save. An action's `$idempotent` property is a different thing: it is only the hint MCP clients read (`idempotentHint`), and changes nothing the package does.
+When two requests with one key race, the unique column lets only one of them save.
+
+This `handle()` refuses every caller that sends no key. `callAction()`, `useAction()`, `actions:run --key=`, an agent's tool call (its tool-call id) and your own code through `withIdempotencyKey()` send one. A Blade form, Livewire's `run()`, `actions:run` without `--key` and every MCP client send none, so the form above shows "This request needs an Idempotency-Key header." on `action`. An action that also serves those callers asks for the key only when one was sent, and skips the lookup without one:
+
+```php
+$key = $context->idempotencyKey === null ? null : $context->requireIdempotencyKey();
+$post = $key === null ? null : $author->posts()->where('idempotency_key', $key)->first();
+```
+
+An action's `$idempotent` property is a different thing: it is only the hint MCP clients read (`idempotentHint`), and changes nothing the package does.
 
 ### Artisan
 
@@ -437,18 +446,6 @@ final class CreatePostForm extends Component
 
 `resources/js/agentic/actions.ts` is generated, and you commit it. Run `php artisan actions:typescript` again after changing an action or its routes, and run `php artisan actions:typescript --check` in CI: it writes nothing, and fails when the committed file is stale. [The TypeScript client](https://github.com/agentic-actions/laravel/blob/main/docs/client.md) has the file's format, which route's URL it uses, and every option of `callAction()`.
 
-## Next
-
-- How it works, with diagrams: [one action, every caller](https://agentic-actions.com/how-it-works/one-action), [the pipeline](https://agentic-actions.com/how-it-works/pipeline), [effects and surfaces](https://agentic-actions.com/how-it-works/effects) and [tenants](https://agentic-actions.com/how-it-works/tenants).
-- [Setup](https://github.com/agentic-actions/laravel/blob/main/docs/setup.md): what each feature needs, and what `actions:install` does.
-- [The copilot](https://github.com/agentic-actions/laravel/blob/main/docs/copilot.md): an agent that calls your actions, streamed into your page.
-- [MCP](https://github.com/agentic-actions/laravel/blob/main/docs/mcp.md): connect Claude Code, Cursor, Claude Desktop and OAuth clients.
-- [Tenants](https://github.com/agentic-actions/laravel/blob/main/docs/concepts.md#tenants): run every action inside one team.
-- [Testing](https://github.com/agentic-actions/laravel/blob/main/docs/testing.md): fakes and assertions for actions, agents and tokens.
-- [Troubleshooting](https://github.com/agentic-actions/laravel/blob/main/docs/troubleshooting.md): an error message, its cause and its fix.
-
-<!-- #endregion getting-started -->
-
 ## Agents
 
 After `composer require laravel/ai`, an agent receives the actions of its toolsets as tools:
@@ -487,6 +484,18 @@ final class BlogAssistant implements Agent, HasTools
 ```
 
 The tools are built for that user on every turn, from the agent's own state. The agent sees only the actions of its toolsets that pass for this user before any arguments exist: `shouldRegister()`, membership and an `authorize()` that takes no input. An `authorize()` that takes `ValidatedInput` runs when the model calls the tool, so put role and permission checks in an `authorize()` without input, and row checks in `handle()` or an input-aware `authorize()` ([what the tool list shows](https://github.com/agentic-actions/laravel/blob/main/docs/concepts.md#what-an-agents-tool-list-shows)). Each tool answers the model with a short sentence, such as "Done." or "Not done. Rejected: title (max).", and exception messages and submitted values never reach it. Run `php artisan actions:check --update` after installing laravel/ai: `create-post` joining the `default` toolset shows up in `actions.exposure.json` as a change to review.
+
+## Next
+
+- How it works, with diagrams: [one action, every caller](https://agentic-actions.com/how-it-works/one-action), [the pipeline](https://agentic-actions.com/how-it-works/pipeline), [effects and surfaces](https://agentic-actions.com/how-it-works/effects) and [tenants](https://agentic-actions.com/how-it-works/tenants).
+- [Setup](https://github.com/agentic-actions/laravel/blob/main/docs/setup.md): what each feature needs, and what `actions:install` does.
+- [The copilot](https://github.com/agentic-actions/laravel/blob/main/docs/copilot.md): an agent that calls your actions, streamed into your page.
+- [MCP](https://github.com/agentic-actions/laravel/blob/main/docs/mcp.md): connect Claude Code, Cursor, Claude Desktop and OAuth clients.
+- [Tenants](https://github.com/agentic-actions/laravel/blob/main/docs/concepts.md#tenants): run every action inside one team.
+- [Testing](https://github.com/agentic-actions/laravel/blob/main/docs/testing.md): fakes and assertions for actions, agents and tokens.
+- [Troubleshooting](https://github.com/agentic-actions/laravel/blob/main/docs/troubleshooting.md): an error message, its cause and its fix.
+
+<!-- #endregion getting-started -->
 
 ## MCP
 
@@ -567,7 +576,7 @@ Bug reports, fixes and documentation changes are welcome. [CONTRIBUTING.md](CONT
 
 ## Getting help
 
-Ask a question or report a bug in [GitHub Issues](https://github.com/agentic-actions/laravel/issues). Include the package version, your Laravel and PHP versions, the smallest set of steps that shows the problem, and the output of `php artisan about` (its Agentic Actions section) and `php artisan actions:check`.
+Report a bug or ask for a feature in [GitHub Issues](https://github.com/agentic-actions/laravel/issues/new/choose). Include the package version, your Laravel and PHP versions, the smallest set of steps that shows the problem, and the output of `php artisan about` (its Agentic Actions section) and `php artisan actions:check`.
 
 ## Security
 
