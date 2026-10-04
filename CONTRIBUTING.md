@@ -8,7 +8,7 @@ You need PHP 8.3 or later, Composer 2 and Node 22.3 or later.
 
 ```bash
 composer install
-npm --prefix js ci
+npm ci                     # the npm client's toolchain, in the private workspace root
 ```
 
 The package is tested with [Orchestra Testbench](https://packages.tools/testbench) against the real framework, Sanctum and laravel/ai 1.0. `workbench/` holds a small blog application that the Workbench test suite and `vendor/bin/testbench` use.

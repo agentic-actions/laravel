@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Upgrading
+
+- An app that installs the npm client from `vendor/` (`"file:vendor/agentic-actions/laravel/js"`): after `composer update`, run `npm dedupe` once and commit `package-lock.json`. An older lock file keeps the copies of `ai`, Inertia or React that npm placed under `vendor/agentic-actions/laravel/js/node_modules`, and `npm install` alone leaves them there; `npm dedupe` removes them. An app that installs the client from npm has nothing to change.
+
+### Fixed
+
+- **The npm client installed from `vendor/` brings no packages of its own.** The client's `package.json` listed its build and test toolchain as devDependencies, which npm installs for a folder linked with `file:` inside the app, so an app that installed the client from `vendor/agentic-actions/laravel/js` also got second copies of `ai` and Inertia under the client's folder: Vite could bundle a second `@inertiajs/react`, and the documented copilot panel failed to type-check against the app's `ai`. The client's `package.json` now declares only its optional peers, so every import resolves to the app's own copy. The toolchain moved to a private npm workspace at the repository root, which the Composer package leaves out; contributors run `npm ci` at the root instead of `npm --prefix js ci`.
+
 ### Documentation
 
 - Two new pages: Troubleshooting, each error message with its cause and its fix, and The TypeScript client, the generated file, `callAction()`, its errors, touches and `useAction()`.

@@ -7,7 +7,10 @@ import { after, before, describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
-const tsc = join(root, 'node_modules', 'typescript', 'bin', 'tsc');
+
+/** The workspace root's node_modules, where npm installs the client's toolchain. */
+const modules = fileURLToPath(new URL('../../../node_modules', import.meta.url));
+const tsc = join(modules, 'typescript', 'bin', 'tsc');
 
 /** The modules of the npm root, which may import nothing outside themselves. */
 const ROOT_MODULES = ['index', 'action', 'call', 'errors', 'parts', 'sync', 'tables', 'touches'];
@@ -47,7 +50,7 @@ async function build(name, files, compilerOptions, install = []) {
 
     for (const dependency of install) {
         await mkdir(dirname(join(directory, 'node_modules', dependency)), { recursive: true });
-        await symlink(join(root, 'node_modules', dependency), join(directory, 'node_modules', dependency), 'dir');
+        await symlink(join(modules, dependency), join(directory, 'node_modules', dependency), 'dir');
     }
 
     await writeFile(join(directory, 'package.json'), JSON.stringify({ name: 'isolated-build', private: true, type: 'module' }));
@@ -67,7 +70,7 @@ async function closure(name, seen = new Set()) {
 
     seen.add(name);
 
-    const manifest = JSON.parse(await readFile(join(root, 'node_modules', name, 'package.json'), 'utf8'));
+    const manifest = JSON.parse(await readFile(join(modules, name, 'package.json'), 'utf8'));
     const optional = manifest.peerDependenciesMeta ?? {};
 
     for (const dependency of Object.keys({ ...manifest.dependencies, ...manifest.peerDependencies })) {

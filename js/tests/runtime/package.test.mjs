@@ -4,8 +4,15 @@ import { test } from 'node:test';
 
 const manifest = JSON.parse(await readFile(new URL('../../package.json', import.meta.url), 'utf8'));
 
+/** The private workspace root at the repository root, which holds the client's build and test toolchain. */
+const workspace = JSON.parse(await readFile(new URL('../../../package.json', import.meta.url), 'utf8'));
+
 test('the client has no runtime dependencies', () => {
     assert.equal(manifest.dependencies, undefined);
+});
+
+test('the client declares no devDependencies, so an install from vendor/ adds no copies of its peers', () => {
+    assert.equal(manifest.devDependencies, undefined);
 });
 
 test('every peer dependency is optional', () => {
@@ -26,7 +33,12 @@ test('the five entries resolve to the built files', () => {
 test('ai is an optional peer, pinned exactly for the package\'s own build and tests', () => {
     assert.equal(manifest.peerDependencies.ai, '^7.0');
     assert.equal(manifest.peerDependenciesMeta.ai?.optional, true);
-    assert.match(manifest.devDependencies.ai, /^\d+\.\d+\.\d+$/);
+    assert.match(workspace.devDependencies.ai, /^\d+\.\d+\.\d+$/);
+});
+
+test('the toolchain lives in a private workspace root whose one workspace is the client', () => {
+    assert.equal(workspace.private, true);
+    assert.deepEqual(workspace.workspaces, ['js']);
 });
 
 test('/ai-sdk and /views export their functions only', async () => {

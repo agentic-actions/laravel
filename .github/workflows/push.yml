@@ -70,7 +70,7 @@ jobs:
           node-version: '22'
 
       - name: Install dependencies
-        run: npm --prefix js ci
+        run: npm ci
 
       - name: Run checks
         run: npm --prefix js run check

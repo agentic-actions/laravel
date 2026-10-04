@@ -202,7 +202,7 @@ jobs:
           node-version: '22'
 
       - name: Install dependencies
-        run: npm --prefix js ci
+        run: npm ci
 
       - name: Run checks
         run: npm --prefix js run check
@@ -224,8 +224,8 @@ jobs:
 
       - name: Install dependencies without React
         run: |
-          npm --prefix js ci
-          rm -rf js/node_modules/react js/node_modules/react-dom js/node_modules/@types/react js/node_modules/@inertiajs/react
+          npm ci
+          rm -rf node_modules/react node_modules/react-dom node_modules/@types/react node_modules/@inertiajs/react
 
       - name: Build the root and /inertia
         working-directory: js

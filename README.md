@@ -174,14 +174,14 @@ For the TypeScript client, install the npm package from the Composer package, so
 }
 ```
 
-The client is also on npm (`npm install @agentic-actions/client`); install the same version as the Composer package. Run `npm install`, then `php artisan actions:typescript`, which writes `resources/js/agentic/actions.ts`.
+The client is also on npm (`npm install @agentic-actions/client`); install the same version as the Composer package. Run `composer install` before `npm install` or `npm ci`, since the link points into `vendor/`, then `php artisan actions:typescript`, which writes `resources/js/agentic/actions.ts`.
 
-Installed that way, the client's imports of React and Inertia resolve to your app's own copies. When Composer installs the package from a local path instead (a `path` repository, which symlinks a checkout that has its own `js/node_modules`), Vite follows the symlink and can load a second React or Inertia: React reports an invalid hook call, or the client reloads through a router that is not your app's. Dedupe them in `vite.config.ts`:
+Installed from `vendor/`, the client brings no packages of its own: React, Inertia and `ai` are optional peers, so its imports of them resolve to your app's copies. When Composer installs the package from a local path instead (a `path` repository, which symlinks a checkout that has its own `node_modules`), Vite follows the symlink and can load a second React, Inertia or `ai`: React reports an invalid hook call, or the client reloads through a router that is not your app's. Dedupe them in `vite.config.ts`:
 
 ```ts
 export default defineConfig({
     resolve: {
-        dedupe: ['react', 'react-dom', '@inertiajs/core', '@inertiajs/react'],
+        dedupe: ['react', 'react-dom', '@inertiajs/core', '@inertiajs/react', 'ai', '@ai-sdk/react'],
     },
     // ...
 });

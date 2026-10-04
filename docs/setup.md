@@ -16,7 +16,7 @@ Installing the package brings in one other package: laravel/mcp 1.x, which serve
 | `inertiajs/inertia-laravel` 3.x | for Inertia | flash results on Inertia visits, and `#[WithPageContext]` |
 | `spatie/laravel-permission` 6 to 8 | no | the `SpatieTeams` tenancy bridge |
 
-The npm client, `@agentic-actions/client`, installs from the Composer package (`"file:vendor/agentic-actions/laravel/js"`), so the two versions always match. It is also on npm, where you install the same version as the Composer package. Its root has no dependencies. Each entry point needs its own:
+The npm client, `@agentic-actions/client`, installs from the Composer package (`"file:vendor/agentic-actions/laravel/js"`), so the two versions always match. It is also on npm, where you install the same version as the Composer package. Run `composer install` before `npm install` or `npm ci`, since the link points into `vendor/`. Its root has no dependencies, and installed from `vendor/` it brings no packages of its own: each entry point uses your app's copy of what it needs:
 
 | Entry point | Needs |
 |---|---|

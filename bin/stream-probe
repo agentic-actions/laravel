@@ -13,7 +13,7 @@
 # run on every exit. Nothing is pushed or published.
 #
 # Needs: Laravel Herd (nginx + PHP-FPM), curl with HTTP/2, Google Chrome (or $STREAM_PROBE_CHROME), Node 22 and perl,
-# and this checkout's js/node_modules (npm --prefix js ci) for the wire check.
+# and this checkout's node_modules (npm ci) for the wire check.
 
 set -euo pipefail
 
