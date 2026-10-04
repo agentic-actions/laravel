@@ -106,7 +106,7 @@ try {
 
 | Option | What it does |
 |---|---|
-| `idempotencyKey` | The key to send. Pass the same one when you retry a call yourself, so an action that reads it with [`requireIdempotencyKey()`](concepts.md#context) sees the retry as the same call. The package itself does not replay or drop a repeated key. |
+| `idempotencyKey` | The key to send. Pass the same one when you retry a call yourself, so an action that reads it with `requireIdempotencyKey()` sees the retry as the same call. The package itself does not replay or drop a repeated key ([Idempotency-Key](../README.md#idempotency-key)). |
 | `headers` | Extra headers, merged over the ones above, such as `Authorization` for a token. |
 | `credentials` | `'same-origin'` by default. `'include'` is for a Sanctum SPA on another origin. |
 | `signal` | An `AbortSignal`, to cancel the request. |
@@ -199,6 +199,6 @@ The [Inertia React recipe](recipes.md#forms-on-inertia-react) shows a whole form
 
 ## Versions
 
-The npm package and the Composer package are released together under one version, and each version of the client is written for the same version of the server: keep the two equal. The generated file's first line names the Composer version that wrote it, such as `from agentic-actions/laravel 0.9.0-beta.2`, which is the npm version to install. After you update the Composer package, install the same version of the client, run `php artisan actions:typescript` again, and commit both. `npm ls @agentic-actions/client` and `composer show agentic-actions/laravel` print the two versions.
+The npm package and the Composer package are released together under one version, and each version of the client is written for the same version of the server: keep the two equal. The generated file's first line names the Composer version that wrote it, such as `from agentic-actions/laravel 0.9.0-beta.2`, which is the npm version to install. After you update the Composer package, install the same version of the client (installed from `vendor/`, it follows on the next `npm install`), run `php artisan actions:typescript` again, and commit both. `npm ls @agentic-actions/client` and `composer show agentic-actions/laravel` print the two versions.
 
 The client's `package.json` declares Node 22.3 or later. Release notes and upgrade steps for both packages are in the [changelog](../CHANGELOG.md).

@@ -212,13 +212,14 @@ export default defineConfigWithTheme<ThemeConfig>({
 
     nav: [
       { text: 'How it works', link: '/how-it-works/one-action', activeMatch: '^/how-it-works/' },
-      { text: 'Guide', link: '/getting-started', activeMatch: '^/(?!changelog|how-it-works/)[^/]+' },
+      { text: 'Guide', link: '/getting-started', activeMatch: '^/(?!changelog|contributing|how-it-works/)[^/]+' },
       { text: 'Demo', link: 'https://demo.agentic-actions.com' },
       { text: 'Changelog', link: '/changelog' },
       {
         text: release,
         items: [
           { text: 'Changelog', link: '/changelog' },
+          { text: 'Contributing', link: '/contributing' },
           { text: 'Packagist', link: 'https://packagist.org/packages/agentic-actions/laravel' },
           { text: 'npm', link: 'https://www.npmjs.com/package/@agentic-actions/client' },
           { text: 'Tags', link: `${repository}/tags` },
@@ -233,6 +234,7 @@ export default defineConfigWithTheme<ThemeConfig>({
         items: [
           { text: 'Getting started', link: '/getting-started' },
           { text: 'Setup', link: '/setup' },
+          { text: 'Troubleshooting', link: '/troubleshooting' },
         ],
       },
       {
@@ -261,6 +263,7 @@ export default defineConfigWithTheme<ThemeConfig>({
         text: 'Reference',
         items: [
           { text: 'Concepts', link: '/concepts' },
+          { text: 'The TypeScript client', link: '/client' },
           { text: 'Security', link: '/security' },
           { text: 'Testing', link: '/testing' },
           { text: 'Recipes', link: '/recipes' },
@@ -276,11 +279,15 @@ export default defineConfigWithTheme<ThemeConfig>({
     },
 
     editLink: {
-      // Two pages are built from files outside docs/: edit those files. Every
+      // Three pages are built from files outside docs/: edit those files. Every
       // other page, docs/site/ and docs/site/concepts/ included, is its own file.
       pattern: ({ filePath }) => {
         const source =
-          { 'site/getting-started.md': 'README.md', 'site/changelog.md': 'CHANGELOG.md' }[filePath] ?? `docs/${filePath}`
+          {
+            'site/getting-started.md': 'README.md',
+            'site/changelog.md': 'CHANGELOG.md',
+            'site/contributing.md': 'CONTRIBUTING.md',
+          }[filePath] ?? `docs/${filePath}`
 
         return `https://github.com/agentic-actions/laravel/edit/main/${source}`
       },

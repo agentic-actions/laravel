@@ -196,7 +196,7 @@ Route::get('/user', fn (Request $request) => $request->user())
 
 **Without tenants**, nothing changes: `mcp.path` is `mcp/actions` by default and serves every MCP action, and the default `middleware` names Sanctum's guard.
 
-**With tenants**, tenant-scoped actions need a path of their own (the [tenant model and membership](concepts.md#tenants) are set up first):
+**With tenants**, tenant-scoped actions need a path of their own (the [tenant model](concepts.md#what-your-tenant-model-needs) and its [membership and scope classes](concepts.md#membership-and-scope-classes) are set up first):
 
 ```php
 // config/agentic-actions.php
