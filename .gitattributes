@@ -12,6 +12,8 @@
 /AGENTS.md export-ignore
 /CLAUDE.md export-ignore
 /CONTRIBUTING.md export-ignore
+/package-lock.json export-ignore
+/package.json export-ignore
 /phpstan.neon.dist export-ignore
 /phpunit.xml.dist export-ignore
 /pint.json export-ignore

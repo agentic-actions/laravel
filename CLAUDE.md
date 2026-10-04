@@ -24,7 +24,7 @@ Read this before any change. It is written so a new session, another agent or a 
 Run them from the repository root, with PHP 8.3+, Composer and Node 22 on the PATH.
 
 ```bash
-composer install && npm --prefix js ci   # setup
+composer install && npm ci               # setup; the client's toolchain is in the root package.json
 composer check                           # Pint --test, PHPStan, Pest (serial)
 npm --prefix js run check                # typecheck, type tests, build, runtime tests
 npm --prefix docs ci && npm --prefix docs run docs:build   # the site; a dead link, #fragment or include fails it
@@ -72,7 +72,7 @@ DB_CONNECTION=mariadb DB_HOST=127.0.0.1 DB_PORT=3307 DB_DATABASE=agentic_actions
 1. **Test first.** A behaviour change starts as a failing test; a security fix keeps its attack as a test under `tests/Feature/Security/`.
 2. **Checks green.** `composer check` and `npm --prefix js run check` pass before every commit. A change to `js/src` commits the `js/dist` that check rebuilt, and a change that touches optional packages also passes the cell without them. A change to `docs/`, the README or the CHANGELOG also passes the site's build.
 3. **Docs and CHANGELOG with the code.** A user-visible change updates `docs/` and adds a line under the CHANGELOG's Unreleased section; a change an app must act on also gets an Upgrading note.
-4. **Release.** `chore(release): prepare X`: the CHANGELOG's Unreleased section becomes the version with its upgrade notes, `js/package.json` and the root of `js/package-lock.json` take the version without the "v", the README's pre-release note and install line follow, `composer.json`'s branch alias and SECURITY.md's supported line move with a new minor, and `js/dist` is rebuilt. Then the annotated tag (`vX.Y.Z-beta.N` for a beta), after `tags.yml` has passed on the commit.
+4. **Release.** `chore(release): prepare X`: the CHANGELOG's Unreleased section becomes the version with its upgrade notes, `js/package.json` and its `js` entry in the root `package-lock.json` take the version without the "v", the README's pre-release note and install line follow, `composer.json`'s branch alias and SECURITY.md's supported line move with a new minor, and `js/dist` is rebuilt. Then the annotated tag (`vX.Y.Z-beta.N` for a beta), after `tags.yml` has passed on the commit.
 
 ## Testing conventions
 

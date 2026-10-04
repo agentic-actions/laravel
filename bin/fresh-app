@@ -154,6 +154,12 @@ quietly 'copy the checkout without vendor/, node_modules/, build/ and .git' \
         --exclude='/composer.lock' --exclude='/.phpunit.cache' --exclude='/workbench/storage' \
         "$repo/" "$package/"
 
+# The copy's client is built from its own sources with the repository's toolchain, whose node_modules is removed
+# again before Composer mirrors the copy.
+quietly 'npm ci in the copy' npm --prefix "$package" ci --no-audit --no-fund
+quietly 'build the client in the copy' npm --prefix "$package/js" run build
+rm -rf "$package/node_modules"
+
 quietly 'add the path repository' \
     composer config repositories.agentic-actions "{\"type\": \"path\", \"url\": \"$package\", \"options\": {\"symlink\": false}}"
 
@@ -325,9 +331,12 @@ contains 'You already have a post with that title.'
 # ----------------------------------------------------------------------------------------------------------------------
 item 11 "php artisan actions:typescript writes a file for the npm root and the web mount"
 
-quietly 'npm ci in the installed client' npm --prefix "$installed/js" ci --no-audit --no-fund
-quietly 'build the installed client' npm --prefix "$installed/js" run build
+quietly "npm install the app's own packages" npm install --no-audit --no-fund
 quietly 'npm install ./vendor/agentic-actions/laravel/js' npm install --no-audit --no-fund ./vendor/agentic-actions/laravel/js
+
+# Installed from vendor/, the client is the one package npm adds: nothing of its own comes with it, so its imports
+# resolve to the app's copies.
+contains 'added 1 package'
 
 expect_exit 0 'actions:typescript' artisan actions:typescript
 contains 'Wrote resources/js/agentic/actions.ts.'

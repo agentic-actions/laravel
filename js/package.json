@@ -80,14 +80,5 @@
         "react-dom": {
             "optional": true
         }
-    },
-    "devDependencies": {
-        "@inertiajs/core": "3.7.0",
-        "@inertiajs/react": "3.7.0",
-        "@types/react": "^19.0.0",
-        "ai": "7.0.114",
-        "react": "^19.0.0",
-        "react-dom": "^19.0.0",
-        "typescript": "~5.9.3"
     }
 }
