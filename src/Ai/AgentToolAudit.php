@@ -2,6 +2,7 @@
 
 namespace AgenticActions\Ai;
 
+use AgenticActions\Ai\Concerns\InteractsWithActions;
 use AgenticActions\Attributes\WithPageContext;
 use AgenticActions\Security\ForbiddenKeys;
 use AgenticActions\Streaming\PageContext;
@@ -18,10 +19,11 @@ use Laravel\Ai\Tools\McpTool;
 use Laravel\Ai\Tools\ToolNameResolver;
 use PHPUnit\Framework\Assert;
 use ReflectionClass;
+use ReflectionMethod;
 
 /**
- * Audits one agent's tools as laravel/ai resolves them: unique names, no forbidden input keys, toolsets within
- * agents.max_tools_per_toolset, and the page context wired when the agent asks for it. Every check goes through
+ * Audits one agent's tools as laravel/ai resolves them: its toolsets' action tools reached, unique names, no forbidden
+ * input keys, toolsets within agents.max_tools_per_toolset, and the page context wired when the agent asks for it. Every check goes through
  * PHPUnit's Assert, so it works under PHPUnit and Pest.
  *
  * @upstream Tools are resolved the way the provider resolves them before a turn.
@@ -31,13 +33,14 @@ use ReflectionClass;
 final class AgentToolAudit
 {
     /**
-     * Assert unique tool names, no forbidden keys and toolsets within the limit, over the tools as laravel/ai
-     * resolves them, then the page context's wiring.
+     * Assert the toolsets' action tools reached, unique tool names, no forbidden keys and toolsets within the limit,
+     * over the tools as laravel/ai resolves them, then the page context's wiring.
      */
     public function assert(Agent $agent): void
     {
         $tools = $this->resolve($agent instanceof HasTools ? [...$agent->tools()] : []);
 
+        $this->assertActionToolsReached($agent, $tools);
         $this->assertUniqueNames($agent, $tools);
         $this->assertNoForbiddenKeys($agent, $tools);
         $this->assertToolsetSizes($agent, $tools);
@@ -79,6 +82,29 @@ final class AgentToolAudit
             McpServerTool::supports($tool) => [new McpServerTool($tool)],
             default => [],
         };
+    }
+
+    /**
+     * Fail when an agent on InteractsWithActions with a #[UseToolset] returns none of the action tools its toolsets
+     * give this person: a tools() the class declares replaces the trait's. A toolset that gives this person no action
+     * tools passes, and so does a tools() that keeps some of them.
+     *
+     * @param  list<Tool>  $tools
+     */
+    private function assertActionToolsReached(Agent $agent, array $tools): void
+    {
+        if (Toolsets::declared($agent::class) === null || ! in_array(InteractsWithActions::class, class_uses_recursive($agent), true)) {
+            return;
+        }
+
+        $offered = (new ReflectionMethod($agent, 'actionTools'))->invoke($agent);
+        $reached = array_filter($tools, fn (Tool $tool): bool => $tool instanceof ActionTool);
+
+        Assert::assertFalse($offered !== [] && $reached === [], sprintf(
+            '%s carries #[UseToolset], whose toolsets give this person %d action tools, but its tools() returns none of them: a tools() the class declares replaces the one InteractsWithActions gives it. Delete the tools() it declares, or merge the package\'s tools into it: return [...$this->actionTools(), ...].',
+            $agent::class,
+            is_array($offered) ? count($offered) : 0,
+        ));
     }
 
     /**

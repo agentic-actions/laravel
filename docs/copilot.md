@@ -62,7 +62,7 @@ final class BlogAssistant implements Agent, Conversational, HasMiddleware, HasTo
 }
 ```
 
-`InteractsWithActions` supplies `tools()`, and `RemembersConversations` supplies `messages()`. `php artisan make:agent` writes its class to `App\Ai\Agents` (the package finds an agent anywhere under `discovery.paths`, `app` by default) with its own `tools()` and `messages()`, both returning `[]`. If you start from it, delete those two methods: a method the class declares takes the place of the trait's, so the agent would run with no action tools and no history. To add tools of your own, spread `actionTools()` into your `tools()`, as [hand-written tools](#hand-written-tools) shows.
+`InteractsWithActions` supplies `tools()`, and `RemembersConversations` supplies `messages()`. `php artisan make:agent` writes its class to `App\Ai\Agents` (the package finds an agent anywhere under `discovery.paths`, `app` by default) with its own `tools()` and `messages()`, both returning `[]`. If you start from it, delete those two methods: a method the class declares takes the place of the trait's, so the agent would run with no action tools and no history. To add tools of your own, spread `actionTools()` into your `tools()`, as [hand-written tools](#hand-written-tools) shows. `actions:check` warns about an agent whose own `tools()` never calls `$this->actionTools()`, and `Actions::assertAgentTools()` fails one whose tools leave out the actions its toolsets give the person ([testing](testing.md#toolsets-and-agents)).
 
 The route, in `routes/web.php`:
 

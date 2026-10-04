@@ -210,7 +210,8 @@ final class ActionsManager
     }
 
     /**
-     * Fail on duplicate tool names, forbidden keys or an oversized toolset in one agent.
+     * Fail when one agent returns none of the action tools its toolsets give the person, or on duplicate tool names,
+     * forbidden keys or an oversized toolset.
      */
     public function assertAgentTools(Agent $agent): void
     {
