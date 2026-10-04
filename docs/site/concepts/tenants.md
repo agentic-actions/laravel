@@ -44,7 +44,7 @@ The package checks membership itself, on every surface, before your code reads t
 
 ## `find()` stays inside the team
 
-`$context->find(Post::class, $id)` looks the row up through your `tenant.scope`, so another team's post is simply not found. Its conditions stay in one group, so an `orWhere` in your scope cannot widen what `find()` reaches. Your own queries, such as `Post::query()` in `handle()`, are yours to scope. See [Security](/security) for the guarantees.
+`$context->find(Post::class, $id)` looks the row up through your `tenant.scope`, so another team's post is simply not found. Your scope decides which rows are the team's: its conditions stay in one group, and `find()`'s key only narrows them, so an `orWhere` you add to the scope, such as shared posts, makes those rows reachable from every team, in Write actions too. Your own queries, such as `Post::query()` in `handle()`, are yours to scope. See [Security](/security) for the guarantees.
 
 ## Tokens and MCP
 
