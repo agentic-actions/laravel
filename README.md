@@ -435,7 +435,7 @@ final class CreatePostForm extends Component
 
 `@agentic-actions/client` has no dependencies. `callAction(createPost(), { title, body })` posts JSON with an `Idempotency-Key` and, on the same origin, the XSRF header; it resolves the typed output or throws `ActionValidationError`, `ActionRefusedError` or `ActionFailedError`. After each success it hands the action's `$touches` (here `['posts']`) to every handler registered with `onTouched()`, so your own store or cache can refetch what went stale. On Inertia, `@agentic-actions/client/inertia` reloads the props those keys name, and `@agentic-actions/client/react` wraps Inertia's `useHttp` in `useAction()` ([recipe](https://github.com/agentic-actions/laravel/blob/main/docs/recipes.md#forms-on-inertia-react)).
 
-`resources/js/agentic/actions.ts` is generated, and you commit it. Run `php artisan actions:typescript` again after changing an action or its routes, and run `php artisan actions:typescript --check` in CI: it writes nothing, and fails when the committed file is stale. An action mounted in several groups gets the URL of its route in the `web` middleware group, or else the first one registered.
+`resources/js/agentic/actions.ts` is generated, and you commit it. Run `php artisan actions:typescript` again after changing an action or its routes, and run `php artisan actions:typescript --check` in CI: it writes nothing, and fails when the committed file is stale. [The TypeScript client](https://github.com/agentic-actions/laravel/blob/main/docs/client.md) has the file's format, which route's URL it uses, and every option of `callAction()`.
 
 ## Next
 
@@ -445,6 +445,7 @@ final class CreatePostForm extends Component
 - [MCP](https://github.com/agentic-actions/laravel/blob/main/docs/mcp.md): connect Claude Code, Cursor, Claude Desktop and OAuth clients.
 - [Tenants](https://github.com/agentic-actions/laravel/blob/main/docs/concepts.md#tenants): run every action inside one team.
 - [Testing](https://github.com/agentic-actions/laravel/blob/main/docs/testing.md): fakes and assertions for actions, agents and tokens.
+- [Troubleshooting](https://github.com/agentic-actions/laravel/blob/main/docs/troubleshooting.md): an error message, its cause and its fix.
 
 <!-- #endregion getting-started -->
 
@@ -547,8 +548,8 @@ The `ActionAssertions` trait adds `assertToolset()` and `assertAgentTools()` to 
 
 ## Documentation
 
-- [Setup](https://github.com/agentic-actions/laravel/blob/main/docs/setup.md): what the package depends on, what each feature needs (packages, tables, routes, config), and `actions:install`
-- [Concepts](https://github.com/agentic-actions/laravel/blob/main/docs/concepts.md): context, surfaces, effects, doors, exposure, the manifest and the snapshot, tenants, queued runs and the change feed
+- [Setup](https://github.com/agentic-actions/laravel/blob/main/docs/setup.md): what the package depends on, what each feature needs (packages, tables, routes, config), `actions:install`, deploying and removing the package
+- [Concepts](https://github.com/agentic-actions/laravel/blob/main/docs/concepts.md): the action, schema to rules, context, surfaces, effects, doors, the pipeline, events, refusals, exposure, the manifest and the snapshot, tenants, queued runs, the change feed, the facade and the public API
 - [Copilot](https://github.com/agentic-actions/laravel/blob/main/docs/copilot.md): live rows while an agent works, confirmations before Destructive and External calls, the page following its writes and writes made elsewhere, and the page context
 - [Asking the person](https://github.com/agentic-actions/laravel/blob/main/docs/asking.md): a form in the chat for the fields a model's call left out, what it can hold, and why it never asks for secrets
 - [Tables](https://github.com/agentic-actions/laravel/blob/main/docs/data.md): a Read action's rows as a table the person sees, the model's short copy, the chart, and tables kept with the conversation
@@ -556,6 +557,8 @@ The `ActionAssertions` trait adds `assertToolset()` and `assertAgentTools()` to 
 - [Security](https://github.com/agentic-actions/laravel/blob/main/docs/security.md): what the package guarantees, and where each guarantee stops
 - [Testing](https://github.com/agentic-actions/laravel/blob/main/docs/testing.md): fakes, toolset assertions, confirmations and forms, queued runs and tokens in tests
 - [Recipes](https://github.com/agentic-actions/laravel/blob/main/docs/recipes.md): strict agent schemas, controllers and Livewire, discovery layouts, custom token guards
+- [The TypeScript client](https://github.com/agentic-actions/laravel/blob/main/docs/client.md): the generated file, `callAction()`, errors, touches and `useAction()`
+- [Troubleshooting](https://github.com/agentic-actions/laravel/blob/main/docs/troubleshooting.md): each error message, its cause and its fix
 - [Migrating from laravel-actions](https://github.com/agentic-actions/laravel/blob/main/docs/migrating-from-laravel-actions.md)
 
 ## Contributing

@@ -162,8 +162,8 @@ The package ships a [Laravel Boost](https://github.com/laravel/boost) guideline 
 |---|---|
 | Packages | none (`spatie/laravel-permission` for the `SpatieTeams` bridge) |
 | Tables | your tenant model's own |
-| Routes | `Route::middleware('auth')->prefix('teams/{team}')->name('teams.')->group(fn () => Actions::routes(tenant: true));` beside `Actions::routes(tenant: false)` ([tenants](concepts.md#tenants)) |
-| Config and env | `tenant.model`, `tenant.parameter`, `tenant.membership`, `tenant.scope`, and `tenancy` for a bridge |
+| Routes | `Route::middleware('auth')->prefix('teams/{team}')->name('teams.')->group(fn () => Actions::routes(tenant: true));` beside `Actions::routes(tenant: false)` ([mounting the routes](concepts.md#mounting-the-routes)) |
+| Config and env | `tenant.model`, `tenant.parameter`, `tenant.membership`, `tenant.scope` ([membership and scope classes](concepts.md#membership-and-scope-classes)), and `tenancy` for a [bridge](concepts.md#a-tenancy-bridge) |
 | Install flag | `--tenancy` |
 
 ### A copilot conversation per tenant
@@ -211,7 +211,7 @@ The package ships a [Laravel Boost](https://github.com/laravel/boost) guideline 
 | File | Written by | Commit it? |
 |---|---|---|
 | `actions.exposure.json` (the `snapshot` key, relative to the base path unless absolute) | `php artisan actions:check --update`, and nothing else | yes: `actions:check` fails while it differs from the classes ([the snapshot](concepts.md#discovery-the-manifest-and-the-snapshot)) |
-| `resources/js/agentic/actions.ts` (`typescript.path`) | `php artisan actions:typescript` | your choice: commit it and check it in CI with `actions:typescript --check`, or run `actions:typescript` before each front-end build |
+| `resources/js/agentic/actions.ts` (`typescript.path`) | `php artisan actions:typescript` | yes: `actions:typescript --check` fails in CI while it is stale ([the generated file](client.md#the-generated-file)) |
 | `bootstrap/cache/agentic-actions.php`, the manifest | `php artisan optimize`, `actions:cache` and a plain `route:cache` | no: it belongs to one deploy, as the route cache does |
 
 ## Deploying

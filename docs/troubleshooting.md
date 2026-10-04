@@ -59,18 +59,7 @@ In each case Vite or TypeScript loads a package from `vendor/agentic-actions/lar
 ls vendor/agentic-actions/laravel/js/node_modules
 ```
 
-Fix: dedupe the shared packages in `vite.config.ts`:
-
-```ts
-export default defineConfig({
-    resolve: {
-        dedupe: ['react', 'react-dom', '@inertiajs/core', '@inertiajs/react', 'ai'],
-    },
-    // ...
-});
-```
-
-Dedupe changes what Vite bundles. It does not change what `tsc` reads. For the type check, install the client from npm (`npm install @agentic-actions/client@<version>`, where the version is the one `composer show agentic-actions/laravel` prints, without the `v`). The npm package declares React, Inertia and `ai` as peer dependencies, so your app's copies are the only ones. [Installation](../README.md#installation) has the install line.
+Fix: dedupe each package that folder holds, `ai` included, in `vite.config.ts`, as [Installation](../README.md#installation) shows. Dedupe changes what Vite bundles, not what `tsc` reads: for the type check, install the client from npm at the version `composer show agentic-actions/laravel` prints, without the `v`. Its React, Inertia and `ai` are peer dependencies, so your app's copies are the only ones.
 
 ## Actions and schemas
 
@@ -190,7 +179,7 @@ The client connects, and `tools/list` comes back empty. Check, in order:
 - `no action of this scope allows MCP`;
 - `the path belongs to another route`: a route of your own already holds the path.
 
-The opposite happens too. Once `install:api` has defined the Sanctum guard, MCP mounts at `mcp/actions` for every Read or Write action that has a description and a bare `#[Expose]`, even if you skipped MCP in the installer. To keep MCP off, set `AGENTIC_ACTIONS_MCP=false`, or name the surfaces you want: `#[Expose(web: true)]`.
+The opposite happens too. Once `install:api` has defined the Sanctum guard, MCP mounts at `mcp/actions`, even if you skipped MCP in the installer ([actions:install](setup.md#actionsinstall)). [Turning MCP off](mcp.md#turning-mcp-off) keeps it closed for the app, and `#[Expose(web: true)]` keeps one action off it.
 
 ### curl to the MCP URL gets a redirect or a 500
 
@@ -250,7 +239,7 @@ The action [App\Actions\UpdatePost] is tenant-scoped, but its context has no ten
 Once `tenant.model` is set, every action is tenant-scoped unless it says otherwise, and it needs a tenant on every call. The usual causes:
 
 - The route segment does not match `tenant.parameter`, which defaults to `tenant`. With `teams/{team}`, set `'parameter' => 'team'`. `actions:check` fails its Tenancy row on this: `… has no {tenant} parameter, so the action cannot find its tenant.`
-- `Actions::routes()` is mounted outside the tenant prefix. Mount `Actions::routes(tenant: true)` under the prefix and `Actions::routes(tenant: false)` beside it ([tenants](concepts.md#tenants)).
+- `Actions::routes()` is mounted outside the tenant prefix. Mount `Actions::routes(tenant: true)` under the prefix and `Actions::routes(tenant: false)` beside it ([mounting the routes](concepts.md#mounting-the-routes)).
 - Your own code built the context without a tenant. Use `ActionContext::http($user, $team)`, pass `--tenant=` (the tenant's route key) to `actions:run`, and dispatch queued runs with a tenant.
 - The action belongs to the account, not a tenant. Set `protected bool $tenantScoped = false;`.
 
@@ -260,7 +249,7 @@ Once `tenant.model` is set, every action is tenant-scoped unless it says otherwi
 A tenant model is configured, but no tenant scope is: set agentic-actions.tenant.scope, or call Actions::scopeUsing().
 ```
 
-An action called `$context->find()`, which finds a row through the tenant scope, and you have not configured one. Write a class that implements `AgenticActions\Contracts\ScopesToTenant` (`__invoke(Builder $query, Model $tenant): Builder`) and name it in `tenant.scope`. Or register a closure with `Actions::scopeUsing()` in a service provider's `boot()` ([tenants](concepts.md#tenants)). The scope must narrow the query it was given. If it returns a query for another model, the call fails with `The tenant scope returned a query for another model than [App\Models\Post].`
+An action called `$context->find()`, which finds a row through the tenant scope, and you have not configured one. Write a class that implements `AgenticActions\Contracts\ScopesToTenant` (`__invoke(Builder $query, Model $tenant): Builder`) and name it in `tenant.scope`. Or register a closure with `Actions::scopeUsing()` in a service provider's `boot()` ([membership and scope classes](concepts.md#membership-and-scope-classes)). The scope must narrow the query it was given. If it returns a query for another model, the call fails with `The tenant scope returned a query for another model than [App\Models\Post].`
 
 ### MissingContext: no actor or tenant of a type
 
@@ -277,10 +266,10 @@ Every call under `teams/{team}` answers `{"message": "Not found."}`, even for a 
 
 - No membership check. Without `tenant.membership` or `Actions::membershipUsing()`, nobody is a member. `actions:check` fails on this: `tenant.model is set, but no membership check is: set tenant.membership in config/agentic-actions.php, or call Actions::membershipUsing().`
 - A membership closure that returns something other than `true`, such as a model or `1`. Only `true` admits.
-- `{team:slug}` in the prefix. The package resolves the segment with the model's own route key and ignores a binding field. Write `teams/{team}`, and return `'slug'` from the model's `getRouteKeyName()`.
+- `{team:slug}` in the prefix. The package resolves the segment with the model's own route key and ignores a binding field. Write `teams/{team}`, and return `'slug'` from the model's `getRouteKeyName()` ([what your tenant model needs](concepts.md#what-your-tenant-model-needs)).
 - A token bound to another tenant, as in [404 for a token](#404-not-found-for-a-token).
 
-A 403 instead of a 404 comes from your own middleware, such as a starter kit's team check, which answers before the package does ([tenants](concepts.md#tenants)).
+A 403 instead of a 404 comes from your own middleware, such as a starter kit's team check, which answers before the package does ([when your own middleware checks membership first](concepts.md#when-your-own-middleware-checks-membership-first)).
 
 ## Deploy
 
@@ -296,7 +285,7 @@ It is reported, never thrown, at most once an hour. The request still worked: it
 - `route:clear`, `actions:clear` or `optimize:clear` ran after it, since all three delete it;
 - the manifest is older than the route cache, or an upgrade of the package changed the manifest's format.
 
-Fix: run `php artisan optimize` in the deploy, after `composer install`, then check it with `php artisan actions:check --production`. `php artisan about` shows `Manifest` as `CACHED` or `NOT CACHED`. A plain `route:cache` writes the manifest too.
+Fix: run `php artisan optimize` in the deploy, then `php artisan actions:check --production`, as [Deploying](setup.md#deploying) shows. `php artisan about` shows `Manifest` as `CACHED` or `NOT CACHED`.
 
 ### actions:check --production fails its Manifest row
 

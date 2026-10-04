@@ -401,7 +401,7 @@ The names are separate strings, not an array: `#[UseToolset(['support'])]` throw
 
 The scanner walks `discovery.paths` (default `app`; globs and absolute paths work) and reads each file that mentions `AgenticActions\`. It takes the class name from the file's tokens, never from its path. Classes outside those paths go in `discovery.classes`.
 
-`php artisan optimize` (or `actions:cache`) writes a manifest to `bootstrap/cache/agentic-actions.php`, so production requests do not scan. The console, local requests and test runs always scan. The manifest only nominates: every gate re-reads the class, so a stale manifest can hide a new action but never widen an old one.
+`php artisan optimize` (or `actions:cache`) writes a manifest to `bootstrap/cache/agentic-actions.php`, so production requests do not scan. The console, local requests and test runs always scan. The manifest only nominates: every gate re-reads the class, so a stale manifest can hide a new action but never widen an old one. [Deploying](setup.md#deploying) says what to run on each deploy.
 
 `actions.exposure.json` is the reviewable form of the same facts, committed with your code. Only `php artisan actions:check --update` writes it. `actions:check` fails while it differs from what the classes declare, so a new route or a widened toolset is a diff someone approved.
 
@@ -621,7 +621,44 @@ Mounted inside the kit's group instead, a stranger and an unknown team both get 
 
 ### A tenancy bridge
 
-`AgenticActions\Tenancy\SpatieTeams`, set as `tenancy` in the config, switches spatie/laravel-permission's team to the tenant around each pipeline step and restores it afterwards. Any class implementing `AgenticActions\Contracts\Tenancy`, whose `run(?Model $tenant, ?Authenticatable $actor, Closure $callback): mixed` calls `$callback` with the tenant's state switched on, fits there too.
+The `tenancy` config key names a class implementing `AgenticActions\Contracts\Tenancy`, which the container builds once. Each call's pipeline runs inside its `run(?Model $tenant, ?Authenticatable $actor, Closure $callback): mixed`, so another package's idea of the current tenant matches the call's. The package ships `AgenticActions\Tenancy\SpatieTeams`, which switches spatie/laravel-permission's team to the tenant around each pipeline step and restores it afterwards. Your own sets the state, runs the callback, and restores what was there in `finally`:
+
+```php
+<?php
+
+namespace App\Tenancy;
+
+use AgenticActions\Contracts\Tenancy;
+use Closure;
+use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Context;
+
+final class TeamContext implements Tenancy
+{
+    public function run(?Model $tenant, ?Authenticatable $actor, Closure $callback): mixed
+    {
+        if ($tenant === null) {
+            return $callback();
+        }
+
+        $previous = Context::get('team_id');
+        Context::add('team_id', $tenant->getKey());
+
+        try {
+            return $callback();
+        } finally {
+            if ($previous === null) {
+                Context::forget('team_id');
+            } else {
+                Context::add('team_id', $previous);
+            }
+        }
+    }
+}
+```
+
+Set `'tenancy' => App\Tenancy\TeamContext::class` in `config/agentic-actions.php`. `$tenant` is null for a call without a tenant, and `$actor` for one without an actor.
 
 ## Queued runs
 
@@ -631,7 +668,7 @@ Mounted inside the kit's group instead, a stranger and an unknown team both get 
 ImportPosts::dispatch(['url' => $url], ActionContext::fromRequest($request))->onQueue('imports');
 ```
 
-The job keeps the caller's actor and tenant, the input and the fixed input, the locale, the idempotency key and the token grants the caller had, and every check runs again in the worker: the token, membership, `authorize()` and validation. A call the job's own code makes, and a job it queues, reads the same grants, whatever context that code builds. It gets its own request id. `dispatch()` returns Laravel's `PendingDispatch`, so `onQueue()`, `delay()` and `afterCommit()` chain as usual, and, like `run()`, it is reached by discovery alone. The input must serialize: pass scalars and arrays, and store an uploaded file first and pass its path. A job queued by an agent's tool or inside an MCP call stays model-driven in the worker, so it still reaches only Read and Write actions. A refusal ends the job; a crash fires `ActionFailed` and fails it, and the worker retries it per its `--tries`, so an action that may run twice declares `$idempotent` and takes an idempotency key. While a Read's own code runs, `dispatch()` refuses an action that is not a Read. See [testing](testing.md#queued-runs) for `Queue::fake()`.
+The job keeps the caller's actor and tenant, the input and the fixed input, the locale, the idempotency key and the token grants the caller had, and every check runs again in the worker: the token, membership, `authorize()` and validation. A call the job's own code makes, and a job it queues, reads the same grants, whatever context that code builds. It gets its own request id. `dispatch()` returns Laravel's `PendingDispatch`, so `onQueue()`, `delay()` and `afterCommit()` chain as usual, and, like `run()`, it is reached by discovery alone. The input must serialize: pass scalars and arrays, and store an uploaded file first and pass its path. A job queued by an agent's tool or inside an MCP call stays model-driven in the worker, so it still reaches only Read and Write actions. A refusal ends the job; a crash fires `ActionFailed` and fails it, and the worker retries it per its `--tries`, so an action that may run twice declares `$idempotent` and takes an idempotency key. While a Read's own code runs, `dispatch()` refuses an action that is not a Read. [Testing](testing.md#queued-runs) shows how to test a queued run.
 
 ## The change feed
 
@@ -689,47 +726,6 @@ final class SupportAssistant implements Agent, HasTools
     }
 }
 ```
-
-## A tenancy bridge
-
-The `tenancy` config key names a class implementing `AgenticActions\Contracts\Tenancy`, which the container builds once. Each call's pipeline runs inside its `run()`, so another package's idea of the current tenant matches the call's. `AgenticActions\Tenancy\SpatieTeams` is the one the package ships ([tenants](#tenants)). Your own sets the state, runs the callback, and restores what was there in `finally`:
-
-```php
-<?php
-
-namespace App\Tenancy;
-
-use AgenticActions\Contracts\Tenancy;
-use Closure;
-use Illuminate\Contracts\Auth\Authenticatable;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Context;
-
-final class TeamContext implements Tenancy
-{
-    public function run(?Model $tenant, ?Authenticatable $actor, Closure $callback): mixed
-    {
-        if ($tenant === null) {
-            return $callback();
-        }
-
-        $previous = Context::get('team_id');
-        Context::add('team_id', $tenant->getKey());
-
-        try {
-            return $callback();
-        } finally {
-            if ($previous === null) {
-                Context::forget('team_id');
-            } else {
-                Context::add('team_id', $previous);
-            }
-        }
-    }
-}
-```
-
-Set `'tenancy' => App\Tenancy\TeamContext::class` in `config/agentic-actions.php`. `$tenant` is null for a call without a tenant, and `$actor` for one without an actor.
 
 ## Public API
 

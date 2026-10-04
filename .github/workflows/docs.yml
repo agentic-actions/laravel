@@ -6,6 +6,7 @@ on:
       - 'docs/**'
       - 'README.md'
       - 'CHANGELOG.md'
+      - 'CONTRIBUTING.md'
       - 'js/package.json'
       - '.github/workflows/docs.yml'
   push:
@@ -14,6 +15,7 @@ on:
       - 'docs/**'
       - 'README.md'
       - 'CHANGELOG.md'
+      - 'CONTRIBUTING.md'
       - 'js/package.json'
       - '.github/workflows/docs.yml'
   workflow_dispatch:

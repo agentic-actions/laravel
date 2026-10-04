@@ -400,7 +400,7 @@ Send a real token to the MCP URL, as [MCP](mcp.md#testing) shows. As with any to
 
 ## Tokens in tests
 
-`Sanctum::actingAs($user, ['*'])` and `Sanctum::actingAs($user, ['actions:read'])` work with the default token reader, exactly as real tokens with those abilities do. What they cannot carry is a tenant binding: a token double answers only whether it has an ability, so it can never be bound to `tenant:{key}`. To test a tenant-bound token, create a real one and send it as a bearer header:
+`Sanctum::actingAs($user, ['*'])` and `Sanctum::actingAs($user, ['actions:read'])` work with the default token reader, exactly as real tokens with those abilities do. What they cannot carry is a tenant binding: a token double answers only whether it has an ability, so it can never be bound to `tenant:{key}`. To test a tenant-bound token, create a real one and send it as a bearer header to the `routes/api.php` tenant group ([mounting the routes](concepts.md#mounting-the-routes)):
 
 ```php
 $token = $user->createToken('test', ['actions:external', 'tenant:'.$team->getKey()])->plainTextToken;
