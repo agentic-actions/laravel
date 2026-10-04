@@ -176,7 +176,7 @@ For the TypeScript client, install the npm package from the Composer package, so
 
 The client is also on npm (`npm install @agentic-actions/client`); install the same version as the Composer package. Run `composer install` before `npm install` or `npm ci`, since the link points into `vendor/`, then `php artisan actions:typescript`, which writes `resources/js/agentic/actions.ts`.
 
-Installed from `vendor/`, the client brings no packages of its own: React, Inertia and `ai` are optional peers, so its imports of them resolve to your app's copies. When Composer installs the package from a local path instead (a `path` repository, which symlinks a checkout that has its own `node_modules`), Vite follows the symlink and can load a second React, Inertia or `ai`: React reports an invalid hook call, or the client reloads through a router that is not your app's. Dedupe them in `vite.config.ts`:
+Installed from `vendor/`, the client brings no packages of its own: React, Inertia and `ai` are optional peers, so its imports of them resolve to your app's copies. Its Inertia entries need Inertia 3; on an app still on Inertia 2, npm moves your `@inertiajs/core` to 3, so read [the requirements](docs/setup.md#what-the-package-requires) first. When Composer installs the package from a local path instead (a `path` repository, which symlinks a checkout that has its own `node_modules`), Vite follows the symlink and can load a second React, Inertia or `ai`: React reports an invalid hook call, or the client reloads through a router that is not your app's. Dedupe them in `vite.config.ts`:
 
 ```ts
 export default defineConfig({
@@ -186,6 +186,8 @@ export default defineConfig({
     // ...
 });
 ```
+
+`dedupe` reaches Vite only. When `tsc` reports that a type from `ai` is not assignable to the same type from another path, map `ai` to your app's copy in `tsconfig.json`: `"paths": { "ai": ["./node_modules/ai"] }` under `compilerOptions`.
 
 `php artisan make:agentic-action CreatePost` writes a new action that is discovered but exposed nowhere, whose `authorize()` returns false until you decide who may run it. Actions are discovered under `app/`; `php artisan vendor:publish --tag=agentic-actions-config` publishes the config if yours live elsewhere. The tags `agentic-actions-lang` and `agentic-actions-stubs` publish the sentences callers and agents read, and the stub `make:agentic-action` writes from.
 

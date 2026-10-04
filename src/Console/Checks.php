@@ -57,8 +57,10 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Exists;
 use Illuminate\Validation\Rules\Unique;
 use InvalidArgumentException;
+use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\HasMiddleware;
+use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Storage\DatabaseConversationStore;
 use Laravel\Mcp\Server\Registrar;
 use Laravel\Passport\Passport;
@@ -462,8 +464,8 @@ final class Checks
                 }
             }
 
-            if (self::shadowsActionTools($agent)) {
-                $findings[] = self::warn('Toolsets', "{$agent}: it declares its own tools(), which replaces the one InteractsWithActions gives it, and that tools() never calls \$this->actionTools(), so the agent receives none of its toolsets' actions. Delete the tools() it declares, or merge the package's tools into it: return [...\$this->actionTools(), ...].");
+            if (($wiring = self::toolsWiring($agent)) !== null) {
+                $findings[] = $wiring;
             }
         }
 
@@ -494,26 +496,65 @@ final class Checks
     }
 
     /**
-     * Whether an agent on InteractsWithActions has a tools() whose source never names actionTools() or a parent's
-     * tools(): one the class declares replaces the trait's, so the toolsets never reach the model. Read from the
-     * source, so a warning: a tools() that reaches actionTools() through another method is flagged too.
+     * How an agent class carrying #[UseToolset] hands its toolsets' actions to laravel/ai: a failure when it uses
+     * InteractsWithActions without implementing HasTools, whose tools() is the only one laravel/ai reads; a warning when
+     * it does not use the trait, which is what turns the attribute into tools; and a warning when its own tools()
+     * replaces the trait's and its source names neither actionTools(), a parent's tools() nor the trait's tools() under
+     * an alias. The last is read from the source, so a warning: a tools() that reaches actionTools() through another
+     * method is flagged too. A class that is not a laravel/ai agent is skipped.
      */
-    private static function shadowsActionTools(string $agent): bool
+    private static function toolsWiring(string $agent): ?Finding
     {
-        if (! class_exists($agent) || ! in_array(InteractsWithActions::class, class_uses_recursive($agent), true)) {
-            return false;
+        if (! class_exists($agent) || ! is_subclass_of($agent, Agent::class)) {
+            return null;
+        }
+
+        if (! in_array(InteractsWithActions::class, class_uses_recursive($agent), true)) {
+            return self::warn('Toolsets', "{$agent}: it carries #[UseToolset] but does not use InteractsWithActions, which turns its toolsets into tools, so the attribute alone gives it none of its toolsets' actions. Add use InteractsWithActions; and an actionContext() (https://agentic-actions.com/copilot#the-server).");
+        }
+
+        if (! is_subclass_of($agent, HasTools::class)) {
+            return self::fail('Toolsets', "{$agent}: it uses InteractsWithActions but does not implement Laravel\\Ai\\Contracts\\HasTools, so laravel/ai never asks it for its tools and none of its toolsets' actions reach the model. Add implements HasTools to the class.");
         }
 
         $method = new ReflectionMethod($agent, 'tools');
 
         if (($file = $method->getFileName()) === false) {
-            return false;
+            return null;
         }
 
         $lines = array_slice(file($file) ?: [], $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1);
         $source = implode('', $lines);
 
-        return ! str_contains($source, 'actionTools(') && ! str_contains($source, 'parent::tools(');
+        foreach (['actionTools', 'parent::tools', ...self::traitAliases($agent)] as $call) {
+            if (str_contains($source, "{$call}(")) {
+                return null;
+            }
+        }
+
+        return self::warn('Toolsets', "{$agent}: its own tools() replaces the one InteractsWithActions gives it, and its source calls neither \$this->actionTools() nor the trait's tools(), so its toolsets' actions may never reach the model. Delete the tools() it declares, or merge the package's tools into it: return [...\$this->actionTools(), ...].");
+    }
+
+    /**
+     * The names an agent class or its parents give InteractsWithActions' tools() and actionTools() in a trait alias,
+     * such as packageTools in `use InteractsWithActions { tools as packageTools; }`.
+     *
+     * @param  class-string  $agent
+     * @return list<string>
+     */
+    private static function traitAliases(string $agent): array
+    {
+        $aliases = [];
+
+        for ($class = new ReflectionClass($agent); $class !== false; $class = $class->getParentClass()) {
+            foreach ($class->getTraitAliases() as $alias => $original) {
+                if (in_array($original, [InteractsWithActions::class.'::tools', InteractsWithActions::class.'::actionTools'], true)) {
+                    $aliases[] = $alias;
+                }
+            }
+        }
+
+        return $aliases;
     }
 
     /**

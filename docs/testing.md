@@ -44,7 +44,7 @@ A name no action has fails the assertion, so a typo never passes `assertNotRan()
 
 `assertToolset()` pins what one toolset holds. It compares the actions whose classes put them in the toolset now with the list you give, in any order, and names the extra and the missing ones when they differ, so widening a toolset shows up as a failing test someone has to update.
 
-`assertAgentTools()` checks one agent's tools the way laravel/ai resolves them before a turn: its hand-written tools, sub-agents, tool-search groups, MCP tools and action tools. It fails on two tools with one name, on any tool that offers a forbidden key, and on a toolset holding more than `agents.max_tools_per_toolset` actions. It also fails an agent on `InteractsWithActions` whose `tools()` returns none of the action tools its toolsets give that person, as when the class declares its own `tools()`; an agent whose toolsets give that person no action passes.
+`assertAgentTools()` checks one agent's tools the way laravel/ai resolves them before a turn: its hand-written tools, sub-agents, tool-search groups, MCP tools and action tools. It fails on two tools with one name, on any tool that offers a forbidden key, and on a toolset holding more than `agents.max_tools_per_toolset` actions. It also fails an agent on `InteractsWithActions` that does not implement `HasTools`, or whose `tools()` returns none of the action tools its toolsets give that person, as when the class declares its own `tools()`; an agent whose toolsets give that person no action passes.
 
 Both come with the `AgenticActions\Testing\ActionAssertions` trait, and as `Actions::assertToolset()` and `Actions::assertAgentTools()`.
 
