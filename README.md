@@ -1,6 +1,6 @@
 # Agentic Actions for Laravel
 
-[![The Agentic Actions demo's Acme task board with the copilot panel open on the right. The panel shows the request "Add three launch tasks for Marcus", one row per action call (the first reads "Not done", the other three "Created a task"), and the reply naming the three tasks. The To do column shows the three new cards, assigned to Marcus Reed. The panel's notice says the demo is scripted and the actions are real.](https://agentic-actions.com/images/demo-board.png)](https://demo.agentic-actions.com)
+[![The Agentic Actions demo's Acme task board, filtered to normal priority, with the copilot panel open on the right. The panel shows the request "Add three launch tasks for Marcus", one row per action call (the first reads "Not done", the other three "Created a task"), and the reply naming the three tasks. The To do column starts with the new cards "Draft the launch checklist" and "Brief the support team on the launch", then "Replace the hero illustration" and the third new card, "Schedule the launch social posts", all assigned to Marcus Reed. Doing and Done show their normal-priority tasks. The panel's notice says the demo is scripted and the actions are real.](https://agentic-actions.com/images/demo-board.png)](https://demo.agentic-actions.com)
 
 The demo's copilot follows a script. The actions it runs are real.
 
