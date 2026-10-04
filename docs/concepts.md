@@ -171,11 +171,177 @@ The scanner walks `discovery.paths` (default `app`; globs and absolute paths wor
 
 ## Tenants
 
-Set `tenant.model` (for example `App\Models\Team`), `tenant.parameter` (the route segment, `team`), and `tenant.membership`, a class implementing `AgenticActions\Contracts\ChecksMembership` that answers whether an actor may enter a tenant for an effect. `tenant.scope` names an `AgenticActions\Contracts\ScopesToTenant` class for `$context->find()`. `Actions::membershipUsing()` and `Actions::scopeUsing()` take closures instead.
-
-From then on actions are tenant-scoped unless they set `$tenantScoped = false`. Mount them under the parameter:
+A tenant is the model your app's rows belong to, such as a team. Four keys in `config/agentic-actions.php` turn tenancy on:
 
 ```php
+'tenant' => [
+    'model' => App\Models\Team::class,
+    'parameter' => 'team',
+    'membership' => App\Tenancy\TeamMembership::class,
+    'scope' => App\Tenancy\TeamScope::class,
+],
+```
+
+`tenant.parameter` is the route segment that carries the tenant. It defaults to `tenant`, so set it to the segment your prefix uses. `tenant.membership` answers whether a person may enter a tenant, and `tenant.scope` narrows `$context->find()` to it; [membership and scope classes](#membership-and-scope-classes) shows both. From then on actions are tenant-scoped unless they set `$tenantScoped = false`, and a tenant-scoped action called without a tenant throws `MissingContext`, which is a programming error.
+
+### What your tenant model needs
+
+- **A route key.** The URL segment is resolved through the model's own route binding, so the model sets its key: `getRouteKeyName()` returning `'slug'`, or UUID primary keys. Write the prefix as `teams/{team}`. A binding field in the prefix, such as `{team:slug}`, is not read: with the default `id` route key, members get a 404 at `/teams/acme` while `/teams/1` answers, and `actions:check` passes. An unknown key is a 404. The MCP tenant path and `actions:run --tenant=acme` take the same route key.
+- **A primary key.** A token binds to a tenant by its primary key, with the ability `tenant:{key}` (`tenant:1`, never the slug).
+- **A foreign key on the rows it owns.** Your scope filters by it, and the package reads its name from the model's `getForeignKey()` (`team_id` for `Team`). No `schema()` or `agentSchema()` key may be named after it or after the parameter (`team`): the tenant comes from the URL or the token, never from input, and `actions:check` fails such a key.
+- **Membership, stored your way.** The package stores none. A `team_user` table (`team_id`, `user_id`) and two relations are enough; a starter kit with teams already has `belongsToTeam()`.
+
+```php
+// app/Models/Team.php
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+
+class Team extends Model
+{
+    protected $fillable = ['name', 'slug'];
+
+    public function getRouteKeyName(): string
+    {
+        return 'slug';
+    }
+
+    /** @return BelongsToMany<User, $this> */
+    public function users(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class);
+    }
+}
+```
+
+```php
+// app/Models/User.php
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+
+// inside the class, beside its other methods:
+
+/** @return BelongsToMany<Team, $this> */
+public function teams(): BelongsToMany
+{
+    return $this->belongsToMany(Team::class);
+}
+
+public function belongsToTeam(Team $team): bool
+{
+    return $this->teams()->whereKey($team->getKey())->exists();
+}
+```
+
+### Membership and scope classes
+
+Each is an invokable class that the container builds, so its constructor may take services:
+
+```php
+namespace AgenticActions\Contracts;
+
+interface ChecksMembership
+{
+    public function __invoke(Authenticatable $actor, Model $tenant, ?Effect $effect): bool;
+}
+
+interface ScopesToTenant
+{
+    public function __invoke(Builder $query, Model $tenant): Builder;
+}
+```
+
+```php
+// app/Tenancy/TeamMembership.php
+namespace App\Tenancy;
+
+use AgenticActions\Contracts\ChecksMembership;
+use AgenticActions\Effect;
+use App\Models\Team;
+use App\Models\User;
+use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Database\Eloquent\Model;
+
+final class TeamMembership implements ChecksMembership
+{
+    public function __invoke(Authenticatable $actor, Model $tenant, ?Effect $effect): bool
+    {
+        return $actor instanceof User && $tenant instanceof Team && $actor->belongsToTeam($tenant);
+    }
+}
+```
+
+```php
+// app/Tenancy/TeamScope.php
+namespace App\Tenancy;
+
+use AgenticActions\Contracts\ScopesToTenant;
+use App\Models\Post;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
+use LogicException;
+
+final class TeamScope implements ScopesToTenant
+{
+    public function __invoke(Builder $query, Model $tenant): Builder
+    {
+        return match ($query->getModel()::class) {
+            Post::class => $query->where('team_id', $tenant->getKey()),
+            default => throw new LogicException('TeamScope cannot scope '.$query->getModel()::class.'.'),
+        };
+    }
+}
+```
+
+Give the scope one arm per model your actions find; a model that belongs to the team through another, such as a comment through its post, gets an arm with `whereHas()`. The rules:
+
+- **Only `true` admits.** The answer is compared with `=== true`, so `1` or a model is a no.
+- **`$effect` is null when the question is the tenant as a whole**: when an MCP client lists its tools on the tenant path, and when a person approves an OAuth client for a tenant. A call asks with its action's effect, and so does each action a tool list weighs, so one MCP `tools/list` asks with `null` first, then once per action with its effect, such as `Read`, then `Write`. A no to `null` gives that client an empty list. To let some members only read, answer `null` and `Effect::Read` with true for them, and the other effects with false. The change feed asks with `Read`.
+- **Membership is side-effect free.** It runs on every surface, often several times in one request.
+- **A scope throws for a model it does not handle.** `find()` and [datasets](data.md), with their relations, all read through it, so a missing arm stops loudly instead of reading every team's rows. It returns a query for the model it was given. Which rows are the team's is its decision: see [what `find()` guarantees](security.md).
+- **A configured class wins.** While `tenant.membership` names a class, `Actions::membershipUsing()` is never called, and the same holds for `tenant.scope` and `Actions::scopeUsing()`.
+- **Without a scope, `find()` throws.** With `tenant.model` set and neither `tenant.scope` nor `scopeUsing()`, the first `$context->find()` throws `MissingContext` ("A tenant model is configured, but no tenant scope is"), which answers 500.
+
+The closure forms take the same arguments and are registered in a service provider's `boot()`. Each is used only while its config key is null:
+
+```php
+// app/Providers/AppServiceProvider.php
+namespace App\Providers;
+
+use AgenticActions\Effect;
+use AgenticActions\Facades\Actions;
+use App\Models\Post;
+use App\Models\Team;
+use App\Models\User;
+use Illuminate\Contracts\Auth\Authenticatable;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\ServiceProvider;
+use LogicException;
+
+class AppServiceProvider extends ServiceProvider
+{
+    public function boot(): void
+    {
+        Actions::membershipUsing(fn (Authenticatable $actor, Model $tenant, ?Effect $effect): bool => $actor instanceof User && $tenant instanceof Team && $actor->belongsToTeam($tenant));
+
+        Actions::scopeUsing(fn (Builder $query, Model $tenant): Builder => match ($query->getModel()::class) {
+            Post::class => $query->where('team_id', $tenant->getKey()),
+            default => throw new LogicException('No tenant scope for '.$query->getModel()::class.'.'),
+        });
+    }
+}
+```
+
+### Mounting the routes
+
+`Actions::routes()` with no argument mounts every action, tenant-scoped or not. Once tenants are on, mount two groups: `tenant: true` under the parameter, and `tenant: false` for the actions that belong to the account, such as editing a profile.
+
+```php
+// routes/web.php
+use AgenticActions\Facades\Actions;
+use Illuminate\Support\Facades\Route;
+
 Route::middleware('auth')
     ->prefix('teams/{team}')
     ->name('teams.')
@@ -184,11 +350,42 @@ Route::middleware('auth')
 Route::middleware('auth')->group(fn () => Actions::routes(tenant: false));
 ```
 
-Give each `Actions::routes()` group its own name prefix, as `teams.` does here. Every group gains the change feed's route, named `_changes` within the group, so two groups under one name prefix share a route name, which `route:cache` refuses.
+For token clients, mount the same pair in `routes/api.php`, which Laravel serves under `/api`:
 
-The route segment is resolved by the model's route key, so a slug or a UUID works, and an unknown key is a 404. A tenant the actor does not belong to gets the same 404, so a stranger cannot tell which tenants exist. That holds when the package is the first to check membership. Inside a group whose own middleware already checks it (a starter kit's team middleware, for example), a non-member gets that middleware's answer, often a 403, before the package's check runs. To keep the uniform 404, mount `Actions::routes(tenant: true)` in a group that authenticates and leaves membership to `tenant.membership`. A token binds to a tenant by its primary key, with the ability `tenant:{key}`. A tenant-scoped action called without a tenant throws `MissingContext`, which is a programming error.
+```php
+// routes/api.php
+use AgenticActions\Facades\Actions;
+use Illuminate\Support\Facades\Route;
 
-`AgenticActions\Tenancy\SpatieTeams`, set as `tenancy` in the config, switches spatie/laravel-permission's team to the tenant around each pipeline step and restores it afterwards.
+Route::middleware('auth:sanctum')
+    ->prefix('teams/{team}')
+    ->name('api.teams.')
+    ->group(fn () => Actions::routes(tenant: true));
+
+Route::middleware('auth:sanctum')->name('api.')->group(fn () => Actions::routes(tenant: false));
+```
+
+A token bound with `tenant:{key}` then reaches only its own team's `api/teams/{team}` routes: never another team's, and never the account-level group. Give each `Actions::routes()` group its own name prefix, as these do. Every group gains the change feed's route, named `_changes` within the group, so two groups under one name prefix share a route name, which `route:cache` refuses. `actions:check` fails a tenant-scoped action whose generated route has no `{team}`.
+
+### When your own middleware checks membership first
+
+An unknown team and a team the person does not belong to get the same 404, so a stranger cannot tell which tenants exist. That holds when the package is the first to check membership. Inside a group whose own middleware already checks it, a starter kit's team middleware for example, a non-member gets that middleware's answer, often a 403, before the package's check runs. To keep the uniform 404, mount `Actions::routes(tenant: true)` in a group that authenticates and leaves membership to `tenant.membership`.
+
+A starter kit with teams that routes its pages under `{current_team}` needs `'parameter' => 'current_team'`, its own `belongsToTeam()` in the membership class, and a group of the package's own beside the kit's, keeping its `verified` middleware:
+
+```php
+// routes/web.php
+Route::middleware(['auth', 'verified'])
+    ->prefix('{current_team}')
+    ->name('current_team.')
+    ->group(fn () => Actions::routes(tenant: true));
+```
+
+Mounted inside the kit's group instead, a stranger and an unknown team both get the kit's 403, so nothing leaks either way, but your pages then answer differently from your token clients, which get the 404.
+
+### A tenancy bridge
+
+`AgenticActions\Tenancy\SpatieTeams`, set as `tenancy` in the config, switches spatie/laravel-permission's team to the tenant around each pipeline step and restores it afterwards. Any class implementing `AgenticActions\Contracts\Tenancy`, whose `run(?Model $tenant, ?Authenticatable $actor, Closure $callback): mixed` calls `$callback` with the tenant's state switched on, fits there too.
 
 ## Queued runs
 

@@ -19,7 +19,9 @@ Multi-tenancy, set up once: every tenant-scoped call runs inside one team. The U
 
 ## Turn it on
 
-Set `tenant.model`, `tenant.parameter` (the route segment, `team`), `tenant.membership`, a class that answers whether a person may enter a tenant, and `tenant.scope`, a class that narrows `find()` to it. From then on every action is tenant-scoped, so mount them under the parameter:
+Set `tenant.model`, `tenant.parameter` (the route segment, `team`), `tenant.membership`, a class that answers whether a person may enter a tenant, and `tenant.scope`, a class that narrows `find()` to it. Each class is a few lines: [Membership and scope classes](/concepts#membership-and-scope-classes) shows both, the rules they follow and the closure forms. The model sets its own route key, such as a slug, and the prefix names the plain parameter: [what your tenant model needs](/concepts#what-your-tenant-model-needs).
+
+From then on every action is tenant-scoped. An action that belongs to the account rather than a team, such as editing a profile, sets `$tenantScoped = false`. Mount the two kinds in two groups:
 
 <CodeCard file="routes/web.php">
 
@@ -28,11 +30,13 @@ Route::middleware('auth')
     ->prefix('teams/{team}')
     ->name('teams.')
     ->group(fn () => Actions::routes(tenant: true));
+
+Route::middleware('auth')->group(fn () => Actions::routes(tenant: false));
 ```
 
 </CodeCard>
 
-An action that belongs to the account rather than a team, such as editing a profile, sets `$tenantScoped = false` and goes in a group without the prefix. See [Tenants](/concepts#tenants) in Concepts for every key.
+`Actions::routes()` with no argument mounts every action, so once tenants are on, mount these two instead. Token clients get the same pair in `routes/api.php`: see [Mounting the routes](/concepts#mounting-the-routes).
 
 ## A stranger sees a 404
 
@@ -40,7 +44,7 @@ An action that belongs to the account rather than a team, such as editing a prof
 <TenantsTeams />
 </Figure>
 
-The package checks membership itself, on every surface, before your code reads the tenant. Keep that by leaving membership to the package: a group whose own middleware checks it first answers with that middleware's response instead, often a 403. See [Tenants](/concepts#tenants) in Concepts.
+The package checks membership itself, on every surface, before your code reads the tenant. Keep that by leaving membership to the package: a group whose own middleware checks it first answers with that middleware's response instead, often a 403. See [When your own middleware checks membership first](/concepts#when-your-own-middleware-checks-membership-first), which also covers a starter kit with teams.
 
 ## `find()` stays inside the team
 
