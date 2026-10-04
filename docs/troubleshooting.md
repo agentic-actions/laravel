@@ -53,13 +53,13 @@ The action's `authorize()` returned false. `make:agentic-action` writes one that
 
 React reports an invalid hook call. Or an action succeeds but the page does not reload its props. Or `tsc` reports TS2345 on the `actionsChat()` options passed to `new Chat()`, because two copies of `ai` declare `ChatInit`.
 
-In each case Vite or TypeScript loads a package from `vendor/agentic-actions/laravel/js/node_modules` as well as from your app's `node_modules`. That folder exists when Composer installs the package from a `path` repository, which symlinks a checkout with its own `node_modules`. It also exists when npm installs the client's own development packages for a `file:` dependency. Check whether it is there:
+In each case Vite or TypeScript loads a package from `vendor/agentic-actions/laravel/js/node_modules` as well as from your app's `node_modules`. That folder exists when Composer installs the package from a `path` repository, which symlinks a checkout with its own `node_modules`. Installed from the Composer package, the client brings no packages of its own since 0.9.0-beta.3, but an app that installed it from `vendor/` on an earlier version keeps the copies its lock file recorded. Check whether the folder is there:
 
 ```bash
 ls vendor/agentic-actions/laravel/js/node_modules
 ```
 
-Fix: dedupe each package that folder holds, `ai` included, in `vite.config.ts`, as [Installation](../README.md#installation) shows. Dedupe changes what Vite bundles, not what `tsc` reads: for the type check, install the client from npm at the version `composer show agentic-actions/laravel` prints, without the `v`; its React, Inertia and `ai` are peer dependencies. The lockfile can still keep a copy the `file:` install brought in, such as an older `@inertiajs/core` beside the one your `@inertiajs/react` uses. Then run `npm dedupe`, or delete `node_modules` and `package-lock.json` and run `npm install`, and check that `npm ls @inertiajs/core ai` lists one version of each.
+Fix: after upgrading from 0.9.0-beta.2 or earlier, run `npm dedupe` once and commit `package-lock.json`. For a `path` repository, dedupe each package that folder holds, `ai` included, in `vite.config.ts`, as [Installation](../README.md#installation) shows. Dedupe changes what Vite bundles, not what `tsc` reads: for the type check, install the client from npm at the version `composer show agentic-actions/laravel` prints, without the `v`; its React, Inertia and `ai` are peer dependencies. The lockfile can still keep a copy the `file:` install brought in, such as an older `@inertiajs/core` beside the one your `@inertiajs/react` uses. Then run `npm dedupe`, or delete `node_modules` and `package-lock.json` and run `npm install`, and check that `npm ls @inertiajs/core ai` lists one version of each.
 
 ## Actions and schemas
 
@@ -195,6 +195,8 @@ curl -si -X POST https://example.com/mcp/actions -H 'Accept: application/json, t
 
 The agent answers in words, calls no action and shows no rows. Or it forgets what was said a turn earlier. If you started it with `php artisan make:agent`, the generated class declares `tools()` and `messages()`, and both return `[]`. A class's own methods win over the methods of its traits. So these two replace `InteractsWithActions::tools()` and `RemembersConversations::messages()`.
 
+`actions:check` warns about an agent whose own `tools()` never calls `$this->actionTools()`, and `Actions::assertAgentTools()` fails such an agent in a test.
+
 Fix: delete both generated methods. Then make sure the class has what [the server](copilot.md#the-server) shows: `#[UseToolset]`, `use InteractsWithActions`, `use RemembersConversations` for a copilot, and an `actionContext()`. An agent that has tools of its own spreads the action tools into its `tools()`:
 
 ```php
@@ -259,7 +261,7 @@ Once `tenant.model` is set, every action is tenant-scoped unless it says otherwi
 A tenant model is configured, but no tenant scope is: set agentic-actions.tenant.scope, or call Actions::scopeUsing().
 ```
 
-An action called `$context->find()`, which finds a row through the tenant scope, and you have not configured one. Write a class that implements `AgenticActions\Contracts\ScopesToTenant` (`__invoke(Builder $query, Model $tenant): Builder`) and name it in `tenant.scope`. Or register a closure with `Actions::scopeUsing()` in a service provider's `boot()` ([membership and scope classes](concepts.md#membership-and-scope-classes)). The scope must narrow the query it was given. If it returns a query for another model, the call fails with `The tenant scope returned a query for another model than [App\Models\Post].`
+An action called `$context->find()`, which finds a row through the tenant scope, or used a tenant-scoped dataset, and you have not configured one. `actions:check` warns about this before any call: `tenant.model is set, but no tenant scope is, …`. Write a class that implements `AgenticActions\Contracts\ScopesToTenant` (`__invoke(Builder $query, Model $tenant): Builder`) and name it in `tenant.scope`. Or register a closure with `Actions::scopeUsing()` in a service provider's `boot()` ([membership and scope classes](concepts.md#membership-and-scope-classes)). The scope must narrow the query it was given. If it returns a query for another model, the call fails with `The tenant scope returned a query for another model than [App\Models\Post].`
 
 ### MissingContext: no actor or tenant of a type
 
