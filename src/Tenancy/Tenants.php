@@ -94,6 +94,16 @@ final class Tenants
     }
 
     /**
+     * Whether a scope class or closure is configured.
+     */
+    public static function hasScope(): bool
+    {
+        $class = config('agentic-actions.tenant.scope');
+
+        return (is_string($class) && $class !== '') || app(ActionsManager::class)->scope() !== null;
+    }
+
+    /**
      * The tenant.scope class, else the scopeUsing() closure.
      *
      * @return callable(Builder<Model>, Model): Builder<Model>

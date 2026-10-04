@@ -118,6 +118,7 @@ final class Checks
             return [
                 self::fail('Names', $exception->getMessage()),
                 ...$this->membership(),
+                ...$this->tenantScope(),
                 ...$this->abilities(),
                 ...$this->cacheStore(),
                 ...$this->npm(),
@@ -141,6 +142,7 @@ final class Checks
             ...$this->authorization($subjects),
             ...$this->effect($subjects),
             ...$this->membership(),
+            ...$this->tenantScope(),
             ...$this->tenantKeys($subjects),
             ...$this->tenantRoutes($scan, $routes),
             ...$this->toolsets($scan, $subjects),
@@ -349,6 +351,21 @@ final class Checks
         }
 
         return [self::fail('Tenancy', 'tenant.model is set, but no membership check is: set tenant.membership in config/agentic-actions.php, or call Actions::membershipUsing().')];
+    }
+
+    /**
+     * Tenancy: a tenant model without a tenant scope. A warning: $context->find() and tenant-scoped datasets refuse
+     * with MissingContext until one is set, and an app that calls neither runs without one.
+     *
+     * @return list<Finding>
+     */
+    private function tenantScope(): array
+    {
+        if (config('agentic-actions.tenant.model') === null || Tenants::hasScope()) {
+            return [];
+        }
+
+        return [self::warn('Tenancy', 'tenant.model is set, but no tenant scope is, so $context->find() and tenant-scoped datasets throw MissingContext on their first call: set tenant.scope in config/agentic-actions.php, or call Actions::scopeUsing() (https://agentic-actions.com/concepts#tenants).')];
     }
 
     /**

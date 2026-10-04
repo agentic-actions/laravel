@@ -536,7 +536,7 @@ Give the scope one arm per model your actions find; a model that belongs to the 
 - **Membership is side-effect free.** It runs on every surface, often several times in one request.
 - **A scope throws for a model it does not handle.** `find()` and [datasets](data.md), with their relations, all read through it, so a missing arm stops loudly instead of reading every team's rows. It returns a query for the model it was given. Which rows are the team's is its decision: see [what `find()` guarantees](security.md).
 - **A configured class wins.** While `tenant.membership` names a class, `Actions::membershipUsing()` is never called, and the same holds for `tenant.scope` and `Actions::scopeUsing()`.
-- **Without a scope, `find()` throws.** With `tenant.model` set and neither `tenant.scope` nor `scopeUsing()`, the first `$context->find()` throws `MissingContext` ("A tenant model is configured, but no tenant scope is"), which answers 500.
+- **Without a scope, `find()` throws.** With `tenant.model` set and neither `tenant.scope` nor `scopeUsing()`, the first `$context->find()`, or a tenant-scoped dataset, throws `MissingContext` ("A tenant model is configured, but no tenant scope is"), which answers 500. `actions:check` warns about it.
 
 The closure forms take the same arguments and are registered in a service provider's `boot()`. Each is used only while its config key is null:
 

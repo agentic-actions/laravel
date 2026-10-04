@@ -5,9 +5,12 @@ use AgenticActions\Console\Finding;
 use AgenticActions\Discovery\Manifest;
 use AgenticActions\Discovery\Scanner;
 use AgenticActions\Discovery\Snapshot;
+use AgenticActions\Facades\Actions;
 use AgenticActions\Support\PackageStatus;
 use AgenticActions\Views\Column;
 use Illuminate\Auth\Middleware\Authenticate;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Routing\Attributes\Controllers\Middleware;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\File;
@@ -35,6 +38,7 @@ use Tests\Fixtures\Checks\UnsupportedUnion;
 use Tests\Fixtures\Misconfigured\NoAuthorize;
 use Tests\Fixtures\Misconfigured\UndeclaredEffect;
 use Tests\Fixtures\Misconfigured\WebWithAgentSchema;
+use Tests\Fixtures\Tenancy\TeamScope;
 use Tests\Fixtures\Views\Invalid\BadColumns;
 use Tests\Fixtures\Views\Invalid\WriteWithTable;
 use Tests\Fixtures\Views\PostStats;
@@ -209,11 +213,14 @@ describe('discovery rows', function () {
 
         $findings = findingsFor([], [$this->fixtures.'/Misconfigured']);
 
-        expect($findings)->toHaveCount(2)
+        expect($findings)->toHaveCount(3)
             ->and($findings[0][0])->toBe('fail')
             ->and($findings[0][1])->toBe('Names')
             ->and($findings[0][2])->toEndWith('share the name or route segment [same].')
-            ->and($findings[1][1])->toBe('Tenancy');
+            ->and($findings[1][0])->toBe('fail')
+            ->and($findings[1][1])->toBe('Tenancy')
+            ->and($findings[2][0])->toBe('warn')
+            ->and($findings[2][1])->toBe('Tenancy');
     });
 
     it('fails an action with no authorize()', function () {
@@ -225,12 +232,37 @@ describe('discovery rows', function () {
 
 describe('tenancy rows', function () {
     it('fails a tenant model without a membership check', function () {
-        config(['agentic-actions.tenant.model' => Team::class]);
+        config(['agentic-actions.tenant.model' => Team::class, 'agentic-actions.tenant.scope' => TeamScope::class]);
 
         expect(inRow(findingsFor([CreateNote::class]), 'Tenancy'))->toBe([
             ['fail', 'Tenancy', 'tenant.model is set, but no membership check is: set tenant.membership in config/agentic-actions.php, or call Actions::membershipUsing().'],
         ]);
     });
+
+    it('warns about a tenant model without a tenant scope, and actions:check still passes', function () {
+        $this->useTeamTenancy();
+        config(['agentic-actions.tenant.scope' => null, 'agentic-actions.discovery.paths' => [], 'agentic-actions.discovery.classes' => [PlainNote::class]]);
+
+        checkActionsCommand(['--update' => true]);
+        [$code, $output] = checkActionsCommand();
+
+        expect(inRow(findingsFor([PlainNote::class]), 'Tenancy'))->toBe([
+            ['warn', 'Tenancy', 'tenant.model is set, but no tenant scope is, so $context->find() and tenant-scoped datasets throw MissingContext on their first call: set tenant.scope in config/agentic-actions.php, or call Actions::scopeUsing() (https://agentic-actions.com/concepts#tenants).'],
+        ])
+            ->and($code)->toBe(0)
+            ->and($output)->toContain('! [Tenancy] tenant.model is set, but no tenant scope is');
+    });
+
+    it('passes a tenant scope given as a class or as a scopeUsing() closure', function (bool $closure) {
+        $this->useTeamTenancy();
+
+        if ($closure) {
+            config(['agentic-actions.tenant.scope' => null]);
+            Actions::scopeUsing(fn (Builder $query, Model $tenant): Builder => $query->where('team_id', $tenant->getKey()));
+        }
+
+        expect(inRow(findingsFor([PlainNote::class]), 'Tenancy'))->toBe([]);
+    })->with(['tenant.scope' => false, 'Actions::scopeUsing()' => true]);
 
     it('fails a schema() key named like the tenant', function () {
         $this->useTeamTenancy();
