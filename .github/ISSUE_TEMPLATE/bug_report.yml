@@ -1,0 +1,53 @@
+name: Bug report
+description: The package or the npm client does not do what the docs say.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A security problem never goes in an issue: report it privately, as [SECURITY.md](https://github.com/agentic-actions/laravel/blob/main/SECURITY.md) describes.
+  - type: input
+    id: package
+    attributes:
+      label: Package version
+      description: The `versions` line of `composer show agentic-actions/laravel` in your app.
+    validations:
+      required: true
+  - type: input
+    id: client
+    attributes:
+      label: npm client version
+      description: The version of `@agentic-actions/client`, if the bug involves it.
+  - type: input
+    id: platform
+    attributes:
+      label: Laravel and PHP versions
+      placeholder: Laravel 13.15, PHP 8.4
+    validations:
+      required: true
+  - type: textarea
+    id: packages
+    attributes:
+      label: Related packages
+      description: The versions of laravel/ai, laravel/mcp, laravel/passport, Sanctum, Inertia or Livewire, if the bug involves them.
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The smallest action class, route lines and commands that show the problem. Remove anything private.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: Link the docs section that describes it, if there is one.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened
+      description: The error, the response or the output of `php artisan actions:check`.
+    validations:
+      required: true

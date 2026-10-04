@@ -10,8 +10,9 @@
 # leaves out vendor/, node_modules/, build/ and .git, because Composer mirrors a path repository whole, apart from the
 # paths .gitattributes marks export-ignore. Nothing is pushed or published.
 #
-# Every item of section 1.2 is asserted; the script stops at the first failure and prints what it saw. The output of
-# composer, npm and the app's own tests goes to build/fresh-app-{mode}.log.
+# Each numbered item is a step of the setup the README's Getting started describes, and each one is asserted; the
+# script stops at the first failure and prints what it saw. The output of composer, npm and the app's own tests goes to
+# build/fresh-app-{mode}.log.
 
 set -euo pipefail
 

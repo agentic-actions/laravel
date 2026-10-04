@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security problem
+    url: https://github.com/agentic-actions/laravel/security/advisories/new
+    about: Report a vulnerability privately, never in an issue. Email to security@agentic-actions.com works too.
+  - name: Read the documentation
+    url: https://agentic-actions.com
+    about: Setup, the concepts, the guides and the recipes.
