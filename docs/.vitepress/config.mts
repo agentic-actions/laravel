@@ -1,9 +1,20 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, posix, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { defineConfigWithTheme, type DefaultTheme } from 'vitepress'
+import { defineConfigWithTheme, type DefaultTheme, type HeadConfig } from 'vitepress'
 
 const repository = 'https://github.com/agentic-actions/laravel'
+
+/** The site's address, which link previews and canonical links need in full. */
+const site = 'https://agentic-actions.com'
+
+/** The link preview image, docs/public/social-card.png. */
+const socialCard = {
+  url: `${site}/social-card.png`,
+  width: '1200',
+  height: '630',
+  alt: 'The Agentic Actions mark and name, the line "Write each Laravel operation once", and the code "#[Expose] final class CreatePost extends Action".',
+}
 
 const docs = fileURLToPath(new URL('..', import.meta.url))
 
@@ -167,13 +178,45 @@ export default defineConfigWithTheme<ThemeConfig>({
   lang: 'en-US',
   cleanUrls: true,
   sitemap: {
-    hostname: 'https://agentic-actions.com',
+    hostname: site,
   },
   head: [
     ['link', { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }],
     ['meta', { name: 'theme-color', media: '(prefers-color-scheme: light)', content: '#f7f5f0' }],
     ['meta', { name: 'theme-color', media: '(prefers-color-scheme: dark)', content: '#151412' }],
+    ['meta', { property: 'og:site_name', content: 'Agentic Actions for Laravel' }],
+    ['meta', { property: 'og:type', content: 'website' }],
+    ['meta', { property: 'og:image', content: socialCard.url }],
+    ['meta', { property: 'og:image:type', content: 'image/png' }],
+    ['meta', { property: 'og:image:width', content: socialCard.width }],
+    ['meta', { property: 'og:image:height', content: socialCard.height }],
+    ['meta', { property: 'og:image:alt', content: socialCard.alt }],
+    ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+    ['meta', { name: 'twitter:image', content: socialCard.url }],
+    ['meta', { name: 'twitter:image:alt', content: socialCard.alt }],
   ],
+
+  /**
+   * Each page's link preview and canonical address: its title as the browser
+   * tab shows it, its description (the site's when it has none), and its clean
+   * address, the one the sitemap lists. The 404 page has no address of its own.
+   */
+  transformHead: ({ page, title, description }) => {
+    const tags: HeadConfig[] = [
+      ['meta', { property: 'og:title', content: title }],
+      ['meta', { property: 'og:description', content: description }],
+      ['meta', { name: 'twitter:title', content: title }],
+      ['meta', { name: 'twitter:description', content: description }],
+    ]
+
+    if (page !== '404.md') {
+      const url = `${site}/${page.replace(/(^|\/)index\.md$/, '$1').replace(/\.md$/, '')}`
+
+      tags.push(['meta', { property: 'og:url', content: url }], ['link', { rel: 'canonical', href: url }])
+    }
+
+    return tags
+  },
 
   // docs/site/ holds the pages only the site has; docs/site/concepts/ the visual concept pages.
   rewrites: {
