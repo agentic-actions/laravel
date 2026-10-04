@@ -1,6 +1,6 @@
 # Agentic Actions for Laravel: notes for agents and reviewers
 
-Read this before any change. It is written so a new session, another agent or a reviewer can pick the work up cold. `AGENTS.md` points here, and `CONTRIBUTING.md` has the same rules for people.
+Read this before any change. It is written so a new session, another agent or a reviewer can pick the work up cold. `AGENTS.md` points here. `CONTRIBUTING.md` gives people the same workflow and rules (making a change, the CI cells and how to run them, the database group, docs pages, releases); this file adds the map of the code, the testing conventions in full and the gotchas.
 
 ## What it is
 
@@ -36,7 +36,7 @@ bin/fresh-app plain                      # about 45 seconds each; run both befor
 bin/fresh-app livewire
 ```
 
-CI: `.github/workflows/push.yml` runs on every push and pull request (PHP 8.3 and 8.5 on Laravel 13, with laravel/ai and laravel/passport, and without either, and the npm client's check); `tags.yml` on a `v*` tag or by hand (the Laravel 12 floor on PHP 8.3 with `--prefer-lowest`, Laravel 12 latest and Laravel 13 on PHP 8.4, MySQL 8 and Postgres 16 running `--group=database`, both fresh-app modes, the npm client with and without React); `docs.yml` builds the site on a pull request or push that touches `docs/`, the README, the CHANGELOG or `js/package.json`, and deploys main to GitHub Pages. To run a cell locally, run it in a clone under `build/` (git-ignored), never in your checkout, whose `vendor/` it would change. A clone takes HEAD, so commit first, copy the cell's install line from the workflow, and delete `build/cells` afterwards:
+CI: `.github/workflows/push.yml` runs on every push and pull request (PHP 8.3 and 8.5 on Laravel 13, with laravel/ai and laravel/passport, and without either, and the npm client's check); `tags.yml` on a `v*` tag or by hand (the Laravel 12 floor on PHP 8.3 with `--prefer-lowest`, Laravel 12 latest and Laravel 13 on PHP 8.4, MySQL 8, Postgres 16 and MariaDB 11 running `--group=database`, both fresh-app modes, the npm client with and without React); `docs.yml` builds the site on a pull request or push that touches `docs/`, the README, the CHANGELOG or `js/package.json`, and deploys main to GitHub Pages. To run a cell locally, run it in a clone under `build/` (git-ignored), never in your checkout, whose `vendor/` it would change. A clone takes HEAD, so commit first, copy the cell's install line from the workflow, and delete `build/cells` afterwards:
 
 ```bash
 git clone --quiet . build/cells/no-ai && cd build/cells/no-ai
@@ -45,13 +45,14 @@ composer remove --dev laravel/ai laravel/passport --no-interaction --no-progress
 vendor/bin/pint --test && vendor/bin/pest --exclude-group=database --testsuite=Unit,Feature
 ```
 
-The floor cell runs on PHP 8.3: `composer update --prefer-lowest --prefer-stable --prefer-dist --no-interaction --no-progress`, then `vendor/bin/pint --test && vendor/bin/pest --exclude-group=database`. The database cells run in the checkout, against a local MySQL 8 and Postgres 16. Create the database once, then run the group on each:
+The floor cell runs on PHP 8.3: `composer update --prefer-lowest --prefer-stable --prefer-dist --no-interaction --no-progress`, then `vendor/bin/pint --test && vendor/bin/pest --exclude-group=database`. The database cells run in the checkout, against a local MySQL 8, Postgres 16 and MariaDB 11. Create the database once on each (the MySQL line works for MariaDB too), then run the group on each:
 
 ```bash
 php -r 'new PDO("mysql:host=127.0.0.1", "root", "")->exec("create database if not exists agentic_actions_testing");'
 php -r 'new PDO("pgsql:host=127.0.0.1;dbname=postgres", "postgres", "")->exec("create database agentic_actions_testing");'
 DB_CONNECTION=mysql DB_HOST=127.0.0.1 DB_PORT=3306 DB_DATABASE=agentic_actions_testing DB_USERNAME=root DB_PASSWORD= vendor/bin/pest --group=database
 DB_CONNECTION=pgsql DB_HOST=127.0.0.1 DB_PORT=5432 DB_DATABASE=agentic_actions_testing DB_USERNAME=postgres DB_PASSWORD= vendor/bin/pest --group=database
+DB_CONNECTION=mariadb DB_HOST=127.0.0.1 DB_PORT=3306 DB_DATABASE=agentic_actions_testing DB_USERNAME=root DB_PASSWORD= vendor/bin/pest --group=database
 ```
 
 ## Hard rules
@@ -77,7 +78,7 @@ DB_CONNECTION=pgsql DB_HOST=127.0.0.1 DB_PORT=5432 DB_DATABASE=agentic_actions_t
 Every new or changed test passes the test-audit skill's authoring gate (`.claude/skills/test-audit/SKILL.md`), and a sweep or pruning of tests follows its audit or campaign mode.
 
 - Pest on Testbench, **serial**: several tests share the Testbench skeleton's `bootstrap/cache`, so `--parallel` collides.
-- `Unit` and `Feature` extend `Tests\TestCase`; `Workbench` extends `WorkbenchTestCase`, which boots the workbench app. By default the tests run on Testbench's `testing` connection, SQLite in memory without foreign keys, so a cascade is asserted from the schema, or on a second in-memory SQLite connection with `foreign_key_constraints` on, migrated inside the test (`ConversationSlotTest` does both). The `database` group is what the MySQL and Postgres cells run; a case in it that needs foreign keys skips on SQLite.
+- `Unit` and `Feature` extend `Tests\TestCase`; `Workbench` extends `WorkbenchTestCase`, which boots the workbench app. By default the tests run on Testbench's `testing` connection, SQLite in memory without foreign keys, so a cascade is asserted from the schema, or on a second in-memory SQLite connection with `foreign_key_constraints` on, migrated inside the test (`ConversationSlotTest` does both). The `database` group is what the MySQL, Postgres and MariaDB cells run; a case in it that needs foreign keys skips on SQLite.
 - Two requests at once are simulated in one process: the second one runs from a `DB::listen()` callback at the moment it would interleave (after the first one's query, outside its savepoint), as `ConversationSlotTest`'s `openAgainstAnotherTurn()` does. A model `creating` listener runs inside the first one's savepoint, whose rollback also removes the second one's row.
 - A test that needs laravel/ai calls `$this->skipUnlessAi()` first: the push cells run Unit and Feature without laravel/ai. Workbench tests always need it. A test that needs Passport calls `$this->skipUnlessPassport()`, or `$this->useOAuth()`, which skips too.
 - `useOAuth($config, $packages, $routes)` reloads the application with OAuth on as an app turns it on: Passport's keys as PEM strings made once per process, an `api` guard on the `passport` driver named after Sanctum's in `mcp.middleware`, `Mcp::oauthRoutes()` and a `login` route (`tests/Fixtures/OAuth/OAuthRoutes`). Pass config through it, never set before it: the reload drops it. `Flow::teams()` is the OAuth tests' environment, and `tests/Fixtures/OAuth/Flow` runs a client's way through the flow (register, authorize, approve, token, refresh, MCP calls).
@@ -96,7 +97,7 @@ Every new or changed test passes the test-audit skill's authoring gate (`.claude
 ## Gotchas found so far
 
 - **Scratch copies need their own `composer install`.** With `vendor/` symlinked from another checkout, the autoloader loads that checkout's `src/`, and Pest works out test class names from the wrong root: under a folder whose name starts with a digit it stops with `InvalidTestClassName`. A copy with its own install runs anywhere.
-- **Database cells** need MySQL 8 and Postgres running; nothing else in the suite needs a server.
+- **Database cells** need MySQL 8, Postgres 16 and MariaDB 11 running; nothing else in the suite needs a server.
 - **Octane.** Per-request state is a `scoped()` binding, and a listener that reads it resolves it with `app()` when the event fires, so it reads the request's container under Octane too. `ActionsProtocol` echoes and flushes each streamed part itself.
 - **Streaming** relies on `ActionsProtocol` sending `X-Accel-Buffering: no` and calling `ignore_user_abort(true)`, so rows arrive one tool at a time behind nginx and a closed tab still stores the turn (`bin/stream-probe` checks it).
 - **Route names.** Two `Actions::routes()` groups under one name prefix share the feed route's name, which `route:cache` refuses; give each group its own prefix.

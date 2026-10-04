@@ -1,0 +1,23 @@
+name: Feature request
+description: Something the package or the npm client could do that it does not do today.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you are trying to do in your app, and where the package stops you.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you propose
+      description: The change to the package, its API or its docs. A short example of the code you would write helps.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you tried instead
+      description: The workarounds or other approaches you considered.
