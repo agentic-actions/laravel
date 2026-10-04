@@ -4,7 +4,15 @@ An agent built on your actions can run inside the page the person is using. Whil
 
 The package gives you the parts: a stream protocol for laravel/ai, a reader for the request, the transcript for a reload, a conversation per tenant, and the client helpers. It ships no chat endpoint and no agent. You write one route, as below.
 
-You need laravel/ai 1.x and its conversation tables: `php artisan actions:install --copilot` publishes them and asks before it migrates ([setup](setup.md#what-each-feature-needs)). The browser side uses the [AI SDK](https://ai-sdk.dev)'s `ai` 7 package through `@agentic-actions/client/ai-sdk`, and `useChat` from `@ai-sdk/react` if you build the panel in React. `#[WithPageContext]` and `@agentic-actions/client/react` need Inertia.
+You need laravel/ai 1.x and its conversation tables: `php artisan actions:install --copilot` publishes them and asks before it migrates ([setup](setup.md#what-each-feature-needs)). Set laravel/ai's default provider in `config/ai.php` and its key in `.env`, such as `OPENAI_API_KEY` (see laravel/ai's [configuration](https://laravel.com/docs/ai-sdk#configuration)). When the provider fails a turn, the person sees one fixed sentence, and the provider's own error goes to your exception handler ([the stream](#the-stream)).
+
+The browser side uses the [AI SDK](https://ai-sdk.dev)'s `ai` 7 package through `@agentic-actions/client/ai-sdk`, and `useChat` from `@ai-sdk/react` 4, the line built on `ai` 7, if you build the panel in React. Install them beside the client itself ([setup](setup.md#what-the-package-requires)):
+
+```bash
+npm install ai@^7 @ai-sdk/react@^4
+```
+
+Two parts need Inertia: [page context](#page-context) (`#[WithPageContext]` on the agent, with the `HasMiddleware` and `middleware()` that carry it) and `@agentic-actions/client/react`, which also takes React 19 and `@inertiajs/react` 3. Without Inertia, leave those three off the agent below, and read the stream as [without React](#without-react) shows.
 
 ## The server
 
@@ -53,6 +61,8 @@ final class BlogAssistant implements Agent, Conversational, HasMiddleware, HasTo
     }
 }
 ```
+
+`InteractsWithActions` supplies `tools()`, and `RemembersConversations` supplies `messages()`. `php artisan make:agent` writes its class to `App\Ai\Agents` (the package finds an agent anywhere under `discovery.paths`, `app` by default) with its own `tools()` and `messages()`, both returning `[]`. If you start from it, delete those two methods: a method the class declares takes the place of the trait's, so the agent would run with no action tools and no history. To add tools of your own, spread `actionTools()` into your `tools()`, as [hand-written tools](#hand-written-tools) shows.
 
 The route, in `routes/web.php`:
 
@@ -159,7 +169,7 @@ To record spend or anything else per turn, use laravel/ai's `then()` (on success
 
 ### Reloading the chat
 
-The browser keeps the chat only until the page reloads. The page's controller passes the stored words back:
+The browser keeps the chat only until the page reloads. The page's controller passes the stored words back (for a panel in a persistent layout, share them instead, as in [the transcript in a layout](#the-transcript-in-a-layout)):
 
 ```php
 use AgenticActions\Streaming\Transcript;
@@ -260,6 +270,58 @@ Things `useChat` does that the recipe depends on:
 - It always posts JSON, so files go through your own upload path.
 - Leave `resume: true` off. Resuming needs a stream buffer the server does not keep.
 - The recipe has no regenerate or edit control, and the transport refuses both before any request, because the server keeps the history. `useChat` trims its own list before it calls the transport, so after a refused regenerate or edit the browser shows less than the server keeps until the page reloads from the transcript.
+
+### The transcript in a layout
+
+A layout has no controller of its own, so it reads the transcript from the props every page shares. Build it in `HandleInertiaRequests` from the same conversation the route continues:
+
+```php
+// app/Http/Middleware/HandleInertiaRequests.php
+use AgenticActions\Streaming\Transcript;
+use App\Ai\BlogAssistant;
+use Illuminate\Http\Request;
+
+public function share(Request $request): array
+{
+    return [
+        ...parent::share($request),
+        'transcript' => function () use ($request): array {
+            $user = $request->user();
+
+            if ($user === null) {
+                return [];
+            }
+
+            $conversationId = (new BlogAssistant($user))->continueLastConversation($user)->currentConversation();
+
+            return $conversationId === null ? [] : Transcript::forUseChat($conversationId, $user);
+        },
+    ];
+}
+```
+
+With tenants, read the id from `Actions::conversation()` for the page's tenant instead, as in [one conversation per tenant](#one-conversation-per-tenant). The layout hands the prop to the panel, with the change feed's URL when you share it ([writes made elsewhere](#writes-made-elsewhere)):
+
+```tsx
+// resources/js/layouts/app-layout.tsx
+import type { ReactNode } from 'react';
+import { usePage } from '@inertiajs/react';
+import type { ActionMessage } from '@agentic-actions/client/ai-sdk';
+import { AssistantPanel } from '../components/assistant-panel';
+
+export default function AppLayout({ children }: { children: ReactNode }) {
+    const { transcript, actionsFeed } = usePage<{ transcript: ActionMessage[]; actionsFeed: string | null }>().props;
+
+    return (
+        <>
+            <main>{children}</main>
+            <AssistantPanel transcript={transcript} feedUrl={actionsFeed} key={actionsFeed ?? 'none'} />
+        </>
+    );
+}
+```
+
+The panel creates its `Chat` once, when it mounts, so only the transcript of the page the person lands on seeds it. Later visits keep the chat the browser holds. A panel that remounts, as the `key` makes it do when the feed URL changes after switching tenants, seeds again from the transcript of the page it remounts on.
 
 ## Confirmations
 
@@ -473,17 +535,14 @@ A write made over MCP, by a queued job, by someone else in the same tenant or in
 
 ```php
 // app/Http/Middleware/HandleInertiaRequests.php, share()
-'actionsFeed' => fn (): ?string => $request->user() === null ? null
-    : route('actions._changes', ['tenant' => $request->route('tenant')]),
+'actionsFeed' => fn (): ?string => match (true) {
+    $request->user() === null => null,
+    $request->route('team') !== null => route('teams.actions._changes', ['team' => $request->route('team')]),
+    default => route('actions._changes'),
+},
 ```
 
-Use the name and parameter of the group your pages belong to: on a group without a tenant, the route takes no parameter. The panel above receives it as `feedUrl`:
-
-```tsx
-const { actionsFeed } = usePage<{ actionsFeed: string | null }>().props;
-
-<AssistantPanel transcript={transcript} feedUrl={actionsFeed} key={actionsFeed ?? 'none'} />
-```
+The route's name is the group's name prefix, then `routes.name` (`actions.`), then `_changes`. With the two groups of [tenants](concepts.md#tenants) (`teams/{team}` named `teams.`, with `tenant.parameter` set to `team`), a team's pages poll `teams.actions._changes`, which takes the `team` parameter, and every other page polls `actions._changes`, which takes none. Use the names of your own groups. The [layout](#the-transcript-in-a-layout) hands the URL to the panel as `feedUrl`.
 
 A polled touch goes through the same path as a done row: one reload 150 ms later, held while an editor is dirty or `blocked` is true, and it applies with `when: 'turn'` too, since no turn will flush it. The feed option is read when the hook mounts, so a panel whose feed URL changes, such as after switching tenants, remounts with a `key`, as above.
 
