@@ -4,6 +4,10 @@
 
 The demo's copilot follows a script. The actions it runs are real.
 
+A four-minute walkthrough on YouTube: Claude adds a task to the demo over MCP, the copilot runs the board's actions, and the docs show the class behind them.
+
+[![The walkthrough video's thumbnail: "ONE CLASS, EVERY AI AGENT" beside the presenter, and a Claude prompt asking to use create-task from a Laravel app. It opens the video on YouTube.](https://i.ytimg.com/vi/M0ApSIw9fJM/maxresdefault.jpg)](https://youtu.be/M0ApSIw9fJM)
+
 <!-- #region getting-started -->
 > **Beta.** 0.9.0-beta.4 is the current release. The API can still change before 1.0: [the changelog](https://github.com/agentic-actions/laravel/blob/main/CHANGELOG.md) lists every change and how to upgrade.
 
