@@ -803,7 +803,7 @@ final class Checks
 
             $class = $subject['entry']->class;
 
-            if ($subject['timing'] !== AuthorizeTiming::Late) {
+            if (! $subject['timing']->takesInput()) {
                 foreach ($this->forbidden->idShaped($this->advertisedNode($subject['action'])) as $path) {
                     $findings[] = self::fail('Ids', "{$class}: agents are offered [{$path}], which looks like an id, and authorize() does not take ValidatedInput, so the record is never checked before handle(). Check it in authorize(ActionContext \$context, ValidatedInput \$input), or follow ".self::RECIPE.': agentSchema() plus fromAgent().');
                 }
@@ -844,7 +844,7 @@ final class Checks
                 $findings[] = self::fail('Summary', $offered.'approvalSummary() is not written, so the card cannot say what the call acts on. Build it from the validated input and the record authorize() allowed (https://agentic-actions.com/copilot#confirmations).');
             }
 
-            if ($subject['timing'] !== AuthorizeTiming::Late) {
+            if (! $subject['timing']->takesInput()) {
                 $findings[] = self::fail('Summary', $offered.'authorize() does not take ValidatedInput, so the card could show a record the person may not read. Check it in authorize(ActionContext $context, ValidatedInput $input).');
             }
         }
@@ -890,7 +890,7 @@ final class Checks
                 && self::overrides($reflection, 'fromAgent')
                 && $subject['timing'] === AuthorizeTiming::Late
                 && ! self::overrides($reflection, 'shouldRegister')) {
-                $findings[] = self::fail('Order', "{$subject['entry']->class}: fromAgent() runs before authorize(), which takes ValidatedInput, and shouldRegister() is not overridden, so any caller who reaches the tool runs fromAgent() unchecked. Override shouldRegister(), or check the actor in an input-free authorize().");
+                $findings[] = self::fail('Order', "{$subject['entry']->class}: fromAgent() runs before authorize(), which takes ValidatedInput, and shouldRegister() is not overridden, so any caller who reaches the tool runs fromAgent() unchecked. Override shouldRegister(), or let authorize() take ?ValidatedInput \$input = null, so it also runs before the input.");
             }
         }
 

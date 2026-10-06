@@ -35,6 +35,7 @@ use Tests\Fixtures\Checks\IdEarlyAuthorize;
 use Tests\Fixtures\Checks\IdScopedExists;
 use Tests\Fixtures\Checks\IdUnscopedExists;
 use Tests\Fixtures\Checks\OrderWithoutShouldRegister;
+use Tests\Fixtures\Checks\OrderWithTwoStepAuthorize;
 use Tests\Fixtures\Checks\RulesNeedActor;
 use Tests\Fixtures\Checks\RulesOnlyAgentKey;
 use Tests\Fixtures\Checks\TenantKeyInSchema;
@@ -465,8 +466,12 @@ describe('agent rows', function () {
 
     it('fails fromAgent() in front of an input-taking authorize() without shouldRegister()', function () {
         expect(inRow(findingsFor([OrderWithoutShouldRegister::class]), 'Order'))->toBe([
-            ['fail', 'Order', OrderWithoutShouldRegister::class.': fromAgent() runs before authorize(), which takes ValidatedInput, and shouldRegister() is not overridden, so any caller who reaches the tool runs fromAgent() unchecked. Override shouldRegister(), or check the actor in an input-free authorize().'],
+            ['fail', 'Order', OrderWithoutShouldRegister::class.': fromAgent() runs before authorize(), which takes ValidatedInput, and shouldRegister() is not overridden, so any caller who reaches the tool runs fromAgent() unchecked. Override shouldRegister(), or let authorize() take ?ValidatedInput $input = null, so it also runs before the input.'],
         ]);
+    });
+
+    it('passes fromAgent() in front of an authorize() whose input may be null: it also runs before the input', function () {
+        expect(inRow(findingsFor([OrderWithTwoStepAuthorize::class]), 'Order'))->toBe([]);
     });
 
     it('fails a file field offered to agents', function () {

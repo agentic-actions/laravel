@@ -113,6 +113,7 @@ final class ListCommand extends Command
         $this->detail('authorize', match (Authorizer::timing($entry->action())) {
             AuthorizeTiming::Early => 'before input',
             AuthorizeTiming::Late => 'after validation',
+            AuthorizeTiming::Both => 'before input and after validation',
             AuthorizeTiming::Missing => 'missing: denied everywhere',
         });
 
