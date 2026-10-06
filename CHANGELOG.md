@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Upgrading
+
+- An `authorize()` whose `ValidatedInput` is nullable (`?ValidatedInput $input` or `ValidatedInput $input = null`) is now also called before the input is read, with null, including when an agent's or MCP client's tool list is built. If yours assumed the input is always there, check `$input === null` first, or make the parameter required (`ValidatedInput $input`) to keep it running after validation only.
+
 ### Added
 
 - **An `authorize()` whose `ValidatedInput` may be null runs before and after the input.** `authorize(ActionContext $context, ?ValidatedInput $input = null)` is called first before any input is read, with null (so the tool list of an agent or MCP client leaves the action out for a person it refuses), then after validation with the input. Until now an `authorize()` that took input ran only on the call, so an action that checked a role and a record in one `authorize()` was listed to people it would always refuse. `actions:list` shows the timing, and `actions:check`'s Order row passes such an action without `shouldRegister()`. An `authorize()` whose `ValidatedInput` is required runs as before.
