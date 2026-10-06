@@ -38,6 +38,7 @@ The package reads these as the class's declared defaults, through reflection, wi
 | `activityLabel(ActionContext $context, bool $finished)` | The copilot row's label while the call runs and after it succeeded. Null means the package's label for the effect. |
 | `approvalReason(ActionContext $context)` | The one sentence on the card a person confirms before an agent's Destructive or External call runs. Null means the package's sentence for the effect. See [offer the action](copilot.md#offer-the-action). |
 | `approvalSummary(ActionContext $context, ValidatedInput $input)` | The rows that card shows, as label => value, built from the validated input that will run. At most 8. |
+| `approvalBinding(ActionContext $context, ValidatedInput $input)` | What the person confirms without reading it on the card (a whole body, every recipient): never shown, but a change before the run refuses the call. |
 | `ask(Ask $ask, ActionContext $context)` | What the form says beyond `schema()` when `$askForMissing` asks the person: its sentence, choices, defaults. See [the `Ask` builder](asking.md#the-ask-builder). |
 
 `run()`, `dispatch()` and `__invoke()` are final. A class that also uses a trait defining any of them fails to load.
