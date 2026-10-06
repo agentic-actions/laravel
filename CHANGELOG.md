@@ -28,6 +28,7 @@
 
 - Two new recipes: File uploads, a CSV taken by an action from `schema()` through a Blade form, `callAction()` with a `File` and a token client, and why agents and MCP clients never get the field; and Your own jobs, which runs an action for each line of that file with `run()` and `ActionContext::http($user, $tenant)`, with what each call checks and what it does not, and when `dispatch()` or `ActionContext::system()` fits instead.
 - Concepts says `ActionContext::console()`, `mcp()` and `queued()` are internal. Security says a job of your own keeps neither the token limits nor the model origin of whoever queued it, and Troubleshooting names every caller that takes a file.
+- The Boost guideline and skill give agents both answers: a job of your own that loops over work calls `run()` with `ActionContext::http($user, $tenant)`, never the internal `ActionContext::queued()`, and a file upload is a `binary` field on an action exposed with `#[Expose(web: true)]`. The skill links the two recipes.
 
 ## 0.9.0-beta.3 - 2026-10-04
 
