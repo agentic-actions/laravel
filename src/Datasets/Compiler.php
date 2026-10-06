@@ -190,11 +190,12 @@ final class Compiler
         }
 
         foreach ($inputs as $measure) {
-            [$where, $value] = $measure->condition() ?? [null, null];
+            [$where, $operator, $value] = $measure->condition() ?? [null, '=', null];
             $input = $measure->column === null ? '1' : $grammar->wrap($column($measure->column));
 
             match (true) {
-                $where !== null => $query->selectRaw('case when '.$grammar->wrap($column($where))." = ? then {$input} end as aa_m_{$measure->name}", [$value]),
+                $where !== null && $value === null => $query->selectRaw('case when '.$grammar->wrap($column($where)).($operator === '=' ? ' is null' : ' is not null')." then {$input} end as aa_m_{$measure->name}"),
+                $where !== null => $query->selectRaw('case when '.$grammar->wrap($column($where))." {$operator} ? then {$input} end as aa_m_{$measure->name}", [$value]),
                 $measure->column !== null => $query->addSelect($column($measure->column)." as aa_m_{$measure->name}"),
                 default => null,
             };
