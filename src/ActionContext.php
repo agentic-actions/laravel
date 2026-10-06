@@ -99,7 +99,8 @@ final class ActionContext
     /**
      * The context of the action running now, for code it calls that is not handed the context, such as a model event,
      * an observer or a service: its surface (who drove the call: the web, an agent, MCP, the CLI, a queued run), its
-     * actor and its tenant. Inside a nested run it is the innermost one; null outside any run.
+     * actor and its tenant. Inside a nested run it is the innermost one; null outside any run, which never means an
+     * unrestricted caller. An action's own methods use the context they are handed.
      */
     public static function current(): ?self
     {

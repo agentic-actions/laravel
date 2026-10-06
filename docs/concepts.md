@@ -197,15 +197,22 @@ The context is immutable: each `with…()` method returns a new one. Its other m
 | `ip`, `userAgent` | The request's, from `fromRequest()`; null elsewhere. |
 | `action` | The running action's name, on the context the pipeline hands your action's methods. |
 
-Code an action calls without handing it the context, such as a model event, an observer or a service, reads it with `ActionContext::current()`: the context of the action running now (the innermost one inside a nested run), or null outside any run. A change log, for example, can record who made a change and from which surface:
+Code an action calls without handing it the context, such as a model event, an observer or a service, reads it with `ActionContext::current()`: the context of the action running now (the innermost one inside a nested run), or null outside any run. The action itself keeps using the `$context` each of its methods is handed. A change log, for example, can record who made a change, from which surface, and whether a model drove it:
 
 ```php
 Post::updated(function (Post $post) {
     $context = ActionContext::current();
 
-    Audit::record($post, by: $context?->actor, via: $context?->surface->value ?? 'outside an action');
+    Audit::record(
+        $post,
+        by: $context?->actor,
+        via: $context?->surface->value ?? 'outside an action',
+        modelDriven: $context?->isModelDriven() ?? false,
+    );
 });
 ```
+
+`current()` answers for the moment your code runs. A listener that waits for a commit or the queue, and deferred code such as a `DB::afterCommit()` or `defer()` callback, can run after their call has ended and see an outer action's context or null; the package's [events](#events) carry their own call's surface, actor and tenant. Listing actions for an agent or an MCP client sets it too, while each action's `shouldRegister()` and `authorize()` run, though no call is made. Null means only that no action is running, never that the caller is unrestricted: code outside every action, such as a seeder or a scheduled task, sees null too, so never lift a check or a scope because `current()` is null.
 
 ## Surfaces
 
