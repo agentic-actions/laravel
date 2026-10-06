@@ -12,13 +12,15 @@ use RuntimeException;
 
 /**
  * Remembers ActionContext::current() while it runs, as a model event or a service it calls would read it; with
- * nested, runs ForgetContext inside itself, and remembers the context again after it.
+ * nested, runs ForgetContext inside itself, and remembers the context again after it; with throws, remembers it in
+ * prepareForValidation() and throws there: unlike an exception from handle(), which the run turns into its outcome,
+ * this one propagates out of the run's scope.
  */
 #[Expose]
 final class RememberContext extends Action
 {
     /**
-     * What ActionContext::current() read: before a nested run, inside it, and after it.
+     * What ActionContext::current() read: before a nested run, inside it, and after it, or before throwing.
      *
      * @var list<ActionContext|null>
      */
@@ -48,6 +50,20 @@ final class RememberContext extends Action
     }
 
     /**
+     * Read the current context and throw, when asked.
+     */
+    public function prepareForValidation(array $input, ActionContext $context): array
+    {
+        if (($input['throws'] ?? false) === true) {
+            self::$seen[] = ActionContext::current();
+
+            throw new RuntimeException('Broken.');
+        }
+
+        return $input;
+    }
+
+    /**
      * Read the current context, around a nested run when asked.
      */
     public function handle(ActionContext $context, ValidatedInput $input): mixed
@@ -57,10 +73,6 @@ final class RememberContext extends Action
         if ($input->boolean('nested')) {
             ForgetContext::run([], ActionContext::system());
             self::$seen[] = ActionContext::current();
-        }
-
-        if ($input->boolean('throws')) {
-            throw new RuntimeException('Broken.');
         }
 
         return null;
