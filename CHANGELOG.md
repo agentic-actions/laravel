@@ -10,6 +10,10 @@
 
 - **An `authorize()` whose `ValidatedInput` may be null runs before and after the input.** `authorize(ActionContext $context, ?ValidatedInput $input = null)` is called first before any input is read, with null (so the tool list of an agent or MCP client leaves the action out for a person it refuses), then after validation with the input. Until now an `authorize()` that took input ran only on the call, so an action that checked a role and a record in one `authorize()` was listed to people it would always refuse. `actions:list` shows the timing, and `actions:check`'s Order row passes such an action without `shouldRegister()`. An `authorize()` whose `ValidatedInput` is required runs as before.
 
+### Fixed
+
+- **An `authorize()` input typed with a subclass of `ValidatedInput` fails closed.** The input is passed by the parameter's name, so a parameter such as `?PostInput $input = null` fails the call with a `TypeError` instead of ever receiving its default null after validation. Type it `ValidatedInput`, or `?ValidatedInput` to run before and after the input.
+
 ## 0.9.0-beta.3 - 2026-10-04
 
 The npm client installed from the Composer package brings no packages of its own, the installer and `actions:check` point at agentic-actions.com and catch two wiring mistakes, and the documentation was rewritten after readers followed it in fresh apps.
