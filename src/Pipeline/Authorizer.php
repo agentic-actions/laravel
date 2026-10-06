@@ -11,6 +11,7 @@ use Illuminate\Support\ValidatedInput;
 use ReflectionMethod;
 use ReflectionNamedType;
 use ReflectionParameter;
+use ReflectionUnionType;
 
 /**
  * Calls an action's authorize() and reads its answer.
@@ -73,18 +74,32 @@ final class Authorizer
     }
 
     /**
-     * The authorize() parameter typed ValidatedInput or a subclass of it, or null when it has none.
+     * The authorize() parameter the input goes to, or null when it has none: one whose declared type, alone or in a
+     * union, is ValidatedInput, a subclass of it (the call then fails its type), or a class or interface ValidatedInput
+     * is, such as the ValidatedData contract. A parameter typed with that contract is read as taking the input, so it
+     * receives it after validation instead of only ever its default null.
      */
     private static function inputParameter(Action $action): ?ReflectionParameter
     {
         foreach ((new ReflectionMethod($action, 'authorize'))->getParameters() as $parameter) {
             $type = $parameter->getType();
+            $types = $type instanceof ReflectionUnionType ? $type->getTypes() : [$type];
 
-            if ($type instanceof ReflectionNamedType && is_a($type->getName(), ValidatedInput::class, true)) {
-                return $parameter;
+            foreach ($types as $member) {
+                if ($member instanceof ReflectionNamedType && ! $member->isBuiltin() && self::takesInput($member->getName())) {
+                    return $parameter;
+                }
             }
         }
 
         return null;
+    }
+
+    /**
+     * Whether a declared class or interface is ValidatedInput, a subclass of it, or one ValidatedInput is.
+     */
+    private static function takesInput(string $type): bool
+    {
+        return is_a($type, ValidatedInput::class, true) || is_a(ValidatedInput::class, $type, true);
     }
 }

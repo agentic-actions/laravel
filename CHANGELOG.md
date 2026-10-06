@@ -5,6 +5,7 @@
 ### Upgrading
 
 - An `authorize()` whose `ValidatedInput` is nullable (`?ValidatedInput $input` or `ValidatedInput $input = null`) is now also called before the input is read, with null, including when an agent's or MCP client's tool list is built. If yours assumed the input is always there, make that call check the caller: while `$input` is null, refuse everyone who may not use the action, as a role or permission check does, and check the record once the input is there. Returning true for a null input checks no one: every caller the earlier steps let through then sees the tool and, on an action with `agentSchema()`, reaches `fromAgent()`, which `actions:check`'s Order row no longer reports. Or make the parameter required (`ValidatedInput $input`) to keep it running after validation only.
+- An `authorize()` whose input is typed with a subclass of `ValidatedInput` (`?PostInput $input = null`) now fails every call with a `TypeError`, where 0.9.0-beta.3 ran it after validation with null. Type the parameter `ValidatedInput`, or a contract it implements such as `ValidatedData`.
 
 ### Added
 
@@ -13,6 +14,7 @@
 ### Fixed
 
 - **An `authorize()` input typed with a subclass of `ValidatedInput` fails closed.** The input is passed by the parameter's name, so a parameter such as `?PostInput $input = null` fails the call with a `TypeError` instead of ever receiving its default null after validation. Type it `ValidatedInput`, or `?ValidatedInput` to run before and after the input.
+- **An `authorize()` input typed with a contract `ValidatedInput` implements, or a union that holds it, gets the input.** `?ValidatedData $input = null` or `ValidatedInput|array|null $input = null` was read as taking no input, so it ran once before validation with null and never saw the record. It now runs before and after the input, as `?ValidatedInput` does.
 
 ## 0.9.0-beta.3 - 2026-10-04
 
