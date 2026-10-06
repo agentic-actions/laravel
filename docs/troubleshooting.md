@@ -221,7 +221,7 @@ Before each turn, every action in the agent's toolsets runs the first five steps
 
 - the action names another toolset, or a Destructive or External action has a bare `#[Expose]`, which offers it to no agent until `#[Expose(agents: [...])]` names a toolset;
 - a Destructive or External action, offered to an agent that cannot wait for a confirmation: one without `Conversational` and `RemembersConversations`, or one run without a conversation participant (`forUser()` or `continueLastConversation()`);
-- an `authorize()` without input that says no for this person;
+- an `authorize()` without input that says no for this person, or one whose `ValidatedInput` may be null that says no when called with null;
 - a forbidden key. Locally and in tests this throws:
 
 ```text

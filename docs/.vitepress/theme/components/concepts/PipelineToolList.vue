@@ -30,7 +30,7 @@ import ListRow from '../diagrams/ListRow.vue'
     <Window title="The agent's tools this turn">
       <ListRow mono tone="pass" label="create-post" status="offered" />
       <ListRow mono tone="pass" label="list-posts" status="offered" />
-      <ListRow mono tone="pass" label="update-post" detail="authorize() takes input: it runs at the call" status="offered" />
+      <ListRow mono tone="pass" label="update-post" detail="authorize() requires input: it runs at the call" status="offered" />
       <ListRow mono tone="refuse" label="publish-post" detail="authorize() said no" status="left out" />
       <ListRow mono tone="refuse" label="import-posts" detail="shouldRegister() said no" status="left out" />
     </Window>

@@ -80,7 +80,7 @@ The fields the model left out or got wrong, plus the ones `confirm()` names, in 
 
 A nullable field is optional in the form. A call that also leaves out a field the form cannot hold is refused whole, naming the fields, as before, so the model asks in words: the person is never asked half of what the call needs. A complete call runs at once; `confirm()` adds fields to a form the call already needs and never makes a complete call wait.
 
-Nobody is asked for an action they may not reach. The tenant, the token and your input-free `authorize()` are checked before any form is built, and an `authorize()` that takes `ValidatedInput` runs when the action runs. With an `authorize()` that takes `ValidatedInput`, the form, and the choices and defaults `ask()` puts in it, is therefore shown before that check, to a person it may still refuse: build `ask()` only from what every person who can reach the action may see.
+Nobody is asked for an action they may not reach. The tenant, the token and your input-free `authorize()` are checked before any form is built, as is an `authorize()` whose `ValidatedInput` may be null, called with null; an `authorize()` that takes `ValidatedInput` sees the input only when the action runs. With an `authorize()` that takes `ValidatedInput`, the form, and the choices and defaults `ask()` puts in it, is therefore shown before it checks the input, to a person it may still refuse: build `ask()` only from what every person who can reach the action may see.
 
 A field's label is its schema `title()`, read in the person's locale. Without one, the form shows the key as a headline (`due_on` becomes "Due On"), so give every field a title in an app that is not in English.
 
