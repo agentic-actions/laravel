@@ -944,8 +944,8 @@ final class Checks
 
     /**
      * Tables & datasets: a table's columns() the package cannot show (a key that is not snake case or comes twice, a
-     * currency that is not ISO 4217, decimals out of range, no column), and a ShowsTable action that is not a Read,
-     * which shows no table.
+     * currency that is not ISO 4217, decimals out of range, no column) or that throws otherwise, such as a dataset's
+     * measure whose where() PHP refuses, and a ShowsTable action that is not a Read, which shows no table.
      *
      * @param  list<Subject>  $subjects
      * @return list<Finding>
@@ -971,6 +971,9 @@ final class Checks
                 Table::columns($subject['action']);
             } catch (InvalidArgumentException $exception) {
                 $findings[] = self::fail('Tables & datasets', $exception->getMessage());
+            } catch (Throwable $exception) {
+                // Table::columns() names the class in its own refusals only.
+                $findings[] = self::fail('Tables & datasets', "{$entry->class}: ".Str::finish($exception->getMessage(), '.'));
             }
         }
 
@@ -1575,7 +1578,7 @@ final class Checks
     {
         try {
             return $this->reader->output($subject['action']);
-        } catch (InvalidArgumentException $exception) {
+        } catch (Throwable $exception) {
             return $subject['entry']->shows() ? [] : throw $exception;
         }
     }

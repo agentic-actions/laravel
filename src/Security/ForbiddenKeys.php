@@ -14,7 +14,7 @@ use Illuminate\Routing\Route as RoutingRoute;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
-use InvalidArgumentException;
+use Throwable;
 
 /**
  * Keys an agent may never be offered, at any depth of its advertised input.
@@ -91,27 +91,27 @@ final class ForbiddenKeys
     }
 
     /**
-     * Whether the catalog may offer the entry: no forbidden input or output key and no binary field. In tests and
-     * locally a violation throws MisconfiguredExposure; elsewhere it is reported at most once an hour per class and
-     * the tool is left out.
+     * Whether the catalog may offer the entry: schemas it can read, no forbidden input or output key and no binary
+     * field. In tests and locally a violation throws MisconfiguredExposure; elsewhere it is reported at most once an
+     * hour per class and the tool is left out, so one entry never takes the others with it.
      */
     public function advertisable(Entry $entry, ActionContext $context): bool
     {
         $action = $entry->action();
-        $input = app(AdvertisedSchema::class)->node($action, $context);
-        $violations = [];
+        [$input, $output, $read, $violations] = [[], [], [], []];
+
+        try {
+            $input = app(AdvertisedSchema::class)->node($action, $context);
+            $output = app(SchemaReader::class)->output($action);
+            $read = $action instanceof Dataset ? $action->columnsRead() : [];
+        } catch (Throwable $exception) {
+            // A declaration that throws, such as a dataset's measures() or a table's columns(), leaves this tool out
+            // alone; actions:check names it.
+            $violations[] = "{$entry->class}: agents cannot be offered it: ".Str::finish($exception->getMessage(), '.').' The tool is left out.';
+        }
 
         foreach ($this->inputReasons($input, $this->routesOf($entry->class)) as $path => $reason) {
             $violations[] = "{$entry->class}: agents cannot be offered input [{$path}]: it {$reason}. The tool is left out. Remove the key from schema(), or follow ".self::RECIPE.': agentSchema() plus fromAgent().';
-        }
-
-        try {
-            $output = app(SchemaReader::class)->output($action);
-            $read = $action instanceof Dataset ? $action->columnsRead() : [];
-        } catch (InvalidArgumentException $exception) {
-            // A table whose columns() cannot be shown is left out alone; actions:check names it.
-            [$output, $read] = [[], []];
-            $violations[] = "{$entry->class}: agents cannot be offered it: ".$exception->getMessage().' The tool is left out.';
         }
 
         // A table's own keys (columns, label, chart…) are the package's; only its columns are data.
