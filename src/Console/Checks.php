@@ -85,9 +85,14 @@ use Throwable;
 final class Checks
 {
     /**
-     * The recipe every finding about agent input names.
+     * The recipe the findings about agent input name, except the one about a file field.
      */
     private const RECIPE = 'the "Strict agent schemas (no ids)" recipe (https://agentic-actions.com/recipes#strict-agent-schemas-no-ids)';
+
+    /**
+     * The recipe a finding about a file field names.
+     */
+    private const UPLOADS = 'the "File uploads" recipe (https://agentic-actions.com/recipes#file-uploads)';
 
     /**
      * Create the checks.
@@ -898,7 +903,7 @@ final class Checks
     }
 
     /**
-     * Schema: a schema the rule compiler refuses, and a file field offered to agents.
+     * Schema: a schema the rule compiler refuses, and a file field in an action agents are offered.
      *
      * @param  list<Subject>  $subjects
      * @return list<Finding>
@@ -934,8 +939,9 @@ final class Checks
                 continue;
             }
 
-            foreach (self::binaryPaths($this->advertisedNode($subject['action'])) as $path) {
-                $findings[] = self::fail('Schema', "{$class}: agents cannot send the file field [{$path}]. Give agents an agentSchema() without it, following ".self::RECIPE.'.');
+            // A model's call is validated against schema() too, so a file there counts whatever agentSchema() offers.
+            foreach (array_unique([...self::binaryPaths($input), ...self::binaryPaths($this->advertisedNode($subject['action']))]) as $path) {
+                $findings[] = self::fail('Schema', "{$class}: agents cannot send the file field [{$path}]. Keep the action on the web with #[Expose(web: true)], and give agents another action without the file, following ".self::UPLOADS.'.');
             }
         }
 

@@ -116,9 +116,9 @@ App\Actions\CreatePost: [tags] anyOf is not supported: declare one type, or let 
 - `a union of string and integer is not supported: declare one type, or let rules() own the key`;
 - `format hostname is not supported`: the formats that work are `email`, `uri`, `url`, `uuid`, `date`, `date-time`, `time`, `ipv4` and `ipv6`;
 - `pattern lookaround (?= is not supported` (also `(?!`, `(?<=` and `(?<!`);
-- `format binary (a file) is accepted on HTTP only`: a file field works only on the `Http` surface: a multipart upload to the action's route, or your own code's call with `ActionContext::http()`. `actions:run`, a queued run and `ActionContext::system()` fail on it, and agents are never offered it ([file uploads](recipes.md#file-uploads)).
+- `format binary (a file) is accepted on HTTP only`: a file field works only on the `Http` surface: a multipart upload to the action's route, or your own code's call with `ActionContext::http()`. A call from `actions:run`, a queued run or `ActionContext::system()` fails on it once it reaches validation, and agents and MCP clients are never offered an action whose `schema()` holds one ([file uploads](recipes.md#file-uploads)).
 
-It is thrown when the action is called, so the call fails as a crash. `actions:check` finds it first, in its Schema row, with `schema()` or `agentSchema()` before the message. Fix: declare one type. For a top-level key that must take several types, give it rules in `rules()` too: the package then leaves its type to those rules. For a format or pattern the package cannot compile, drop it from `schema()` and put the rule in `rules()`. For a file, give agents an `agentSchema()` without the file field ([strict agent schemas](recipes.md#strict-agent-schemas-no-ids)).
+It is thrown when the action is called, so the call fails as a crash. `actions:check` finds the other reasons first, in its Schema row, with `schema()` or `agentSchema()` before the message. A file field in `schema()` passes that row, since `actions:check` compiles `schema()` as the web does: the row fails a file field only in `agentSchema()`, with this message, or in an action whose `#[Expose]` opens agents or MCP, with `agents cannot send the file field`. So a file field on an action you only run from the CLI, the queue or `ActionContext::system()` shows up when it is called. Fix: declare one type. For a top-level key that must take several types, give it rules in `rules()` too: the package then leaves its type to those rules. For a format or pattern the package cannot compile, drop it from `schema()` and put the rule in `rules()`. For a file, call the action on the web or with `ActionContext::http()`, and give agents another action without the file ([file uploads](recipes.md#file-uploads)).
 
 ### ReadActionWrote
 
@@ -222,6 +222,7 @@ Before each turn, every action in the agent's toolsets runs the first five steps
 - the action names another toolset, or a Destructive or External action has a bare `#[Expose]`, which offers it to no agent until `#[Expose(agents: [...])]` names a toolset;
 - a Destructive or External action, offered to an agent that cannot wait for a confirmation: one without `Conversational` and `RemembersConversations`, or one run without a conversation participant (`forUser()` or `continueLastConversation()`);
 - an `authorize()` without input that says no for this person, or one whose `ValidatedInput` may be null that says no when called with null;
+- a file field in `schema()`, even behind an `agentSchema()` without it, since a model cannot send a file ([file uploads](recipes.md#file-uploads)). It throws as a forbidden key does, with `agents cannot send the file field`;
 - a forbidden key. Locally and in tests this throws:
 
 ```text

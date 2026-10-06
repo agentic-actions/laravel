@@ -29,6 +29,7 @@ use Tests\Fixtures\Ai\ParentToolsAgent;
 use Tests\Fixtures\Ai\TraitlessToolsetAgent;
 use Tests\Fixtures\Authorize\TwoStepAuthorize;
 use Tests\Fixtures\Checks\EmptyRequiredOutput;
+use Tests\Fixtures\Checks\FileBehindAgentSchema;
 use Tests\Fixtures\Checks\FileForAgents;
 use Tests\Fixtures\Checks\ForbiddenSecret;
 use Tests\Fixtures\Checks\HttpOnlyAttributes;
@@ -479,11 +480,14 @@ describe('agent rows', function () {
         expect(inRow(findingsFor([OrderWithTwoStepAuthorize::class]), 'Order'))->toBe([]);
     });
 
-    it('fails a file field offered to agents', function () {
-        expect(inRow(findingsFor([FileForAgents::class]), 'Schema'))->toBe([
-            ['fail', 'Schema', FileForAgents::class.': agents cannot send the file field [attachment]. Give agents an agentSchema() without it, following the "Strict agent schemas (no ids)" recipe (https://agentic-actions.com/recipes#strict-agent-schemas-no-ids).'],
+    it('fails a file field in an action agents are offered, also behind an agentSchema() without it', function (string $class) {
+        expect(inRow(findingsFor([$class]), 'Schema'))->toBe([
+            ['fail', 'Schema', $class.': agents cannot send the file field [attachment]. Keep the action on the web with #[Expose(web: true)], and give agents another action without the file, following the "File uploads" recipe (https://agentic-actions.com/recipes#file-uploads).'],
         ]);
-    });
+    })->with([
+        'offered to agents' => FileForAgents::class,
+        'behind an agentSchema() without it' => FileBehindAgentSchema::class,
+    ]);
 
     it('warns about Laravel 13\'s #[Middleware] on an agent-exposed class', function () {
         if (! class_exists(Middleware::class)) {

@@ -27,9 +27,14 @@ final class ForbiddenKeys
     private const ID_SHAPED = ['id', '*_id', 'uuid'];
 
     /**
-     * The recipe every refusal about agent input names.
+     * The recipe the refusals about agent input name, except the one about a file field.
      */
     private const RECIPE = 'the "Strict agent schemas (no ids)" recipe (https://agentic-actions.com/recipes#strict-agent-schemas-no-ids)';
+
+    /**
+     * The recipe a refusal about a file field names.
+     */
+    private const UPLOADS = 'the "File uploads" recipe (https://agentic-actions.com/recipes#file-uploads)';
 
     /**
      * Each route's parameters by route name or URI, memoized per request for a class and a route table.
@@ -91,17 +96,19 @@ final class ForbiddenKeys
     }
 
     /**
-     * Whether the catalog may offer the entry: schemas it can read, no forbidden input or output key and no binary
-     * field. In tests and locally a violation throws MisconfiguredExposure; elsewhere it is reported at most once an
-     * hour per class and the tool is left out, so one entry never takes the others with it.
+     * Whether the catalog may offer the entry: schemas it can read, no forbidden input or output key, and no binary
+     * field in what agents are offered or in schema(). In tests and locally a violation throws MisconfiguredExposure;
+     * elsewhere it is reported at most once an hour per class and the tool is left out, so one entry never takes the
+     * others with it.
      */
     public function advertisable(Entry $entry, ActionContext $context): bool
     {
         $action = $entry->action();
-        [$input, $output, $read, $violations, $cause] = [[], [], [], [], null];
+        [$input, $schema, $output, $read, $violations, $cause] = [[], [], [], [], [], null];
 
         try {
             $input = app(AdvertisedSchema::class)->node($action, $context);
+            $schema = app(SchemaReader::class)->input($action);
             $output = app(SchemaReader::class)->output($action);
             $read = $action instanceof Dataset ? $action->columnsRead() : [];
         } catch (Throwable $exception) {
@@ -125,8 +132,10 @@ final class ForbiddenKeys
             $violations[] = "{$entry->class}: agents cannot receive the column [{$path}] a dimension or measure reads: it matches agents.forbidden_output_keys. The tool is left out.";
         }
 
-        foreach (self::binaryPaths($input) as $path) {
-            $violations[] = "{$entry->class}: agents cannot send the file field [{$path}]. The tool is left out. Give agents an agentSchema() without it, following ".self::RECIPE.'.';
+        // A model's call is validated against schema() too, where a file is accepted on HTTP only, so a file there
+        // keeps the action off agents whatever agentSchema() offers.
+        foreach (array_unique([...self::binaryPaths($input), ...self::binaryPaths($schema)]) as $path) {
+            $violations[] = "{$entry->class}: agents cannot send the file field [{$path}]. The tool is left out. Keep the action on the web with #[Expose(web: true)], and give agents another action without the file, following ".self::UPLOADS.'.';
         }
 
         if ($violations === []) {
