@@ -235,7 +235,7 @@ In the tenant group of [mounting the routes](concepts.md#mounting-the-routes), t
 </form>
 ```
 
-- The TypeScript client types the field `File | Blob`. Pass the `File` itself, not a `FormData` of your own: `callAction()` builds the multipart body once the input holds a file, and `useAction()` sends one as multipart too, through Inertia's `useHttp`. A refused file rejects with an `ActionValidationError` whose `errors.file` holds the message.
+- The TypeScript client types the field `File | Blob`. Pass the `File` itself, not a `FormData` of your own: `callAction()` builds the multipart body once the input holds a file, and `useAction()` sends one as multipart too, through Inertia's `useHttp`. For a file the rules refuse, `callAction()` rejects with an `ActionValidationError` whose `errors.file` holds the message, while `useAction()` puts the message on its `errors.file` and its `run()` resolves `undefined`.
 
 ```ts
 import { callAction } from '@agentic-actions/client';
