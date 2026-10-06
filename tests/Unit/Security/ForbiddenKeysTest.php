@@ -15,6 +15,7 @@ use Illuminate\JsonSchema\Types\Type;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Route;
 use Tests\Fixtures\Actions\CreateNote;
+use Tests\Fixtures\Checks\FileBehindAgentSchema;
 use Tests\Fixtures\Views\Invalid\BadColumns;
 use Tests\Fixtures\Views\PostStats;
 
@@ -151,9 +152,14 @@ it('refuses forbidden output keys and file fields', function () {
     } catch (MisconfiguredExposure $exception) {
         expect($exception->getMessage())->toBe(implode("\n", [
             LeakyOutputNote::class.': agents cannot receive output [secret]: it matches agents.forbidden_output_keys. The tool is left out. Remove the key from outputSchema().',
-            LeakyOutputNote::class.': agents cannot send the file field [photo]. The tool is left out. Give agents an agentSchema() without it, following the "Strict agent schemas (no ids)" recipe (https://agentic-actions.com/recipes#strict-agent-schemas-no-ids).',
+            LeakyOutputNote::class.': agents cannot send the file field [photo]. The tool is left out. Keep the action on the web with #[Expose(web: true)], and give agents another action without the file, following the "File uploads" recipe (https://agentic-actions.com/recipes#file-uploads).',
         ]));
     }
+});
+
+it('leaves out an action whose schema() takes a file behind an agentSchema() without it: a model\'s call is validated against schema() too', function () {
+    expect(fn () => app(ForbiddenKeys::class)->advertisable(ClassExposure::of(FileBehindAgentSchema::class), ActionContext::agent(null)))
+        ->toThrow(MisconfiguredExposure::class, FileBehindAgentSchema::class.': agents cannot send the file field [attachment]. The tool is left out.');
 });
 
 it('offers a table whatever its own keys match, and refuses a column that matches', function () {
