@@ -31,6 +31,11 @@ final class AskingDraft extends Action
     public static ?ActionContext $context = null;
 
     /**
+     * What ActionContext::current() read in the last handle().
+     */
+    public static ?ActionContext $current = null;
+
+    /**
      * Whether authorize() allows the actor.
      */
     public static bool $allowed = true;
@@ -42,6 +47,7 @@ final class AskingDraft extends Action
     {
         self::$handled = null;
         self::$context = null;
+        self::$current = null;
         self::$allowed = true;
     }
 
@@ -95,6 +101,7 @@ final class AskingDraft extends Action
     {
         self::$handled = $input->all();
         self::$context = $context;
+        self::$current = ActionContext::current();
 
         $context->actor(User::class)->posts()->create($input->only(['title', 'body', 'status', 'excerpt']));
 

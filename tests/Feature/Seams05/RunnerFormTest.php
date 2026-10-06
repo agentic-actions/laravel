@@ -216,12 +216,16 @@ describe('step 8 for a form', function () {
     });
 
     it('runs the merged input once on the form\'s claim, and handle() never sees the ticket', function () {
-        $first = seams05Run(AskingDraft::class, $this->merged, ($this->answered)());
+        $context = ($this->answered)();
+
+        $first = seams05Run(AskingDraft::class, $this->merged, $context);
         $second = seams05Run(AskingDraft::class, $this->merged, ($this->answered)());
 
         expect($first->kind())->toBe(OutcomeKind::Ok)
             ->and(AskingDraft::$handled)->toBe(['title' => 'Launch notes', 'body' => 'What shipped.', 'status' => 'draft'])
             ->and(AskingDraft::$context?->approval)->toBeNull()
+            ->and(AskingDraft::$current?->requestId)->toBe($context->requestId)
+            ->and(AskingDraft::$current?->approval)->toBeNull()
             ->and($second->forModel())->toBe(trans('agentic-actions::model.not_confirmed'))
             ->and($second->status())->toBe(409)
             ->and(Post::query()->count())->toBe(1);

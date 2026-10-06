@@ -331,7 +331,8 @@ final class Runner
     }
 
     /**
-     * Run a callback inside the context's tenancy and locale, as the current context (ActionContext::current()).
+     * Run a callback inside the context's tenancy and locale, as the current context (ActionContext::current()), always
+     * without the approval ticket: code an action calls never sees it.
      *
      * @template T
      *
@@ -341,7 +342,7 @@ final class Runner
     public function scoped(ActionContext $context, Closure $callback): mixed
     {
         $running = app(RunningContexts::class);
-        $running->push($context);
+        $running->push($context->approval === null ? $context : $context->withApproval(null));
 
         try {
             return app(Tenancy::class)->run(
