@@ -13,8 +13,8 @@ use Tests\Fixtures\Actions\Trace;
 use Workbench\App\Models\Post;
 
 /**
- * A Destructive agent action whose card a test writes: approvalSummary() returns, or throws, what $summary gives for
- * the post.
+ * A Destructive agent action whose card a test writes: approvalSummary() and approvalBinding() return, or throw, what
+ * $summary and $binding give for the post.
  */
 #[Expose(agents: ['approvals'])]
 final class ScriptedSummary extends Action
@@ -25,6 +25,13 @@ final class ScriptedSummary extends Action
      * @var (Closure(Post): array<string, mixed>)|null
      */
     public static ?Closure $summary = null;
+
+    /**
+     * The binding for the post; null binds nothing.
+     *
+     * @var (Closure(Post): array<string, mixed>)|null
+     */
+    public static ?Closure $binding = null;
 
     protected string $description = 'Delete one of the signed-in author\'s posts.';
 
@@ -58,6 +65,14 @@ final class ScriptedSummary extends Action
         $post = $context->find(Post::class, $input->integer('post'));
 
         return self::$summary === null ? ['Post' => $post->title] : (self::$summary)($post);
+    }
+
+    /**
+     * What the test scripted.
+     */
+    public function approvalBinding(ActionContext $context, ValidatedInput $input): array
+    {
+        return self::$binding === null ? [] : (self::$binding)($context->find(Post::class, $input->integer('post')));
     }
 
     /**

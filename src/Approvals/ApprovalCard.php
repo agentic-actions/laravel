@@ -5,9 +5,15 @@ namespace AgenticActions\Approvals;
 use AgenticActions\Action;
 use AgenticActions\ActionContext;
 use AgenticActions\Exposure\Entry;
+use BackedEnum;
+use Illuminate\Contracts\Support\Arrayable;
+use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Contracts\Support\Jsonable;
 use Illuminate\Support\ValidatedInput;
 use JsonException;
+use JsonSerializable;
 use LogicException;
+use Stringable;
 
 /**
  * What a person confirms for one Destructive or External agent call, built on the server by Runner::preview().
@@ -43,7 +49,8 @@ final class ApprovalCard
      * Build the card from the action's authored methods, in the context's locale, after both authorize steps. Its
      * fingerprint is the validated input's, with approvalBinding()'s values when there are any.
      *
-     * @throws LogicException when approvalSummary() returns more than MAX_ROWS rows or a value that is not a string or number
+     * @throws LogicException when approvalSummary() returns more than MAX_ROWS rows or a value that is not a string or
+     *                        number, or approvalBinding() a value that is not plain data
      */
     public static function build(Entry $live, Action $action, ActionContext $context, ValidatedInput $input): self
     {
@@ -70,10 +77,51 @@ final class ApprovalCard
         $title = $action->approvalReason($context)
             ?? (string) trans('agentic-actions::approval.'.$live->effect?->value, [], $context->locale);
 
-        $bound = $action->approvalBinding($context, $input);
+        $bound = [];
+
+        foreach ($action->approvalBinding($context, $input) as $key => $value) {
+            $bound[$key] = self::bound($live, $value, (string) $key);
+        }
+
         $fingerprint = ApprovalClaims::fingerprint($input).($bound === [] ? '' : ':'.ApprovalClaims::fingerprint($bound));
 
         return new self($live, $context, self::text($title), $summary, $fingerprint);
+    }
+
+    /**
+     * One of approvalBinding()'s values as plain data, so its fingerprint holds all of it: null, a boolean, a number or
+     * a string as it is, an array value by value, an Htmlable such as HtmlString as its HTML, a backed enum as its
+     * value and any other Stringable as its text. An object that serializes itself (a model, a collection, anything
+     * Arrayable, Jsonable or JsonSerializable) can leave attributes out, so it is refused even when it is Stringable
+     * or Htmlable.
+     *
+     * @throws LogicException naming the value's path for any other value, such as a model, a closure or a resource
+     */
+    private static function bound(Entry $live, mixed $value, string $path): mixed
+    {
+        if ($value === null || is_scalar($value)) {
+            return $value;
+        }
+
+        if (is_array($value)) {
+            $bound = [];
+
+            foreach ($value as $key => $item) {
+                $bound[$key] = self::bound($live, $item, "{$path}.{$key}");
+            }
+
+            return $bound;
+        }
+
+        $text = match (true) {
+            $value instanceof Arrayable, $value instanceof Jsonable, $value instanceof JsonSerializable => null,
+            $value instanceof Htmlable => $value->toHtml(),
+            $value instanceof BackedEnum => $value->value,
+            $value instanceof Stringable => (string) $value,
+            default => null,
+        };
+
+        return $text ?? throw new LogicException("{$live->class}: approvalBinding() value [{$path}] is ".get_debug_type($value).'; a binding holds strings, numbers, booleans, null and arrays of them, so bind attributes, not models.');
     }
 
     /**
