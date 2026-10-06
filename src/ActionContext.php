@@ -149,7 +149,8 @@ final class ActionContext
     }
 
     /**
-     * An in-request caller outside a route: Livewire, Filament, a Blade controller.
+     * Your own code acting for a person: Livewire, Filament, a Blade controller, or a job of your own. It takes the
+     * default guard as it is when the context is built, which in a worker is auth.defaults.guard.
      */
     public static function http(?Authenticatable $actor, ?Model $tenant = null, ?string $locale = null): self
     {
