@@ -91,9 +91,10 @@ final class ApprovalCard
     /**
      * One of approvalBinding()'s values as plain data, so its fingerprint holds all of it: null, a boolean, a number or
      * a string as it is, an array value by value, an Htmlable such as HtmlString as its HTML, a backed enum as its
-     * value and any other Stringable as its text. An object that serializes itself (a model, a collection, anything
-     * Arrayable, Jsonable or JsonSerializable) can leave attributes out, so it is refused even when it is Stringable
-     * or Htmlable.
+     * value and any other Stringable as its text. What toHtml() returns is read the same way, since HtmlString keeps
+     * whatever it was given: one wrapped around another reads through to the text, and one around any other object is
+     * refused. An object that serializes itself (a model, a collection, anything Arrayable, Jsonable or
+     * JsonSerializable) can leave attributes out, so it is refused even when it is Stringable or Htmlable.
      *
      * @throws LogicException naming the value's path for any other value, such as a model, a closure or a resource
      */
@@ -115,7 +116,7 @@ final class ApprovalCard
 
         $text = match (true) {
             $value instanceof Arrayable, $value instanceof Jsonable, $value instanceof JsonSerializable => null,
-            $value instanceof Htmlable => $value->toHtml(),
+            $value instanceof Htmlable => self::bound($live, $value->toHtml(), $path),
             $value instanceof BackedEnum => $value->value,
             $value instanceof Stringable => (string) $value,
             default => null,

@@ -6,7 +6,9 @@ use AgenticActions\Approvals\ApprovalCard;
 use AgenticActions\Approvals\ApprovalClaims;
 use AgenticActions\Approvals\ApprovalTicket;
 use AgenticActions\Exposure\ClassExposure;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\HtmlString;
+use Illuminate\Support\Str;
 use Illuminate\Support\ValidatedInput;
 use Tests\Fixtures\Approvals\ConfirmedDelete;
 use Tests\Fixtures\Approvals\ConfirmedPublish;
@@ -80,6 +82,7 @@ it('binds an HtmlString, a backed enum and another Stringable as their text', fu
     expect(seams04Bound(['body' => $value])->fingerprint)->toBe(seams04Bound(['body' => $text])->fingerprint);
 })->with([
     'an HtmlString' => [new HtmlString('<p>The body.</p>'), '<p>The body.</p>'],
+    'an HtmlString around another, as a cast value is wrapped again' => [new HtmlString(new HtmlString('<p>The body.</p>')), '<p>The body.</p>'],
     'a backed enum' => [PostStatus::Draft, 'draft'],
     'a Stringable whose state is private' => [new class('The body.') implements Stringable
     {
@@ -100,4 +103,10 @@ it('builds no card, rather than bind nothing, for a binding that holds a model o
         public function __construct(private readonly string $body) {}
     }], 'draft'],
     'an Eloquent model, in a list' => [fn (): array => ['recipients' => [$this->post]], 'recipients.0'],
+    'a date' => [fn (): array => ['send_at' => Carbon::parse('2026-10-06 10:00:00', 'Asia/Damascus')], 'send_at'],
+    'a Str::of() string' => [fn (): array => ['subject' => Str::of('Launch notes')], 'subject'],
+    'an HtmlString around an object whose state is private' => [fn (): array => ['body' => new HtmlString(new class('The body.')
+    {
+        public function __construct(private readonly string $body) {}
+    })], 'body'],
 ]);
