@@ -23,7 +23,7 @@ import Pill from '../diagrams/Pill.vue'
       <Step title="the token" icon="key" note="the effect's ability, such as actions:write" branch="not found: 404" />
       <Step title="shouldRegister()" code note="exposure, not authorization" branch="not found: 404" />
       <Step title="tenant membership" icon="team" tone="tenant" note="when the call has a tenant" branch="not a member: 404" />
-      <Step title="authorize()" code icon="lock" note="when it takes no input" branch="denied: 403" />
+      <Step title="authorize()" code icon="lock" note="when it takes no input, or with null when its input may be null" branch="denied: 403" />
       <Step class="is-some" title="the arguments cut" icon="agent" note="agents and MCP: only the advertised schema" />
       <Step title="input prepared" note="fixed input, conversions, prepareForValidation()" />
       <Step title="validation" icon="check" note="schema() plus rules()" branch="invalid: 422" />

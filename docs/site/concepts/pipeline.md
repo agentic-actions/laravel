@@ -17,9 +17,9 @@ The door, the token, `shouldRegister()` and membership answer "not found" when t
 
 ## What an agent's tool list shows
 
-Before each turn, the agent's tools are built by running every check up to an `authorize()` without input, for each action in its toolsets. An action leaves the list when one of them says no, or when it would offer a [forbidden key](/security).
+Before each turn, the agent's tools are built by running every check up to an `authorize()` without input, for each action in its toolsets; an `authorize()` whose `ValidatedInput` may be null runs there too, with null. An action leaves the list when one of them says no, or when it would offer a [forbidden key](/security).
 
-<Figure caption="An authorize() that takes input needs the model's arguments, so its tool stays listed until the model calls it.">
+<Figure caption="An authorize() that requires input needs the model's arguments, so its tool stays listed until the model calls it.">
 <PipelineToolList />
 </Figure>
 
@@ -36,7 +36,7 @@ public function authorize(ActionContext $context): bool
 
 </CodeCard>
 
-When `authorize()` has to take input, put the check on the caller in `shouldRegister()`, as the [strict agent schemas](/recipes#strict-agent-schemas-no-ids) recipe does. See [What an agent's tool list shows](/concepts#what-an-agents-tool-list-shows) in Concepts.
+When `authorize()` has to take input, let its `ValidatedInput` be null: it then runs twice, first with null before any input is read (and when the tool list is built), then with the input after validation. Check the caller on the first run and the record on the second. `shouldRegister()` can hold the check on the caller instead, as the [strict agent schemas](/recipes#strict-agent-schemas-no-ids) recipe does. See [What an agent's tool list shows](/concepts#what-an-agents-tool-list-shows) in Concepts.
 
 ## Refusals
 

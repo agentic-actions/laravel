@@ -44,7 +44,7 @@ final class CreatePost extends Action
 <Step title="exposure" note="#[Expose] lets the caller in" />
 <Step title="token abilities" note="actions:write for a Write" />
 <Step title="tenant membership" tone="tenant" note="the person is in the team" branch="not a member: 404" />
-<Step title="authorize()" code note="before the input, or after validation" />
+<Step title="authorize()" code note="before the input, after validation, or both" />
 <Step title="validation" note="schema() as rules" />
 <Step title="handle()" code tone="pass" note="does the work" />
 <Step title="output allowlist" note="only declared keys leave" />
