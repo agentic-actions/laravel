@@ -232,7 +232,7 @@ abstract class Action
      * validated input that will run and the record it names, after both authorize steps, inside the tenant scope,
      * with writes refused. Its fingerprint joins the claim, so a call whose bound values changed between the card and
      * the run is refused and the person confirms again. Strings, numbers, booleans, null and arrays of them; an
-     * HtmlString, a backed enum and another Stringable are converted to text. Bind attributes, not models: a model, a
+     * HtmlString and another Stringable are read as their text, and a backed enum as its value. Bind attributes, not models: a model, a
      * collection, a date or any other object, a Stringable one that is also Arrayable, Jsonable or JsonSerializable
      * included, gives no card, so the call is refused, and the mistake is reported. Empty binds nothing more.
      *
