@@ -71,8 +71,8 @@ final class ActionContext
 
         /**
          * The confirmation a Destructive or External agent call carries: its conversation and tool-call id. A ticket
-         * with no ids lets a catalog list those actions for an agent that can pause. Null on every other call and
-         * inside handle(); the package never serializes it, so a queued run never carries one.
+         * with no ids lets a catalog list those actions for an agent that can pause. Null on every other call, inside
+         * handle() and on ActionContext::current(); the package never serializes it, so a queued run never carries one.
          *
          * @internal
          */

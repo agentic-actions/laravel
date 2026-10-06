@@ -35,6 +35,7 @@ beforeEach(function () {
 
     Trace::reset();
     ConfirmedDelete::$handled = null;
+    ConfirmedDelete::$current = null;
 
     $this->user = User::factory()->create();
     $this->post = $this->user->posts()->create(['title' => 'Launch notes', 'body' => 'x', 'status' => 'draft']);
@@ -125,6 +126,8 @@ describe('step 8', function () {
             ->and(Post::query()->whereKey($this->post->id)->exists())->toBeFalse()
             ->and(Trace::$calls)->toBe(['ConfirmedDelete::authorize', 'ConfirmedDelete::authorize', 'ConfirmedDelete::handle'])
             ->and(ConfirmedDelete::$handled?->approval)->toBeNull()
+            ->and(ConfirmedDelete::$current?->requestId)->toBe($context->requestId)
+            ->and(ConfirmedDelete::$current?->approval)->toBeNull()
             ->and($outcome->context()->approval)->toBeNull()
             ->and($this->claimReads)->not->toBe([]);
     });

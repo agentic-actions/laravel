@@ -23,6 +23,11 @@ final class ConfirmedDelete extends Action
      */
     public static ?ActionContext $handled = null;
 
+    /**
+     * What ActionContext::current() read in the last handle().
+     */
+    public static ?ActionContext $current = null;
+
     protected string $description = 'Delete one of the signed-in author\'s posts.';
 
     protected ?Effect $effect = Effect::Destructive;
@@ -77,6 +82,7 @@ final class ConfirmedDelete extends Action
         Trace::record('ConfirmedDelete::handle');
 
         self::$handled = $context;
+        self::$current = ActionContext::current();
 
         $context->find(Post::class, $input->integer('post'))->delete();
 
