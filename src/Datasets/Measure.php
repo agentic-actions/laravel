@@ -129,7 +129,7 @@ final class Measure
      *                                  boolean, an enum, Stringable or null, or for null with an operator other than =,
      *                                  != or <>
      */
-    public function where(string $column, mixed $operator, BackedEnum|string|int|float|bool|null $value = null): self
+    public function where(string $column, mixed $operator, BackedEnum|Stringable|string|int|float|bool|null $value = null): self
     {
         if (! in_array($this->kind, ['count', 'sum'], true)) {
             throw new InvalidArgumentException("The measure [{$this->name}] takes no where(): only a count or a sum does.");

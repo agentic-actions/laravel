@@ -6,6 +6,7 @@ use AgenticActions\Facades\Actions;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Str;
 use Tests\Fixtures\Datasets\PostConditions;
+use Tests\Fixtures\Datasets\StrictConditions;
 use Workbench\App\Models\Post;
 use Workbench\App\Models\User;
 
@@ -44,6 +45,10 @@ it('reads two arguments as equals, as Laravel\'s where() does', function () {
 it('compares a Stringable value, such as a Carbon date or Str::of(), as its string', function () {
     expect(Measure::count('today', 'Today')->where('created_at', today())->condition())->toBe(['created_at', '=', '2026-09-30 00:00:00'])
         ->and(Measure::count('published', 'Published')->where('status', Str::of('published'))->condition())->toBe(['status', '=', 'published']);
+});
+
+it('takes a Stringable value after an operator too, from a file with strict types', function () {
+    expect(StrictConditions::recent()->condition())->toBe(['created_at', '>=', '2026-09-01 00:00:00']);
 });
 
 it('refuses an operator it does not know, and null with an operator other than = or !=', function (string $operator, mixed $value, string $message) {

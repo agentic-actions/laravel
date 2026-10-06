@@ -21,7 +21,7 @@
 
 - **An `authorize()` input typed with a subclass of `ValidatedInput` fails closed.** The input is passed by the parameter's name, so a parameter such as `?PostInput $input = null` fails the call with a `TypeError` instead of ever receiving its default null after validation. Type it `ValidatedInput`, or `?ValidatedInput` to run before and after the input.
 - **An `authorize()` input typed with a contract `ValidatedInput` implements, or a union that holds it, gets the input.** `?ValidatedData $input = null` or `ValidatedInput|array|null $input = null` was read as taking no input, so it ran once before validation with null and never saw the record. It now runs before and after the input, as `?ValidatedInput` does.
-- **A measure's three-argument `where()` applies its operator.** It compared the column with the operator string, so `->where('amount', '>=', 1000)` kept the rows whose `amount` equals `'>='`, and the numbers were wrong without an error. It now applies the operator.
+- **A measure's three-argument `where()` applies its operator.** It compared the column with the operator string, so `->where('status', '!=', 'draft')` counted only the rows whose `status` is `'!='`, usually none, with no error; on Postgres a numeric column, as in `->where('amount', '>=', 1000)`, failed the query instead. It now applies the operator, and the value after it may be a `Stringable` such as a date, also in a file with strict types.
 
 ## 0.9.0-beta.3 - 2026-10-04
 
