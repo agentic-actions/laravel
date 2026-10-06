@@ -75,6 +75,7 @@ beforeEach(function () {
     Recorder::reset();
     NestingDelete::$authorized = null;
     ScriptedSummary::$summary = null;
+    ScriptedSummary::$binding = null;
     Exceptions::fake();
 
     $this->user = User::factory()->create();
@@ -132,6 +133,7 @@ afterEach(function () {
     Inside::reset();
     NestingDelete::$authorized = null;
     ScriptedSummary::$summary = null;
+    ScriptedSummary::$binding = null;
     ignore_user_abort(false);
 });
 
@@ -475,6 +477,24 @@ describe('11. what runs changing after the card was shown', function () {
             ->and(($this->exists)($this->post))->toBeTrue()
             ->and(Trace::$calls)->not->toContain('DeleteNamed::handle');
     });
+
+    it('refuses a confirmed call whose bound body changed while its card still reads the same', function (Closure $binding) {
+        ScriptedSummary::$binding = $binding;
+
+        $conversation = ($this->pause)([['scripted-summary', ['post' => $this->post->id]]]);
+
+        // Another session rewrites the body the card cannot show; the title it shows stays.
+        $this->post->update(['body' => 'Something else entirely.']);
+
+        ($this->resume)($conversation, ['call_1' => Decision::approve()]);
+
+        expect(($this->exists)($this->post))->toBeTrue()
+            ->and(Trace::$calls)->not->toContain('ScriptedSummary::handle')
+            ->and(($this->modelSaw)())->toContain(trans('agentic-actions::model.not_confirmed'));
+    })->with([
+        'bound as a string' => [fn (Post $post): array => ['body' => $post->body]],
+        'bound as an HtmlString, as the AsHtmlString cast gives it' => [fn (Post $post): array => ['body' => new HtmlString($post->body)]],
+    ]);
 
     it('refuses at step 8, reports, and keeps the claim, when the card cannot be rebuilt as the call runs', function () {
         $ticketed = reviewMint(ScriptedSummary::class, ['post' => $this->post->id], $this->user);

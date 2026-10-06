@@ -1,19 +1,23 @@
 <?php
 
+use AgenticActions\Action;
 use AgenticActions\ActionContext;
 use AgenticActions\Approvals\ApprovalCard;
 use AgenticActions\Approvals\ApprovalClaims;
 use AgenticActions\Approvals\ApprovalTicket;
 use AgenticActions\Exposure\ClassExposure;
+use Illuminate\Support\HtmlString;
 use Illuminate\Support\ValidatedInput;
 use Tests\Fixtures\Approvals\ConfirmedDelete;
 use Tests\Fixtures\Approvals\ConfirmedPublish;
+use Tests\Fixtures\Datasets\PostStatus;
 use Workbench\App\Models\Post;
 use Workbench\App\Models\User;
 
 /*
  * approvalBinding(): what a person confirms without reading it on the card. It joins the claim's fingerprint, so a
  * call whose bound data changed between the card and the run is refused, as one whose card would read otherwise is.
+ * It holds plain data, so the fingerprint covers every value: any other value gives no card.
  */
 
 beforeEach(function () {
@@ -24,6 +28,29 @@ beforeEach(function () {
     $this->build = fn (): ApprovalCard => ApprovalCard::build(ClassExposure::of(ConfirmedPublish::class), new ConfirmedPublish, $this->context, $this->input);
     $this->claims = app(ApprovalClaims::class);
 });
+
+/**
+ * Build a card for ConfirmedPublish's entry from an action whose binding is $binding.
+ *
+ * @param  array<string, mixed>  $binding
+ */
+function seams04Bound(array $binding): ApprovalCard
+{
+    $action = new class($binding) extends Action
+    {
+        /**
+         * @param  array<string, mixed>  $binding
+         */
+        public function __construct(private readonly array $binding) {}
+
+        public function approvalBinding(ActionContext $context, ValidatedInput $input): array
+        {
+            return $this->binding;
+        }
+    };
+
+    return ApprovalCard::build(ClassExposure::of(ConfirmedPublish::class), $action, ActionContext::agent(User::factory()->create()), new ValidatedInput(['post' => 1]));
+}
 
 it('refuses a call whose bound data changed after the card, though the card reads the same', function () {
     expect($this->claims->mint('conversation-1', 'call_1', ($this->build)()))->toBeTrue();
@@ -48,3 +75,29 @@ it('keeps the input\'s fingerprint for an action that binds nothing', function (
 
     expect($card->fingerprint)->toBe(ApprovalClaims::fingerprint($input));
 });
+
+it('binds an HtmlString, a backed enum and another Stringable as their text', function (mixed $value, string $text) {
+    expect(seams04Bound(['body' => $value])->fingerprint)->toBe(seams04Bound(['body' => $text])->fingerprint);
+})->with([
+    'an HtmlString' => [new HtmlString('<p>The body.</p>'), '<p>The body.</p>'],
+    'a backed enum' => [PostStatus::Draft, 'draft'],
+    'a Stringable whose state is private' => [new class('The body.') implements Stringable
+    {
+        public function __construct(private readonly string $body) {}
+
+        public function __toString(): string
+        {
+            return $this->body;
+        }
+    }, 'The body.'],
+]);
+
+it('builds no card, rather than bind nothing, for a binding that holds a model or another object', function (Closure $binding, string $path) {
+    expect(fn () => seams04Bound($binding->call($this)))->toThrow(LogicException::class, ConfirmedPublish::class.": approvalBinding() value [{$path}]");
+})->with([
+    'an object whose state is private' => [fn (): array => ['draft' => new class('The body.')
+    {
+        public function __construct(private readonly string $body) {}
+    }], 'draft'],
+    'an Eloquent model, in a list' => [fn (): array => ['recipients' => [$this->post]], 'recipients.0'],
+]);
