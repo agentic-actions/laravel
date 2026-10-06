@@ -103,7 +103,7 @@ try {
 - `Accept: application/json` and `X-Requested-With: XMLHttpRequest`;
 - an `Idempotency-Key`: the one you pass, else a fresh UUID for each call;
 - `X-XSRF-TOKEN` from the `XSRF-TOKEN` cookie, when the URL has the page's own origin or `credentials` is `'include'`;
-- the input as JSON. When the input holds a `File` or `Blob`, at any depth, the call goes as `multipart/form-data` instead, with nested keys in PHP's bracket form (`tags[0]`, `author[name]`), booleans as `1` and `0`, `null` as an empty string and a `Date` as its ISO string.
+- the input as JSON. When the input holds a `File` or `Blob`, at any depth, the call goes as `multipart/form-data` instead, with nested keys in PHP's bracket form (`tags[0]`, `author[name]`), booleans as `1` and `0`, `null` as an empty string and a `Date` as its ISO string. [File uploads](recipes.md#file-uploads) shows an action that takes one.
 
 | Option | What it does |
 |---|---|
