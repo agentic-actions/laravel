@@ -116,7 +116,7 @@ App\Actions\CreatePost: [tags] anyOf is not supported: declare one type, or let 
 - `a union of string and integer is not supported: declare one type, or let rules() own the key`;
 - `format hostname is not supported`: the formats that work are `email`, `uri`, `url`, `uuid`, `date`, `date-time`, `time`, `ipv4` and `ipv6`;
 - `pattern lookaround (?= is not supported` (also `(?!`, `(?<=` and `(?<!`);
-- `format binary (a file) is accepted on HTTP only`: a file field works on the generated route, as a multipart upload, and nowhere else. `actions:run` fails on it, and agents are never offered it.
+- `format binary (a file) is accepted on HTTP only`: a file field works only on the `Http` surface: a multipart upload to the action's route, or your own code's call with `ActionContext::http()`. `actions:run`, a queued run and `ActionContext::system()` fail on it, and agents are never offered it ([file uploads](recipes.md#file-uploads)).
 
 It is thrown when the action is called, so the call fails as a crash. `actions:check` finds it first, in its Schema row, with `schema()` or `agentSchema()` before the message. Fix: declare one type. For a top-level key that must take several types, give it rules in `rules()` too: the package then leaves its type to those rules. For a format or pattern the package cannot compile, drop it from `schema()` and put the rule in `rules()`. For a file, give agents an `agentSchema()` without the file field ([strict agent schemas](recipes.md#strict-agent-schemas-no-ids)).
 

@@ -61,5 +61,5 @@ A token binds to a tenant with the ability `tenant:{key}`, by primary key. Over 
 ## The copilot, the queue and the feed
 
 - **One conversation per team.** `Actions::conversation($agent, $user, $team)` keeps one copilot conversation per person, tenant and agent. See [One conversation per tenant](/copilot#one-conversation-per-tenant).
-- **Queued runs keep the tenant.** A dispatched action carries its person and tenant, and the worker checks membership again. See [Queued runs](/concepts#queued-runs).
+- **Queued runs keep the tenant.** A dispatched action carries its person and tenant, and the worker checks membership again. See [Queued runs](/concepts#queued-runs). A job of your own names them in `ActionContext::http($user, $team)`, and each call it makes checks membership too: see [Your own jobs](/recipes#your-own-jobs).
 - **The change feed is per tenant.** A write in a team reaches every member's open page within one poll. See [The change feed](/concepts#the-change-feed).

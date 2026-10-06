@@ -153,6 +153,182 @@ export function NewPost() {
 - `validate()` is Precognition's. A 401, 403, 404, 409 or 423 lands on `refusal` there too, and the next check clears it.
 - After a successful `run()`, Inertia makes the values it sent the form's new defaults, so `reset()` brings those values back instead of emptying the form. To start the next entry empty, set the fields yourself, as `save()` does above.
 
+## File uploads
+
+A file is a `string()` field with the `binary` format. It arrives as `multipart/form-data`, and `handle()` reads it as an `Illuminate\Http\UploadedFile`. This action takes a CSV of posts for a team, stores it, and queues [a job of your own](#your-own-jobs) to import it:
+
+```php
+<?php
+
+namespace App\Actions;
+
+use AgenticActions\Action;
+use AgenticActions\ActionContext;
+use AgenticActions\Attributes\Expose;
+use AgenticActions\Effect;
+use App\Jobs\ImportPostsFromCsv;
+use App\Models\Team;
+use App\Models\User;
+use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\Support\ValidatedInput;
+
+#[Expose(web: true)]
+final class UploadPosts extends Action
+{
+    protected string $description = 'Import draft posts from a CSV file: one post per line, its title, then its body.';
+
+    protected ?Effect $effect = Effect::Write;
+
+    /**
+     * The file.
+     */
+    public function schema(JsonSchema $schema): array
+    {
+        return [
+            'file' => $schema->string()->format('binary')->required(),
+        ];
+    }
+
+    /**
+     * What schema() does not say about a file: its type, and its size in kilobytes.
+     */
+    public function rules(ActionContext $context): array
+    {
+        return ['file' => ['mimes:csv,txt', 'max:1024']];
+    }
+
+    /**
+     * Any member of the team: membership is checked before this runs.
+     */
+    public function authorize(ActionContext $context): bool
+    {
+        return $context->actor instanceof User;
+    }
+
+    /**
+     * Keep the file, and import it in a worker.
+     */
+    public function handle(ActionContext $context, ValidatedInput $input): void
+    {
+        $path = $input->input('file')->store('imports');
+
+        ImportPostsFromCsv::dispatch($context->actor(User::class), $context->tenant(Team::class), $path, $context->locale);
+    }
+}
+```
+
+In the tenant group of [mounting the routes](concepts.md#mounting-the-routes), the action answers `POST /teams/{team}/actions/upload-posts`, named `teams.actions.upload-posts`. Every caller sends the file as `multipart/form-data`:
+
+- A Blade form sets `enctype`. A file the rules refuse comes back as an error on `file`:
+
+```blade
+<form method="POST" action="{{ route('teams.actions.upload-posts', $team) }}" enctype="multipart/form-data">
+    @csrf
+    <input type="file" name="file" accept=".csv">
+    @error('file') <p>{{ $message }}</p> @enderror
+    <button>Import</button>
+</form>
+```
+
+- The TypeScript client types the field `File | Blob`. Pass the `File` itself, not a `FormData` of your own: `callAction()` builds the multipart body once the input holds a file, and `useAction()` sends one as multipart too, through Inertia's `useHttp`. A refused file rejects with an `ActionValidationError` whose `errors.file` holds the message.
+
+```ts
+import { callAction } from '@agentic-actions/client';
+import { uploadPosts } from '@/agentic/actions';
+
+export async function uploadCsv(file: File): Promise<void> {
+    await callAction(uploadPosts({ team: 'acme' }), { file });
+}
+```
+
+- A token client posts the same form to the `routes/api.php` group, with a token that can write:
+
+```bash
+curl https://example.com/api/teams/acme/actions/upload-posts \
+  -H "Authorization: Bearer $TOKEN" -H "Accept: application/json" \
+  -F file=@posts.csv
+```
+
+A JSON body cannot carry a file, so the field fails its `file` rule there. `handle()` runs while the request is open, so it only stores the file, on the default disk under a name Laravel picks, and queues the import with the path: a job's input must serialize, and an uploaded file does not.
+
+Agents and MCP clients never see this action. A model's tool call carries JSON arguments, never a file. So the package leaves an action with a file field out of every agent's tools and the MCP server's (your tests and local requests throw instead), and `actions:check` fails it while its `#[Expose]` opens agents or MCP, as a bare `#[Expose]` would. `web: true` keeps it to the route. The CLI, a queued run and `ActionContext::system()` refuse the field too, with `UnsupportedSchema`: only a call on the `Http` surface takes a file, from a route or from your own code with `ActionContext::http()`. To let an agent import posts, give it an action that takes what a model can send, such as a URL to fetch, or give this one an `agentSchema()` without the file ([strict agent schemas](#strict-agent-schemas-no-ids)), which leaves its route to you.
+
+## Your own jobs
+
+A job you write runs actions with `run()`, as a controller does. Build the context for the person the work belongs to, `ActionContext::http($user, $team, $locale)`, and each call goes through the whole pipeline as theirs. This job imports the file [the upload](#file-uploads) stored, one post per line, with `CreatePost` made tenant-scoped as in [a tenant-scoped action](concepts.md#a-tenant-scoped-action):
+
+```php
+<?php
+
+namespace App\Jobs;
+
+use AgenticActions\ActionContext;
+use AgenticActions\Refusal;
+use App\Actions\CreatePost;
+use App\Models\Team;
+use App\Models\User;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
+
+final class ImportPostsFromCsv implements ShouldQueue
+{
+    use Queueable;
+
+    public function __construct(
+        public User $author,
+        public Team $team,
+        public string $path,
+        public string $locale,
+    ) {}
+
+    /**
+     * Draft one post per line, as the author in the team, and keep the reason for each line it skips.
+     */
+    public function handle(): void
+    {
+        $context = ActionContext::http($this->author, $this->team, $this->locale);
+        $csv = Storage::readStream($this->path);
+        $skipped = [];
+        $line = 0;
+
+        while (($row = fgetcsv($csv, escape: '')) !== false) {
+            $line++;
+
+            try {
+                CreatePost::run(['title' => $row[0] ?? null, 'body' => $row[1] ?? null], $context);
+            } catch (ValidationException $e) {
+                $skipped[$line] = $e->getMessage();
+            } catch (Refusal $e) {
+                $skipped[$line] = $e->translate($context->locale);
+            }
+        }
+
+        fclose($csv);
+        Storage::delete($this->path);
+
+        // Tell the author which lines were skipped and why, such as in a notification.
+    }
+}
+```
+
+The loop is yours, so the job can also count progress, stop early or send a summary. Each `run()` is a whole call, as the author in the team:
+
+- `shouldRegister()`, membership in the team (asked again for every line), `authorize()` and validation run, then `handle()`. Each call fires its own [event](concepts.md#events), on the `Http` surface its context names, and its write reaches the team's open pages through the [change feed](concepts.md#the-change-feed).
+- `run()` returns what `handle()` returned. Invalid input throws a `ValidationException`, and a refusal, a denied `authorize()` or a person no longer in the team throws a `Refusal`, so the job skips that line and goes on. Anything else is a crash: it fires `ActionFailed` and fails the job, and a retry starts again at the first line, so keep each call safe to repeat (`CreatePost` refuses a title the author already has). `Actions::attempt()` makes the same call and returns an [`Outcome`](concepts.md#the-pipeline) instead, for a loop that should report a crash and go on.
+- A worker runs in `app.locale`, so the job takes the person's locale from the context that queued it, and validation messages and refusals come back in that language.
+
+What each call is not held to:
+
+- `#[Expose]`: `run()` reaches any action ([doors](concepts.md#doors)).
+- A token's limits. `http()` takes the default guard when you build the context, which in a worker is `auth.defaults.guard`: under the session guard (`web` in a new app) the calls have the person's full access, and under a token guard every call reads as not found.
+- A model's limits. In a worker, the calls are not model-driven, even when an agent's tool or an MCP client led to the job.
+
+So whoever may start the job gets every call it makes. Queue it from code whose own checks cover that work, as `UploadPosts`, a Write, queues a job that only writes. For one call, or for items that stand alone, queue the action itself with `CreatePost::dispatch($input, $context)` ([queued runs](concepts.md#queued-runs)): that job keeps the caller's token limits and model origin and checks them again in the worker, each call retries on its own, and a person or team deleted before the run drops it. Write a job of your own when the work needs one place: a file to read, lines in order, progress, a summary.
+
+With no person behind the work, such as a nightly import, build the context with `ActionContext::system($team)`: there is no actor, no token check and no membership, and `authorize()` decides, so the action must let `$context->isSystem()` through. Never build one with `ActionContext::queued()`: the package builds it for its own queued runs, and it is `@internal`.
+
 ## laravel-data
 
 The validated input is a plain array, so a data object is one line inside `handle()`: `PostData::from($input->all())`. `schema()` stays the one place the input is described and validated.

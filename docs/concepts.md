@@ -157,7 +157,7 @@ The example assumes an `avatar_path` column on `users`, in the model's fillable 
 - The TypeScript client types the field `File | Blob`, and `callAction()` sends the whole input as multipart when it holds one, nested keys in bracket notation (`tags[0]`) and booleans as `1` and `0`.
 - Your own code calls `UpdateAvatar::run(['avatar' => $file], ActionContext::http($user))` with an `Illuminate\Http\UploadedFile`.
 
-Every other surface refuses the field. A call from the CLI, a queued run or `ActionContext::system()` fails with `UnsupportedSchema`, so `actions:run` exits with 4. Agents and MCP clients are never offered an action with a file field: it is left out of their tool lists (your tests and local requests throw instead), and `actions:check` fails it while `#[Expose]` opens agents or MCP. Expose it with `#[Expose(web: true)]`, as above. For agents, write another action without the file, or give this one an `agentSchema()` without it ([strict agent schemas](recipes.md#strict-agent-schemas-no-ids)), which leaves its route to you. To do the slow work in a worker, store the file in `handle()` and queue another action with its path ([queued runs](#queued-runs)). `actions:check` compiles `schema()` as the web does, so it does not flag a file field on an action you only run from the CLI or the queue.
+Every other surface refuses the field. A call from the CLI, a queued run or `ActionContext::system()` fails with `UnsupportedSchema`, so `actions:run` exits with 4. Agents and MCP clients are never offered an action with a file field: it is left out of their tool lists (your tests and local requests throw instead), and `actions:check` fails it while `#[Expose]` opens agents or MCP. Expose it with `#[Expose(web: true)]`, as above. For agents, write another action without the file, or give this one an `agentSchema()` without it ([strict agent schemas](recipes.md#strict-agent-schemas-no-ids)), which leaves its route to you. To do the slow work in a worker, store the file in `handle()` and queue another action with its path ([queued runs](#queued-runs)). `actions:check` compiles `schema()` as the web does, so it does not flag a file field on an action you only run from the CLI or the queue. The [file uploads](recipes.md#file-uploads) recipe shows an upload end to end, from the form to the job that imports it.
 
 ## Context
 
@@ -166,11 +166,11 @@ Every other surface refuses the field. A call from the CLI, a queued run or `Act
 | Constructor | For |
 |---|---|
 | `ActionContext::fromRequest($request)` | The HTTP edge. The package builds it for generated and hand-written routes: the request's user, the guard that authenticated it, the tenant route parameter, the locale, the `Idempotency-Key` header, and the route's parameters as fixed input. |
-| `ActionContext::http($actor, $tenant, $locale)` | Your own code inside a request: Livewire, Filament, a Blade controller. |
+| `ActionContext::http($actor, $tenant, $locale)` | Your own code acting for a person: Livewire, Filament, a Blade controller, or [a job of your own](recipes.md#your-own-jobs). |
 | `ActionContext::agent($actor, $tenant, $locale)` | An agent's tools, built from the agent's own state. |
 | `ActionContext::system($tenant, $locale)` | Webhooks and scheduled work: no actor and no token check, but `authorize()` still runs. |
 
-`actions:run` builds a console context from `--as`, `--tenant`, `--locale` and `--key`. The actor may be null everywhere; `authorize()` decides what a guest may do.
+`actions:run` builds a console context from `--as`, `--tenant`, `--locale` and `--key`. The constructors the package uses for its own callers, `console()` for the CLI, `mcp()` for MCP clients and `queued()` for a [queued run](#queued-runs) in the worker, are `@internal`: a job of your own builds its context with `http()` or `system()`. The actor may be null everywhere; `authorize()` decides what a guest may do.
 
 Inside an action:
 
@@ -725,6 +725,8 @@ ImportPosts::dispatch(['url' => $url], ActionContext::fromRequest($request))->on
 ```
 
 The job keeps the caller's actor and tenant, the input and the fixed input, the locale, the idempotency key and the token grants the caller had, and every check runs again in the worker: the token, membership, `authorize()` and validation. A call the job's own code makes, and a job it queues, reads the same grants, whatever context that code builds. It gets its own request id. `dispatch()` returns Laravel's `PendingDispatch`, so `onQueue()`, `delay()` and `afterCommit()` chain as usual, and, like `run()`, it is reached by discovery alone. The input must serialize: pass scalars and arrays, and store an uploaded file first and pass its path. A job queued by an agent's tool or inside an MCP call stays model-driven in the worker, so it still reaches only Read and Write actions. A refusal ends the job; a crash fires `ActionFailed` and fails it, and the worker retries it per its `--tries`, so an action that may run twice calls `$context->requireIdempotencyKey()` and stores the key ([context](#context)); `$idempotent` is only a hint to MCP clients. While a Read's own code runs, `dispatch()` refuses an action that is not a Read. [Testing](testing.md#queued-runs) shows how to test a queued run.
+
+`dispatch()` queues one call. To make many from a job you write, such as one for each line of an uploaded file, call `run()` there with a context you build: [your own jobs](recipes.md#your-own-jobs) shows what each call then checks, and what it does not.
 
 ## The change feed
 
