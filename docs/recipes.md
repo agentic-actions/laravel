@@ -212,7 +212,12 @@ final class UploadPosts extends Action
     {
         $path = $input->input('file')->store('imports');
 
-        ImportPostsFromCsv::dispatch($context->actor(User::class), $context->tenant(Team::class), $path, $context->locale);
+        ImportPostsFromCsv::dispatch(
+            $context->actor(User::class)->getKey(),
+            $context->tenant(Team::class)->getKey(),
+            $path,
+            $context->locale,
+        );
     }
 }
 ```
@@ -279,8 +284,8 @@ final class ImportPostsFromCsv implements ShouldQueue
     use Queueable;
 
     public function __construct(
-        public User $author,
-        public Team $team,
+        public int $authorId,
+        public int $teamId,
         public string $path,
         public string $locale,
     ) {}
@@ -290,7 +295,17 @@ final class ImportPostsFromCsv implements ShouldQueue
      */
     public function handle(): void
     {
-        $context = ActionContext::http($this->author, $this->team, $this->locale);
+        $author = User::find($this->authorId);
+        $team = Team::find($this->teamId);
+
+        // Deleted since the upload, soft-deleted included: import nothing.
+        if ($author === null || $team === null) {
+            Storage::delete($this->path);
+
+            return;
+        }
+
+        $context = ActionContext::http($author, $team, $this->locale);
         $csv = Storage::readStream($this->path);
         $skipped = [];
         $line = 0;
@@ -312,8 +327,18 @@ final class ImportPostsFromCsv implements ShouldQueue
 
         // Tell the author which lines were skipped and why, such as in a notification.
     }
+
+    /**
+     * The last try crashed: remove the file all the same.
+     */
+    public function failed(): void
+    {
+        Storage::delete($this->path);
+    }
 }
 ```
+
+The job takes keys rather than models and finds the author and the team when it runs: a person or team deleted since the upload, soft-deleted included, imports nothing, and the file goes either way, by `failed()` once the last try has crashed. That is where it differs from the job `dispatch()` queues, which the package drops when its person or tenant is gone: a job of your own that took the models would run for a soft-deleted author, since Laravel restores one and `run()` does not refuse it, and would fail on one deleted for good, leaving the file behind.
 
 The loop is yours, so the job can also count progress, stop early or send a summary. Each `run()` is a whole call, as the author in the team:
 
