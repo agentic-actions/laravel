@@ -15,7 +15,7 @@ One `AgenticActions\Action` class per operation serves web routes, the CLI, lara
 4. Add `#[Expose]` for every surface the effect allows, or narrow it: `#[Expose(web: true)]`, `#[Expose(agents: ['default'])]`, `#[Expose(mcp: true)]`.
 5. Declare `protected array $touches` with the Inertia prop keys a success makes stale, such as `['posts']`.
 6. Say no with `throw Refusal::make(__('You already have a post with that title.'))->on('title');`.
-7. To run it later, queue it with `CreatePost::dispatch($input, $context)` instead of a job of your own: the worker runs the whole pipeline as the caller.
+7. To run it later, queue it with `CreatePost::dispatch($input, $context)` instead of a job of your own: the worker runs the whole pipeline as the caller. A job of your own that loops over work, such as the lines of an uploaded CSV, calls `CreatePost::run($input, ActionContext::http($user, $tenant, $locale))` for each item, as https://agentic-actions.com/recipes#your-own-jobs shows; never build a context with `ActionContext::queued()`, which is internal.
 
 ```php
 use AgenticActions\Action;
@@ -52,7 +52,7 @@ final class CreatePost extends Action
 
 Check: run `php artisan actions:check --update`, review the diff of `actions.exposure.json`, and run `php artisan actions:typescript` when the action has a route.
 
-Mistakes to avoid: calling `auth()` or `request()` inside `handle()` (it breaks for agents, MCP, the queue and the CLI), and forgetting `$effect` (the action is then exposed nowhere and `actions:check` fails).
+Mistakes to avoid: calling `auth()` or `request()` inside `handle()` (it breaks for agents, MCP, the queue and the CLI), forgetting `$effect` (the action is then exposed nowhere and `actions:check` fails), and writing a controller for a file upload (a `$schema->string()->format('binary')` field takes the file on the action's own route under `#[Expose(web: true)]`, as https://agentic-actions.com/recipes#file-uploads shows).
 
 ## 2. Wire an agent
 
