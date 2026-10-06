@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\ValidatedInput;
 use ReflectionMethod;
 use ReflectionNamedType;
+use ReflectionParameter;
 
 /**
  * Calls an action's authorize() and reads its answer.
@@ -29,27 +30,27 @@ final class Authorizer
             return AuthorizeTiming::Missing;
         }
 
-        foreach ((new ReflectionMethod($action, 'authorize'))->getParameters() as $parameter) {
-            $type = $parameter->getType();
+        $parameter = self::inputParameter($action);
 
-            if ($type instanceof ReflectionNamedType && is_a($type->getName(), ValidatedInput::class, true)) {
-                return $type->allowsNull() ? AuthorizeTiming::Both : AuthorizeTiming::Late;
-            }
+        if ($parameter === null) {
+            return AuthorizeTiming::Early;
         }
 
-        return AuthorizeTiming::Early;
+        return $parameter->allowsNull() ? AuthorizeTiming::Both : AuthorizeTiming::Late;
     }
 
     /**
      * Call authorize() through the container and map its result to null (allowed), NotFound or Denied. Any other
-     * throwable propagates for the exception mapper.
+     * throwable propagates for the exception mapper. The input is passed by the parameter's name, null included, so a
+     * parameter without a default gets the null, and one typed with a subclass of ValidatedInput fails its type rather
+     * than fall back to its default.
      */
     public function check(Action $action, ActionContext $context, ?ValidatedInput $input): ?OutcomeKind
     {
         $parameters = [ActionContext::class => $context];
 
-        if ($input !== null || self::timing($action) === AuthorizeTiming::Both) {
-            $parameters[ValidatedInput::class] = $input;
+        if (($parameter = self::inputParameter($action)) !== null) {
+            $parameters[$parameter->getName()] = $input;
         }
 
         try {
@@ -69,5 +70,21 @@ final class Authorizer
         }
 
         return $result === true ? null : OutcomeKind::Denied;
+    }
+
+    /**
+     * The authorize() parameter typed ValidatedInput or a subclass of it, or null when it has none.
+     */
+    private static function inputParameter(Action $action): ?ReflectionParameter
+    {
+        foreach ((new ReflectionMethod($action, 'authorize'))->getParameters() as $parameter) {
+            $type = $parameter->getType();
+
+            if ($type instanceof ReflectionNamedType && is_a($type->getName(), ValidatedInput::class, true)) {
+                return $parameter;
+            }
+        }
+
+        return null;
     }
 }
