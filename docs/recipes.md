@@ -325,7 +325,7 @@ What each call is not held to:
 
 - `#[Expose]`: `run()` reaches any action ([doors](concepts.md#doors)).
 - A token's limits. `http()` takes the default guard when you build the context, which in a worker is `auth.defaults.guard`: under the session guard (`web` in a new app) the calls have the person's full access, and under a token guard every call reads as not found.
-- A model's limits. In a worker, the calls are not model-driven, even when an agent's tool or an MCP client led to the job.
+- A model's limits. In a worker, the calls are not model-driven, even when an agent's tool or an MCP client led to the job, directly or from a queued run.
 
 So whoever may start the job gets every call it makes. Queue it from code whose own checks cover that work, as `UploadPosts`, a Write, queues a job that only writes. For one call, or for items that stand alone, queue the action itself with `CreatePost::dispatch($input, $context)` ([queued runs](concepts.md#queued-runs)): that job keeps the caller's token limits and model origin and checks them again in the worker, each call retries on its own, and a person or team deleted before the run drops it. Write a job of your own when the work needs one place: a file to read, lines in order, progress, a summary.
 
