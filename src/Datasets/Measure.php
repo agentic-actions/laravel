@@ -5,6 +5,7 @@ namespace AgenticActions\Datasets;
 use AgenticActions\Views\Column;
 use BackedEnum;
 use InvalidArgumentException;
+use Stringable;
 
 /**
  * One number a dataset computes over its rows: a count, a count of distinct values, a sum, an average, a minimum, a
@@ -120,10 +121,13 @@ final class Measure
     /**
      * Count, or sum, only the rows whose column compares with the value, as Laravel's where() reads it: two arguments
      * mean equals (where('status', 'published')), three name the operator (=, !=, <>, <, <=, >, >=). A null value
-     * means "is null" with = and "is not null" with != or <>.
+     * means "is null" with = and "is not null" with != or <>, and a Stringable value, such as a Carbon date or
+     * Str::of(), compares as its string.
      *
      * @throws InvalidArgumentException on a measure that is not a count or a sum, for a column a dataset cannot read, for
-     *                                  an operator not in OPERATORS, or for null with an operator other than =, != or <>
+     *                                  an operator not in OPERATORS, for a value that is not a string, a number, a
+     *                                  boolean, an enum, Stringable or null, or for null with an operator other than =,
+     *                                  != or <>
      */
     public function where(string $column, mixed $operator, BackedEnum|string|int|float|bool|null $value = null): self
     {
@@ -141,9 +145,11 @@ final class Measure
             throw new InvalidArgumentException("The measure [{$this->name}] compares with [".(is_scalar($operator) ? $operator : get_debug_type($operator)).']: use one of '.implode(' ', self::OPERATORS).'.');
         }
 
-        if ($compared instanceof BackedEnum) {
-            $compared = $compared->value;
-        }
+        $compared = match (true) {
+            $compared instanceof BackedEnum => $compared->value,
+            $compared instanceof Stringable => (string) $compared,
+            default => $compared,
+        };
 
         if (! is_scalar($compared) && $compared !== null) {
             throw new InvalidArgumentException("The measure [{$this->name}] compares [{$column}] with a ".get_debug_type($compared).': use a string, a number, a boolean, an enum or null.');
