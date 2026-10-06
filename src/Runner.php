@@ -20,6 +20,7 @@ use AgenticActions\Pipeline\ExceptionMapper;
 use AgenticActions\Pipeline\Halt;
 use AgenticActions\Pipeline\ModelDriven;
 use AgenticActions\Pipeline\OutcomeKind;
+use AgenticActions\Pipeline\RunningContexts;
 use AgenticActions\Schema\AdvertisedSchema;
 use AgenticActions\Schema\Coercer;
 use AgenticActions\Schema\Projector;
@@ -330,7 +331,7 @@ final class Runner
     }
 
     /**
-     * Run a callback inside the context's tenancy and locale.
+     * Run a callback inside the context's tenancy and locale, as the current context (ActionContext::current()).
      *
      * @template T
      *
@@ -339,11 +340,18 @@ final class Runner
      */
     public function scoped(ActionContext $context, Closure $callback): mixed
     {
-        return app(Tenancy::class)->run(
-            $context->tenant,
-            $context->actor,
-            fn (): mixed => $this->withLocale($context->locale, $callback),
-        );
+        $running = app(RunningContexts::class);
+        $running->push($context);
+
+        try {
+            return app(Tenancy::class)->run(
+                $context->tenant,
+                $context->actor,
+                fn (): mixed => $this->withLocale($context->locale, $callback),
+            );
+        } finally {
+            $running->pop();
+        }
     }
 
     /**

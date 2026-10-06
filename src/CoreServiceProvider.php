@@ -4,6 +4,7 @@ namespace AgenticActions;
 
 use AgenticActions\Contracts\ReadsTokenGrants;
 use AgenticActions\Contracts\Tenancy;
+use AgenticActions\Pipeline\RunningContexts;
 use AgenticActions\Security\ForbiddenKeys;
 use AgenticActions\Security\ReadGuard;
 use AgenticActions\Security\TokenGrants;
@@ -41,6 +42,7 @@ final class CoreServiceProvider extends ServiceProvider
         $this->app->singleton(ReadsTokenGrants::class, TokenGrants::class);
         $this->app->scoped(ReadGuard::class);
         $this->app->scoped(ForbiddenKeys::class);
+        $this->app->scoped(RunningContexts::class);
 
         $this->app->singleton(Tenancy::class, function (Application $app): Tenancy {
             $tenancy = $app->make(config('agentic-actions.tenancy') ?? NullTenancy::class);

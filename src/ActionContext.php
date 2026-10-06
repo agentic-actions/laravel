@@ -4,6 +4,7 @@ namespace AgenticActions;
 
 use AgenticActions\Approvals\ApprovalTicket;
 use AgenticActions\Pipeline\ModelDriven;
+use AgenticActions\Pipeline\RunningContexts;
 use AgenticActions\Tenancy\Tenants;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Builder;
@@ -93,6 +94,16 @@ final class ActionContext
         }
 
         $this->requestId = $requestId ?: (string) Str::ulid();
+    }
+
+    /**
+     * The context of the action running now, for code it calls that is not handed the context, such as a model event,
+     * an observer or a service: its surface (who drove the call: the web, an agent, MCP, the CLI, a queued run), its
+     * actor and its tenant. Inside a nested run it is the innermost one; null outside any run.
+     */
+    public static function current(): ?self
+    {
+        return app(RunningContexts::class)->current();
     }
 
     /**
