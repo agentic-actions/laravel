@@ -198,7 +198,7 @@ final class PostActivity extends Dataset
 ```
 
 - **`$model`** is required. With tenants, the package scopes the model's query to the tenant as `$context->find()` does whenever the call runs in a tenant, even with `$tenantScoped = false`, and the model's global scopes apply as always. Outside a tenant, an account-level dataset counts every row its `scope()` allows, and `actions:check` warns about one that declares no `scope()`.
-- **`dimensions()` and `measures()`** are pure, like `columns()`, and read in the call's locale, so labels can use `__()`. A declaration the package cannot answer throws when it is read, and `actions:check` reports it with its message.
+- **`dimensions()` and `measures()`** are pure, like `columns()`, and read in the call's locale, so labels can use `__()`. A declaration the package cannot answer throws when it is read, and `actions:check` reports it with its message. Until you fix it, agents and MCP clients are not offered the dataset and keep their other tools: your tests and local requests throw `MisconfiguredExposure` with that message, and elsewhere it is reported at most once an hour.
 - **What you do not write:** `schema()`, `rules()`, `columns()` and `handle()` are generated, and a dataset declares neither `agentSchema()` nor `outputSchema()`: discovery refuses one that does. It never asks the person for a missing field, whatever `$askForMissing` says.
 
 ### Dimensions and measures

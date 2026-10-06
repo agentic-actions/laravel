@@ -640,6 +640,7 @@ describe('tables & datasets', function () {
         'a key that is not snake case' => [fn (): array => [Column::text('Title', 'Title')], 'The column key [Title] must be 1 to 64 lower-case letters, digits or underscores, starting with a letter.'],
         'a key given twice' => [fn (): array => [Column::text('title', 'Title'), Column::integer('title', 'Words')], 'columns() declares the key [title] twice.'],
         'a currency that is not ISO 4217' => [fn (): array => [Column::money('price', 'Price', 'dollars')], 'The column [price] has the currency [dollars]: give its ISO 4217 code, three upper-case letters such as USD.'],
+        'a label skipped by naming the currency, which PHP refuses' => [fn (): array => [Column::money('price', currency: 'USD')], Column::class.'::money(): Argument #2 ($label) not passed.'],
     ]);
 
     it('fails a ShowsTable action that is not a Read, and passes a table that is', function () {

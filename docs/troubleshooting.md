@@ -228,7 +228,13 @@ Before each turn, every action in the agent's toolsets runs the first five steps
 App\Actions\UpdateProfile: agents cannot be offered input [api_token]: it matches agents.forbidden_keys pattern "*token*". The tool is left out. Remove the key from schema(), or follow the "Strict agent schemas (no ids)" recipe (docs/recipes.md#strict-agent-schemas-no-ids): agentSchema() plus fromAgent().
 ```
 
-In production the tool is left out quietly, and the error is reported at most once an hour per class.
+- a dataset's or a table's declaration that throws, such as a measure whose `where()` takes `like`. Locally and in tests this throws too, and the Tables & datasets row of `actions:check` gives the same reason:
+
+```text
+App\Actions\PostActivity: agents cannot be offered it: The measure [posts] compares with [like]: use one of = != <> < <= > >=. The tool is left out.
+```
+
+In production such a tool is left out quietly, the agent keeps its other tools, and the error is reported at most once an hour per class.
 
 ### The reply stopped before it finished
 

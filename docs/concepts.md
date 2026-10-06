@@ -299,7 +299,7 @@ public function handle(Request $request): string
 
 ### What an agent's tool list shows
 
-Before each turn, an agent's tools are built by running steps 1 to 5 for every action in its toolsets. An action leaves the list when one of those steps says no (the door, the token, `shouldRegister()`, membership, or an `authorize()` that takes no input), or when it would offer a [forbidden key](security.md). An `authorize()` that takes `ValidatedInput` needs the model's arguments, so it runs only when the model calls the tool. Until then the tool stays listed, and a person who may never run it still sees it in the agent's list, and is refused when the model calls it, unless that `ValidatedInput` may be null (below).
+Before each turn, an agent's tools are built by running steps 1 to 5 for every action in its toolsets. An action leaves the list when one of those steps says no (the door, the token, `shouldRegister()`, membership, or an `authorize()` that takes no input), when it would offer a [forbidden key](security.md), or when reading its schema throws, as it does for a [dataset](data.md#declare-a-dataset) whose declaration the package refuses. The other actions stay listed. An `authorize()` that takes `ValidatedInput` needs the model's arguments, so it runs only when the model calls the tool. Until then the tool stays listed, and a person who may never run it still sees it in the agent's list, and is refused when the model calls it, unless that `ValidatedInput` may be null (below).
 
 So put checks on the caller (a role, a permission) in an `authorize()` without input, and checks on a particular row in `handle()` or in an `authorize()` that takes `ValidatedInput`:
 

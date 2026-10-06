@@ -1,6 +1,7 @@
 <?php
 
 use AgenticActions\ActionContext;
+use AgenticActions\Datasets\Measure;
 use AgenticActions\Discovery\ActionRegistry;
 use AgenticActions\Discovery\Catalog;
 use AgenticActions\Exceptions\MisconfiguredExposure;
@@ -12,6 +13,7 @@ use AgenticActions\Surface;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Exceptions;
 use Laravel\Sanctum\Sanctum;
+use Tests\Fixtures\Discovery\Misdeclared\PostCounts;
 use Workbench\App\Models\Team;
 use Workbench\App\Models\User;
 
@@ -37,6 +39,7 @@ beforeEach(function () {
 afterEach(function () {
     // Teardown runs commands that ask for confirmation in production.
     $this->app['env'] = 'testing';
+    PostCounts::$measures = null;
 });
 
 /**
@@ -113,6 +116,40 @@ it('drops an action whose advertised input holds a forbidden key in production, 
 
     Exceptions::assertReported(fn (MisconfiguredExposure $exception): bool => str_contains($exception->getMessage(), 'api_key'));
 });
+
+it('throws for a dataset whose declaration throws in a test run and locally', function (string $environment) {
+    config(['agentic-actions.discovery.paths' => [$this->fixtures.'/Actions', $this->fixtures.'/Discovery/Misdeclared']]);
+    $this->refreshActions();
+    PostCounts::$measures = fn (): array => [Measure::count('posts', 'Posts')->where('title', 'like', '%a%')];
+    $this->app['env'] = $environment;
+
+    expect(fn () => discoveryCatalog(ActionContext::agent($this->user), ['default']))
+        ->toThrow(MisconfiguredExposure::class, PostCounts::class.': agents cannot be offered it: The measure [posts] compares with [like]: use one of = != <> < <= > >=. The tool is left out.');
+})->with(['a test run' => 'testing', 'locally' => 'local']);
+
+it('leaves out only a dataset whose declaration throws in production, for agents and MCP, and reports it once', function (Closure $measures, string $error) {
+    Exceptions::fake();
+    config(['agentic-actions.discovery.paths' => [$this->fixtures.'/Actions', $this->fixtures.'/Discovery/Misdeclared']]);
+    $this->refreshActions();
+    PostCounts::$measures = $measures;
+    $this->app['env'] = 'production';
+
+    // MCP counts only the abilities a token names.
+    Sanctum::actingAs($this->user, ['actions:read', 'actions:write']);
+    $working = ['create-note', 'late-authorize', 'list-notes', 'team-note', 'translated-note'];
+    $nominated = app(ActionRegistry::class)->find('post-counts');
+
+    expect($nominated?->toolsets)->toBe(['default'])
+        ->and($nominated?->allows(Surface::Mcp))->toBeTrue()
+        ->and(discoveryCatalog(ActionContext::agent($this->user), ['default']))->toBe($working)
+        ->and(array_map(fn (Entry $entry): string => $entry->name, app(Catalog::class)->forMcp(ActionContext::mcp($this->user, null))))->toBe($working);
+
+    Exceptions::assertReportedCount(1);
+    Exceptions::assertReported(fn (MisconfiguredExposure $exception): bool => $exception->getMessage() === PostCounts::class.": agents cannot be offered it: {$error} The tool is left out.");
+})->with([
+    'an operator where() refuses' => [fn (): array => [Measure::count('posts', 'Posts')->where('title', 'like', '%a%')], 'The measure [posts] compares with [like]: use one of = != <> < <= > >=.'],
+    'a named value, which PHP refuses' => [fn (): array => [Measure::count('posts', 'Posts')->where('title', value: 'Launch')], Measure::class.'::where(): Argument #2 ($operator) not passed.'],
+]);
 
 it('runs the token check', function () {
     Sanctum::actingAs($this->user, ['actions:read']);
