@@ -127,7 +127,7 @@ it('throws for a dataset whose declaration throws in a test run and locally', fu
         ->toThrow(MisconfiguredExposure::class, PostCounts::class.': agents cannot be offered it: The measure [posts] compares with [like]: use one of = != <> < <= > >=. The tool is left out.');
 })->with(['a test run' => 'testing', 'locally' => 'local']);
 
-it('leaves out only a dataset whose declaration throws in production, for agents and MCP, and reports it once', function (Closure $measures, string $error) {
+it('leaves out only a dataset whose declaration throws in production, for agents and MCP, and reports it once, with the declaration\'s own exception attached', function (Closure $measures, string $error, string $cause) {
     Exceptions::fake();
     config(['agentic-actions.discovery.paths' => [$this->fixtures.'/Actions', $this->fixtures.'/Discovery/Misdeclared']]);
     $this->refreshActions();
@@ -145,10 +145,11 @@ it('leaves out only a dataset whose declaration throws in production, for agents
         ->and(array_map(fn (Entry $entry): string => $entry->name, app(Catalog::class)->forMcp(ActionContext::mcp($this->user, null))))->toBe($working);
 
     Exceptions::assertReportedCount(1);
-    Exceptions::assertReported(fn (MisconfiguredExposure $exception): bool => $exception->getMessage() === PostCounts::class.": agents cannot be offered it: {$error} The tool is left out.");
+    Exceptions::assertReported(fn (MisconfiguredExposure $exception): bool => $exception->getMessage() === PostCounts::class.": agents cannot be offered it: {$error} The tool is left out."
+        && $exception->getPrevious() instanceof $cause);
 })->with([
-    'an operator where() refuses' => [fn (): array => [Measure::count('posts', 'Posts')->where('title', 'like', '%a%')], 'The measure [posts] compares with [like]: use one of = != <> < <= > >=.'],
-    'a named value, which PHP refuses' => [fn (): array => [Measure::count('posts', 'Posts')->where('title', value: 'Launch')], Measure::class.'::where(): Argument #2 ($operator) not passed.'],
+    'an operator where() refuses' => [fn (): array => [Measure::count('posts', 'Posts')->where('title', 'like', '%a%')], 'The measure [posts] compares with [like]: use one of = != <> < <= > >=.', InvalidArgumentException::class],
+    'a named value, which PHP refuses' => [fn (): array => [Measure::count('posts', 'Posts')->where('title', value: 'Launch')], Measure::class.'::where(): Argument #2 ($operator) not passed.', ArgumentCountError::class],
 ]);
 
 it('runs the token check', function () {

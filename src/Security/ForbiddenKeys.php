@@ -98,7 +98,7 @@ final class ForbiddenKeys
     public function advertisable(Entry $entry, ActionContext $context): bool
     {
         $action = $entry->action();
-        [$input, $output, $read, $violations] = [[], [], [], []];
+        [$input, $output, $read, $violations, $cause] = [[], [], [], [], null];
 
         try {
             $input = app(AdvertisedSchema::class)->node($action, $context);
@@ -107,6 +107,7 @@ final class ForbiddenKeys
         } catch (Throwable $exception) {
             // A declaration that throws, such as a dataset's measures() or a table's columns(), leaves this tool out
             // alone; actions:check names it.
+            $cause = $exception;
             $violations[] = "{$entry->class}: agents cannot be offered it: ".Str::finish($exception->getMessage(), '.').' The tool is left out.';
         }
 
@@ -132,7 +133,7 @@ final class ForbiddenKeys
             return true;
         }
 
-        $exception = MisconfiguredExposure::withErrors($violations);
+        $exception = MisconfiguredExposure::withErrors($violations, $cause);
 
         if (app()->runningUnitTests() || app()->isLocal()) {
             throw $exception;
