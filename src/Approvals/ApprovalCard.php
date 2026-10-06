@@ -40,7 +40,8 @@ final class ApprovalCard
     ) {}
 
     /**
-     * Build the card from the action's authored methods, in the context's locale, after both authorize steps.
+     * Build the card from the action's authored methods, in the context's locale, after both authorize steps. Its
+     * fingerprint is the validated input's, with approvalBinding()'s values when there are any.
      *
      * @throws LogicException when approvalSummary() returns more than MAX_ROWS rows or a value that is not a string or number
      */
@@ -69,7 +70,10 @@ final class ApprovalCard
         $title = $action->approvalReason($context)
             ?? (string) trans('agentic-actions::approval.'.$live->effect?->value, [], $context->locale);
 
-        return new self($live, $context, self::text($title), $summary, ApprovalClaims::fingerprint($input));
+        $bound = $action->approvalBinding($context, $input);
+        $fingerprint = ApprovalClaims::fingerprint($input).($bound === [] ? '' : ':'.ApprovalClaims::fingerprint($bound));
+
+        return new self($live, $context, self::text($title), $summary, $fingerprint);
     }
 
     /**

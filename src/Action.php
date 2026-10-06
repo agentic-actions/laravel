@@ -227,6 +227,20 @@ abstract class Action
     }
 
     /**
+     * What the person confirms without reading it on the card: values the run depends on that approvalSummary() cannot
+     * show, such as a message's whole body or every recipient. Same rules as approvalSummary(): built from the
+     * validated input that will run and the record it names, after both authorize steps, inside the tenant scope,
+     * with writes refused. Its fingerprint joins the claim, so a call whose bound values changed between the card and
+     * the run is refused and the person confirms again. Any JSON-encodable values; empty binds nothing more.
+     *
+     * @return array<string, mixed>
+     */
+    public function approvalBinding(ActionContext $context, ValidatedInput $input): array
+    {
+        return [];
+    }
+
+    /**
      * What the form says beyond schema(): its sentence, the fields always shown for review, choices, defaults and
      * widgets; titles are the schema's own (title()). Called only when $askForMissing is true and a model's call needs a
      * form, in the context's locale, inside the Read guard, on a fresh instance that never saw the model's arguments:

@@ -149,10 +149,10 @@ These cover an agent's Destructive and External calls. See [confirmations](copil
 - An agent cannot switch the confirmation off.
 
 - The card is built on the server by the action's own `approvalReason()` and `approvalSummary()`, after `authorize()` allowed the call, from the validated input that will run and the records it names. The browser receives only that sentence and those rows, as plain text, never the raw arguments, a reason or the model's prose; a character that would break a line or reorder the text around it becomes a space. An input value a summary shows is exactly what will run.
-- The card is built again from the input that will run, just before `handle()`, and the call runs only when it reads exactly as the card the person confirmed. A record that changed in between, or an input that now names another record, runs nothing, and a reload shows no card for it.
+- The card is built again from the input that will run, just before `handle()`, and the call runs only when it reads exactly as the card the person confirmed and `approvalBinding()`'s values are the same. A record that changed in between, or an input that now names another record, runs nothing, and a reload shows no card for it. What the card cannot show (a long body, a full recipient list) is covered only when the action returns it from `approvalBinding()`.
 - One step of the model asks about at most eight calls; any further Destructive or External call of that step is refused.
 
-- While the card is built, and before a person's confirmation is checked, database writes and queued actions are refused. Keep `authorize()`, `prepareForValidation()`, `rules()` and `approvalSummary()` free of other effects.
+- While the card is built, and before a person's confirmation is checked, database writes and queued actions are refused. Keep `authorize()`, `prepareForValidation()`, `rules()`, `approvalSummary()` and `approvalBinding()` free of other effects.
 
 - The confirmation route keeps Laravel's CSRF protection and is never listed as a CSRF exception. Only a JSON boolean `approved` counts as an answer.
 
