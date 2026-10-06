@@ -4,6 +4,7 @@ use AgenticActions\ActionContext;
 use AgenticActions\Datasets\Measure;
 use AgenticActions\Facades\Actions;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Str;
 use Tests\Fixtures\Datasets\PostConditions;
 use Workbench\App\Models\Post;
 use Workbench\App\Models\User;
@@ -38,6 +39,11 @@ it('counts and sums only the rows each condition matches', function () {
 it('reads two arguments as equals, as Laravel\'s where() does', function () {
     expect(Measure::count('published', 'Published')->where('status', 'published')->condition())->toBe(['status', '=', 'published'])
         ->and(Measure::count('bare', 'Bare')->where('excerpt', null)->condition())->toBe(['excerpt', '=', null]);
+});
+
+it('compares a Stringable value, such as a Carbon date or Str::of(), as its string', function () {
+    expect(Measure::count('today', 'Today')->where('created_at', today())->condition())->toBe(['created_at', '=', '2026-09-30 00:00:00'])
+        ->and(Measure::count('published', 'Published')->where('status', Str::of('published'))->condition())->toBe(['status', '=', 'published']);
 });
 
 it('refuses an operator it does not know, and null with an operator other than = or !=', function (string $operator, mixed $value) {
