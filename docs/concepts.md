@@ -197,6 +197,16 @@ The context is immutable: each `with…()` method returns a new one. Its other m
 | `ip`, `userAgent` | The request's, from `fromRequest()`; null elsewhere. |
 | `action` | The running action's name, on the context the pipeline hands your action's methods. |
 
+Code an action calls without handing it the context, such as a model event, an observer or a service, reads it with `ActionContext::current()`: the context of the action running now (the innermost one inside a nested run), or null outside any run. A change log, for example, can record who made a change and from which surface:
+
+```php
+Post::updated(function (Post $post) {
+    $context = ActionContext::current();
+
+    Audit::record($post, by: $context?->actor, via: $context?->surface->value ?? 'outside an action');
+});
+```
+
 ## Surfaces
 
 A surface is where a call comes from: `Http`, `Agent`, `Mcp`, `Queue`, `Console` or `System`, the cases of `AgenticActions\Surface`, read from `$context->surface`.
