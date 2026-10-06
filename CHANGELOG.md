@@ -4,7 +4,7 @@
 
 ### Upgrading
 
-- An `authorize()` whose `ValidatedInput` is nullable (`?ValidatedInput $input` or `ValidatedInput $input = null`) is now also called before the input is read, with null, including when an agent's or MCP client's tool list is built. If yours assumed the input is always there, check `$input === null` first, or make the parameter required (`ValidatedInput $input`) to keep it running after validation only.
+- An `authorize()` whose `ValidatedInput` is nullable (`?ValidatedInput $input` or `ValidatedInput $input = null`) is now also called before the input is read, with null, including when an agent's or MCP client's tool list is built. If yours assumed the input is always there, make that call check the caller: while `$input` is null, refuse everyone who may not use the action, as a role or permission check does, and check the record once the input is there. Returning true for a null input checks no one: every caller the earlier steps let through then sees the tool and, on an action with `agentSchema()`, reaches `fromAgent()`, which `actions:check`'s Order row no longer reports. Or make the parameter required (`ValidatedInput $input`) to keep it running after validation only.
 
 ### Added
 

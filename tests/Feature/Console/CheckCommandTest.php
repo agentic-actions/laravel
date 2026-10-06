@@ -471,7 +471,7 @@ describe('agent rows', function () {
 
     it('fails fromAgent() in front of an input-taking authorize() without shouldRegister()', function () {
         expect(inRow(findingsFor([OrderWithoutShouldRegister::class]), 'Order'))->toBe([
-            ['fail', 'Order', OrderWithoutShouldRegister::class.': fromAgent() runs before authorize(), which takes ValidatedInput, and shouldRegister() is not overridden, so any caller who reaches the tool runs fromAgent() unchecked. Override shouldRegister(), or let authorize() take ?ValidatedInput $input = null, so it also runs before the input.'],
+            ['fail', 'Order', OrderWithoutShouldRegister::class.': fromAgent() runs before authorize(), which takes ValidatedInput, and shouldRegister() is not overridden, so any caller who reaches the tool runs fromAgent() unchecked. Override shouldRegister(), or let authorize() take ?ValidatedInput $input = null and check the caller when $input is null, refusing everyone who may not use the action: that call runs before fromAgent(), and returning true there checks no one.'],
         ]);
     });
 

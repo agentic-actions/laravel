@@ -87,7 +87,7 @@ final class ArchivePost extends Action
 
 - A missing title comes back to the model as the refusal's sentence, followed by the author's own titles framed as data, so it can pick the right one.
 - Under a bare `#[Expose]`, an action with an `agentSchema()` gets no generated route: its canonical input carries ids an agent never saw, not what a form sends, so write that route by hand if a form needs one. Naming `web: true` on it is an error. When agents only need to give more fields than the web, keep `schema()` alone and name them in [`requiredForAgents()`](asking.md#fields-only-a-model-must-give) instead: the route stays.
-- `fromAgent()` runs before `authorize()` sees any input. When `authorize()` takes `ValidatedInput`, `actions:check` requires `shouldRegister()` too, so a caller who may not use the action never reaches `fromAgent()`, unless that `ValidatedInput` may be null: `authorize(ActionContext $context, ?ValidatedInput $input = null)` also runs before `fromAgent()`, with null.
+- `fromAgent()` runs before `authorize()` sees any input. When `authorize()` takes `ValidatedInput`, `actions:check` requires `shouldRegister()` too, so a caller who may not use the action never reaches `fromAgent()`, unless that `ValidatedInput` may be null: `authorize(ActionContext $context, ?ValidatedInput $input = null)` also runs before `fromAgent()`, with null, and must refuse there every caller who may not use the action.
 - To keep ids away from agents everywhere, add them to the forbidden keys in `config/agentic-actions.php`. Any action that still offers one is then left out of every toolset, and `actions:check` names it:
 
 ```php
