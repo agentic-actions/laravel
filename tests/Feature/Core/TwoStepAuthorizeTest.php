@@ -13,7 +13,9 @@ use Tests\Fixtures\Actions\Trace;
 use Tests\Fixtures\Actions\TracedNote;
 use Tests\Fixtures\Authorize\ReviewInput;
 use Tests\Fixtures\Authorize\TwoStepAuthorize;
+use Tests\Fixtures\Authorize\TwoStepAuthorizeOnContract;
 use Tests\Fixtures\Authorize\TwoStepAuthorizeOnSubclass;
+use Tests\Fixtures\Authorize\TwoStepAuthorizeOnUnion;
 use Tests\Fixtures\Authorize\TwoStepAuthorizeWithoutDefault;
 use Tests\Fixtures\Authorize\TwoStepReview;
 use Workbench\App\Models\Post;
@@ -35,10 +37,14 @@ beforeEach(function () {
 dataset('nullable input', [
     '?ValidatedInput $input = null' => [TwoStepAuthorize::class],
     '?ValidatedInput $input' => [TwoStepAuthorizeWithoutDefault::class],
+    '?ValidatedData $input = null, the contract ValidatedInput implements' => [TwoStepAuthorizeOnContract::class],
+    'ValidatedInput|array|null $input = null, a union' => [TwoStepAuthorizeOnUnion::class],
 ]);
 
 it('reads a nullable ValidatedInput as both timings, and a required one as after validation only', function () {
     expect(Authorizer::timing(new TwoStepAuthorize))->toBe(AuthorizeTiming::Both)
+        ->and(Authorizer::timing(new TwoStepAuthorizeOnContract))->toBe(AuthorizeTiming::Both)
+        ->and(Authorizer::timing(new TwoStepAuthorizeOnUnion))->toBe(AuthorizeTiming::Both)
         ->and(Authorizer::timing(new LateAuthorize))->toBe(AuthorizeTiming::Late)
         ->and(Authorizer::timing(new TracedNote))->toBe(AuthorizeTiming::Early);
 });

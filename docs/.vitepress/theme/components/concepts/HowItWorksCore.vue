@@ -5,8 +5,8 @@
  * (README.md, the opening paragraph; docs/concepts.md, "The pipeline").
  *
  * The steps are a list of small monospace chips that wrap, unnumbered: the
- * pipeline page owns the numbers, and authorize() runs before or after
- * validation. Tenant membership and handle() carry the tenant and pass
+ * pipeline page owns the numbers, and authorize() runs before validation,
+ * after it, or both. Tenant membership and handle() carry the tenant and pass
  * accents as on the home page.
  */
 import type { Tone } from '../diagrams/tones'
