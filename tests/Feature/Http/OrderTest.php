@@ -19,6 +19,8 @@ use Illuminate\Support\ValidatedInput;
 use Tests\Fixtures\Actions\TeamNote;
 use Tests\Fixtures\Actions\Trace;
 use Tests\Fixtures\Actions\TracedNote;
+use Tests\Fixtures\Authorize\TwoStepAuthorize;
+use Tests\Fixtures\Authorize\TwoStepReview;
 use Tests\Fixtures\Misconfigured\NoAuthorize;
 use Workbench\App\Models\Post;
 use Workbench\App\Models\User;
@@ -30,6 +32,7 @@ use Workbench\App\Models\User;
 beforeEach(function () {
     Trace::reset();
     TracedNote::reset();
+    TwoStepReview::$mayReview = true;
 
     $this->user = User::factory()->create();
 });
@@ -88,6 +91,40 @@ it('answers an input-taking authorize() with 403 after validation, for another u
     $this->actingAs($this->user)->postJson('/actions/late-authorize', ['post_id' => $own->getKey()])->assertOk();
 
     expect($own->fresh()?->status)->toBe('reviewed');
+});
+
+it('answers an authorize() whose input may be null with 403 before a 422, and before Precognition, when its first check refuses', function () {
+    TwoStepReview::$mayReview = false;
+
+    $this->mountRoutes(function (): void {
+        Route::post('two-step', TwoStepAuthorize::class);
+        Route::post('two-step-precognitive', TwoStepAuthorize::class)->middleware(HandlePrecognitiveRequests::class);
+    });
+
+    $this->actingAs($this->user)
+        ->postJson('/two-step', ['post_id' => 'x'])
+        ->assertForbidden()
+        ->assertExactJson(['message' => trans('agentic-actions::http.denied')]);
+
+    $this->actingAs($this->user)
+        ->postJson('/two-step-precognitive', ['post_id' => 'x'], ['Precognition' => 'true'])
+        ->assertForbidden();
+
+    expect(Trace::$calls)->toBe(['authorize:before', 'authorize:before']);
+});
+
+it('answers an authorize() whose input may be null with 403 after validation when its second check refuses another user\'s row', function () {
+    $foreign = Post::factory()->create();
+
+    $this->mountRoutes(fn () => Route::post('two-step', TwoStepAuthorize::class));
+
+    $this->actingAs($this->user)
+        ->postJson('/two-step', ['post_id' => $foreign->getKey()])
+        ->assertForbidden()
+        ->assertExactJson(['message' => trans('agentic-actions::http.denied')]);
+
+    expect(Trace::$calls)->toBe(['authorize:before', 'rules', 'prepareForValidation', 'authorize:after'])
+        ->and($foreign->fresh()?->status)->toBe('draft');
 });
 
 it('never lets the body override a route parameter', function () {

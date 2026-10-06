@@ -12,6 +12,7 @@ use Tests\Fixtures\Approvals\DeleteByTitle;
 use Tests\Fixtures\Approvals\UnsummarizedDelete;
 use Tests\Fixtures\Checks\ApprovalLooseAuthorize;
 use Tests\Fixtures\Checks\ApprovalNoInput;
+use Tests\Fixtures\Checks\ApprovalTwoStepAuthorize;
 use Tests\Fixtures\Checks\AskDraft;
 
 /*
@@ -54,6 +55,10 @@ it('fails an action with input whose authorize() does not take ValidatedInput, t
 
 it('passes an action with a summary and an input-taking authorize(), whatever it advertises', function () {
     expect(summaryFindings([ConfirmedDelete::class, ConfirmedSend::class, DeleteByTitle::class]))->toBe([]);
+});
+
+it('passes an action with a summary whose authorize() takes a ValidatedInput that may be null: it also runs after validation', function () {
+    expect(summaryFindings([ApprovalTwoStepAuthorize::class]))->toBe([]);
 });
 
 it('passes an action that takes no input, with no summary', function () {
