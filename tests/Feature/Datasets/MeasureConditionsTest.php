@@ -27,13 +27,13 @@ beforeEach(function () {
 it('counts and sums only the rows each condition matches', function () {
     $ids = [];
 
-    foreach ([['A short one', 'draft'], [null, 'published'], ['Another', 'published'], [null, 'archived']] as [$excerpt, $status]) {
+    foreach ([['A short one', 'draft'], ['A second one', 'published'], ['Another', 'published'], [null, 'archived']] as [$excerpt, $status]) {
         $ids[] = Post::factory()->for($this->user)->create(['excerpt' => $excerpt, 'status' => $status, 'created_at' => '2026-09-30 09:00:00'])->id;
     }
 
     $rows = Actions::attempt(PostConditions::class, ['measures' => ['excerpted', 'bare', 'not_drafts', 'later_ids']], ActionContext::http($this->user))->output()['rows'] ?? [];
 
-    expect($rows)->toBe([['excerpted' => 2, 'bare' => 2, 'not_drafts' => 3, 'later_ids' => array_sum(array_filter($ids, fn (int $id): bool => $id > 2))]]);
+    expect($rows)->toBe([['excerpted' => 3, 'bare' => 1, 'not_drafts' => 3, 'later_ids' => array_sum(array_filter($ids, fn (int $id): bool => $id > 2))]]);
 })->group('database');
 
 it('reads two arguments as equals, as Laravel\'s where() does', function () {
@@ -46,10 +46,17 @@ it('compares a Stringable value, such as a Carbon date or Str::of(), as its stri
         ->and(Measure::count('published', 'Published')->where('status', Str::of('published'))->condition())->toBe(['status', '=', 'published']);
 });
 
-it('refuses an operator it does not know, and null with an operator other than = or !=', function (string $operator, mixed $value) {
-    expect(fn () => Measure::count('posts', 'Posts')->where('id', $operator, $value))->toThrow(InvalidArgumentException::class);
+it('refuses an operator it does not know, and null with an operator other than = or !=', function (string $operator, mixed $value, string $message) {
+    expect(fn () => Measure::count('posts', 'Posts')->where('id', $operator, $value))->toThrow(InvalidArgumentException::class, $message);
 })->with([
-    'like' => ['like', '%a%'],
-    'an injection' => ['= 1 or 1 =', 1],
-    'null with >' => ['>', null],
+    'like' => ['like', '%a%', 'The measure [posts] compares with [like]: use one of = != <> < <= > >=.'],
+    'an injection' => ['= 1 or 1 =', 1, 'The measure [posts] compares with [= 1 or 1 =]: use one of = != <> < <= > >=.'],
+    'null with >' => ['>', null, 'The measure [posts] compares [id] with null using [>]: null takes =, != or <> only.'],
+]);
+
+it('refuses a value that is not a string, a number, a boolean, an enum, Stringable or null', function (string $column, mixed $value, string $message) {
+    expect(fn () => Measure::count('posts', 'Posts')->where($column, $value))->toThrow(InvalidArgumentException::class, $message);
+})->with([
+    'a list' => ['id', [1, 2], 'The measure [posts] compares [id] with a array: use a string, a number, a boolean, an enum or null.'],
+    'a DateTimeImmutable, which has no string form' => ['created_at', new DateTimeImmutable('2026-09-30'), 'The measure [posts] compares [created_at] with a DateTimeImmutable: use a string, a number, a boolean, an enum or null.'],
 ]);
