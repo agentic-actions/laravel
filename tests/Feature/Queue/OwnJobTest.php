@@ -90,7 +90,7 @@ it('runs a Destructive call as the person under the session guard, never model-d
     'a queued run MCP queued',
 ]);
 
-it('reads each call as not found under a token guard, which holds no token in the worker', function (string $guard, bool $runs) {
+it('runs each call under the session guard, and reads it as not found under a token guard, which holds no token in the worker', function (string $guard, bool $runs) {
     OwnJob::dispatch(User::factory()->create(), QueuedRead::class);
 
     // The worker's default guard, as auth.defaults.guard names it.
