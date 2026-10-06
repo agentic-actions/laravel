@@ -211,7 +211,7 @@ final class PostActivity extends Dataset
 | `Measure::count($name, $label)` | the number of rows |
 | `Measure::countDistinct($name, $label, $column)` | the number of distinct values |
 | `Measure::sum()`, `avg()`, `min()`, `max()` | the sum, average, smallest or largest value of a column; `->money('EUR')` shows it as money |
-| `->where($column, $value)` | on a count or a sum: only the rows whose column equals the value |
+| `->where($column, $value)`, `->where($column, $operator, $value)` | on a count or a sum: only the rows whose column compares with the value, as Laravel's `where()` reads it: two arguments mean equals, three name the operator (`=`, `!=`, `<>`, `<`, `<=`, `>`, `>=`); null means "is null" with `=` and "is not null" with `!=` |
 | `Measure::ratio($name, $label, $numerator, $denominator)` | one measure divided by another, as a fraction the table shows as a percentage; none when the denominator is 0 |
 
 - **Names** are lower-case snake case of up to 41 characters, and each is used once across the dataset. They are the table's column keys.

@@ -15,9 +15,16 @@ use InvalidArgumentException;
 final class Measure
 {
     /**
-     * The condition a count or a sum keeps rows by: a column and the value it equals.
+     * The operators where() compares with.
      *
-     * @var array{0: string, 1: string|int|bool}|null
+     * @var list<string>
+     */
+    public const OPERATORS = ['=', '!=', '<>', '<', '<=', '>', '>='];
+
+    /**
+     * The condition a count or a sum keeps rows by: a column, an operator and the value it compares with.
+     *
+     * @var array{0: string, 1: string, 2: string|int|float|bool|null}|null
      */
     private ?array $condition = null;
 
@@ -111,11 +118,14 @@ final class Measure
     }
 
     /**
-     * Count, or sum, only the rows whose column equals the value.
+     * Count, or sum, only the rows whose column compares with the value, as Laravel's where() reads it: two arguments
+     * mean equals (where('status', 'published')), three name the operator (=, !=, <>, <, <=, >, >=). A null value
+     * means "is null" with = and "is not null" with != or <>.
      *
-     * @throws InvalidArgumentException on a measure that is not a count or a sum, or for a column a dataset cannot read
+     * @throws InvalidArgumentException on a measure that is not a count or a sum, for a column a dataset cannot read, for
+     *                                  an operator not in OPERATORS, or for null with an operator other than =, != or <>
      */
-    public function where(string $column, BackedEnum|string|int|bool $value): self
+    public function where(string $column, mixed $operator, BackedEnum|string|int|float|bool|null $value = null): self
     {
         if (! in_array($this->kind, ['count', 'sum'], true)) {
             throw new InvalidArgumentException("The measure [{$this->name}] takes no where(): only a count or a sum does.");
@@ -123,7 +133,29 @@ final class Measure
 
         Dimension::check($this->name, $column);
 
-        $this->condition = [$column, $value instanceof BackedEnum ? $value->value : $value];
+        /** @var mixed $compared */
+        $compared = func_num_args() === 2 ? $operator : $value;
+        $operator = func_num_args() === 2 ? '=' : $operator;
+
+        if (! is_string($operator) || ! in_array($operator, self::OPERATORS, true)) {
+            throw new InvalidArgumentException("The measure [{$this->name}] compares with [".(is_scalar($operator) ? $operator : get_debug_type($operator)).']: use one of '.implode(' ', self::OPERATORS).'.');
+        }
+
+        if ($compared instanceof BackedEnum) {
+            $compared = $compared->value;
+        }
+
+        if (! is_scalar($compared) && $compared !== null) {
+            throw new InvalidArgumentException("The measure [{$this->name}] compares [{$column}] with a ".get_debug_type($compared).': use a string, a number, a boolean, an enum or null.');
+        }
+
+        $value = $compared;
+
+        if ($value === null && ! in_array($operator, ['=', '!=', '<>'], true)) {
+            throw new InvalidArgumentException("The measure [{$this->name}] compares [{$column}] with null using [{$operator}]: null takes =, != or <> only.");
+        }
+
+        $this->condition = [$column, $operator, $value];
 
         return $this;
     }
@@ -159,7 +191,7 @@ final class Measure
      *
      * @internal
      *
-     * @return array{0: string, 1: string|int|bool}|null
+     * @return array{0: string, 1: string, 2: string|int|float|bool|null}|null
      */
     public function condition(): ?array
     {
