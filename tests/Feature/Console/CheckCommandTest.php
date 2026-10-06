@@ -27,6 +27,7 @@ use Tests\Fixtures\Ai\NotesAgent;
 use Tests\Fixtures\Ai\OwnToolsAgent;
 use Tests\Fixtures\Ai\ParentToolsAgent;
 use Tests\Fixtures\Ai\TraitlessToolsetAgent;
+use Tests\Fixtures\Authorize\TwoStepAuthorize;
 use Tests\Fixtures\Checks\EmptyRequiredOutput;
 use Tests\Fixtures\Checks\FileForAgents;
 use Tests\Fixtures\Checks\ForbiddenSecret;
@@ -451,6 +452,10 @@ describe('agent rows', function () {
         expect(inRow(findingsFor([IdEarlyAuthorize::class]), 'Ids'))->toBe([
             ['fail', 'Ids', IdEarlyAuthorize::class.': agents are offered [post_id], which looks like an id, and authorize() does not take ValidatedInput, so the record is never checked before handle(). Check it in authorize(ActionContext $context, ValidatedInput $input), or follow '.STRICT_RECIPE],
         ]);
+    });
+
+    it('passes an id offered to agents when authorize() takes a ValidatedInput that may be null: it also runs after validation', function () {
+        expect(inRow(findingsFor([TwoStepAuthorize::class]), 'Ids'))->toBe([]);
     });
 
     it('fails an unscoped exists rule on an id, and passes a scoped one', function () {

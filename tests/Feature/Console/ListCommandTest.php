@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Route;
 use Laravel\Ai\Contracts\Tool;
 use Tests\Fixtures\Actions\CreateNote;
 use Tests\Fixtures\Actions\PlainNote;
+use Tests\Fixtures\Authorize\TwoStepAuthorize;
 use Tests\Fixtures\Checks\HeaderTokenReader;
 use Tests\Fixtures\Checks\McpAccount;
 use Tests\Fixtures\Checks\McpRoutes;
@@ -125,12 +126,13 @@ describe('blocks', function () {
     });
 
     it('shows when authorize() runs, or that it is missing', function () {
-        config(['agentic-actions.discovery.classes' => [NoAuthorize::class]]);
+        config(['agentic-actions.discovery.classes' => [NoAuthorize::class, TwoStepAuthorize::class]]);
 
         [, $output] = listActionsCommand();
 
         expect(actionBlock($output, 'late-authorize'))->toContain('  authorize  after validation')
             ->and(actionBlock($output, 'create-note'))->toContain('  authorize  before input')
+            ->and(actionBlock($output, 'two-step-authorize'))->toContain('  authorize  before input and after validation')
             ->and(actionBlock($output, 'no-authorize'))->toContain('  authorize  missing: denied everywhere');
     });
 
