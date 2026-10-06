@@ -237,11 +237,11 @@ Middleware declared on the action class, through Laravel's `HasMiddleware` or La
 2. The token check: the credential needs the effect's ability, and a tenant-bound token only reaches its tenant.
 3. `shouldRegister()`.
 4. Tenant membership, when the call has a tenant.
-5. `authorize()` without input, when it takes none.
+5. `authorize()` without input: when it takes none, or, with null, when its `ValidatedInput` may be null.
 6. For agents and MCP: the arguments are cut to the advertised schema, then translated through `fromAgent()` when the class overrides `agentSchema()`.
 7. The fixed input overlays the body, strings are converted where no information is lost (`"12"` to `12`), an empty string, or one of only whitespace, becomes null for every key at every depth, a string field and a key only `rules()` declares included, as Laravel's `TrimStrings` and `ConvertEmptyStringsToNull` make it on the web, so validation refuses it unless the field is nullable (no other string is trimmed, and a blank `password`, `password_confirmation` or `current_password` stays as given, as `TrimStrings` leaves it), and `prepareForValidation()` runs.
 8. Validation: the compiled `schema()` plus `rules()`.
-9. `authorize()` with input, when it takes `ValidatedInput`.
+9. `authorize()` with input, when it takes `ValidatedInput` (nullable or not).
 10. For an agent's Destructive or External call: the person's confirmation, taken once. Then `handle()`, the output projection, and `modelReply()`.
 11. One event: `ActionCompleted`, `ActionRefused` or `ActionFailed` ([events](#events)). Events carry no input values.
 
@@ -281,7 +281,7 @@ public function handle(Request $request): string
 
 ### What an agent's tool list shows
 
-Before each turn, an agent's tools are built by running steps 1 to 5 for every action in its toolsets. An action leaves the list when one of those steps says no (the door, the token, `shouldRegister()`, membership, or an `authorize()` that takes no input), or when it would offer a [forbidden key](security.md). An `authorize()` that takes `ValidatedInput` needs the model's arguments, so it runs only when the model calls the tool. Until then the tool stays listed, and a person who may never run it still sees it in the agent's list, and is refused when the model calls it.
+Before each turn, an agent's tools are built by running steps 1 to 5 for every action in its toolsets. An action leaves the list when one of those steps says no (the door, the token, `shouldRegister()`, membership, or an `authorize()` that takes no input), or when it would offer a [forbidden key](security.md). An `authorize()` that takes `ValidatedInput` needs the model's arguments, so it runs only when the model calls the tool. Until then the tool stays listed, and a person who may never run it still sees it in the agent's list, and is refused when the model calls it, unless that `ValidatedInput` may be null (below).
 
 So put checks on the caller (a role, a permission) in an `authorize()` without input, and checks on a particular row in `handle()` or in an `authorize()` that takes `ValidatedInput`:
 
@@ -299,7 +299,20 @@ public function handle(ActionContext $context, ValidatedInput $input): Task
 }
 ```
 
-An action has one `authorize()`. When it has to take input, as it does when agents are offered an id, put the check on the caller in `shouldRegister()`, as the [strict agent schemas](recipes.md#strict-agent-schemas-no-ids) recipe does.
+An action has one `authorize()`. When it has to take input, as it does when agents are offered an id, let its `ValidatedInput` be null: it then runs twice, first before any input is read with `null` (step 5, and when the tool list is built), then after validation with the input (step 9). Check the caller on the first run and the record on the second:
+
+```php
+public function authorize(ActionContext $context, ?ValidatedInput $input = null): bool
+{
+    if (! $context->actor(User::class)->can('edit-tasks')) {
+        return false; // Off the tool list, and refused before any input is read.
+    }
+
+    return $input === null || $context->find(Task::class, $input->integer('task'))->isOpen();
+}
+```
+
+`shouldRegister()` can hold the check on the caller instead, as the [strict agent schemas](recipes.md#strict-agent-schemas-no-ids) recipe does.
 
 ## Events
 

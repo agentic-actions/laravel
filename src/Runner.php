@@ -528,23 +528,26 @@ final class Runner
     }
 
     /**
-     * Step 3: a missing authorize() is denied; an input-free one runs now. Null when the call may go on.
+     * Step 3: a missing authorize() is denied; an input-free one, or the first run of one whose input may be null, runs
+     * now. Null when the call may go on.
      */
     private function authorizeEarly(Entry $live, Action $action, ActionContext $context): ?Outcome
     {
-        return match (Authorizer::timing($action)) {
-            AuthorizeTiming::Missing => Outcome::denied($live, $context),
-            AuthorizeTiming::Early => $this->authorizing($live, $action, $context, null),
-            AuthorizeTiming::Late => null,
+        $timing = Authorizer::timing($action);
+
+        return match (true) {
+            $timing === AuthorizeTiming::Missing => Outcome::denied($live, $context),
+            $timing->early() => $this->authorizing($live, $action, $context, null),
+            default => null,
         };
     }
 
     /**
-     * Step 7: an input-taking authorize(). Null when the call may go on.
+     * Step 7: an input-taking authorize(), with the validated input. Null when the call may go on.
      */
     private function authorizeLate(Entry $live, Action $action, ValidatedInput $input, ActionContext $context): ?Outcome
     {
-        return Authorizer::timing($action) === AuthorizeTiming::Late ? $this->authorizing($live, $action, $context, $input) : null;
+        return Authorizer::timing($action)->takesInput() ? $this->authorizing($live, $action, $context, $input) : null;
     }
 
     /**

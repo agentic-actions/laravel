@@ -19,7 +19,9 @@ use ReflectionNamedType;
 final class Authorizer
 {
     /**
-     * Whether the action declares authorize() taking ValidatedInput (Late), not taking it (Early), or none (Missing).
+     * Whether the action declares authorize() taking ValidatedInput (Late), taking a ValidatedInput that may be null
+     * (Both: called before the input with null, then after validation with it), not taking it (Early), or none
+     * (Missing).
      */
     public static function timing(Action $action): AuthorizeTiming
     {
@@ -31,7 +33,7 @@ final class Authorizer
             $type = $parameter->getType();
 
             if ($type instanceof ReflectionNamedType && is_a($type->getName(), ValidatedInput::class, true)) {
-                return AuthorizeTiming::Late;
+                return $type->allowsNull() ? AuthorizeTiming::Both : AuthorizeTiming::Late;
             }
         }
 
@@ -46,7 +48,7 @@ final class Authorizer
     {
         $parameters = [ActionContext::class => $context];
 
-        if ($input !== null) {
+        if ($input !== null || self::timing($action) === AuthorizeTiming::Both) {
             $parameters[ValidatedInput::class] = $input;
         }
 
