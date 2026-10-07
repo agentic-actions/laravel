@@ -9,6 +9,7 @@ use AgenticActions\Attributes\WithPageContext;
 use AgenticActions\Facades\Actions;
 use AgenticActions\Streaming\PageContext;
 use AgenticActions\Support\Packages;
+use Laravel\Ai\Attributes\CacheToolDefinitions;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Providers\Tools\ToolSearch;
@@ -26,21 +27,24 @@ trait InteractsWithActions
 {
     /**
      * The agent's tools: the tool-search group of its #[DeferToolset] toolsets, when this person gets any of their
-     * actions, then the action tools of its #[UseToolset] toolsets. A class that declares its own tools() spreads
-     * actionTools() into it instead, and puts deferredActionTools() in a tool-search group of its own.
+     * actions, then the action tools of its #[UseToolset] toolsets. The deferred actions go out as ordinary tools
+     * instead while laravel/ai is older than 1.1, and when the class carries laravel/ai's #[CacheToolDefinitions] and
+     * this person gets none of its loaded actions. A class that declares its own tools() spreads actionTools() into it
+     * instead, and puts deferredActionTools() in a tool-search group of its own.
      *
-     * @upstream The tool-search group comes first, so a cache mark on the last tool lands on a loaded one.
+     * @upstream The tool-search group comes first, and a caching agent that loads nothing for this person sends no group, so the cache mark on the last tool never lands on a deferred one.
      *
      * @return iterable<int, Tool|ToolSearch>
      */
     public function tools(): iterable
     {
         $deferred = $this->deferredActionTools();
+        $loaded = $this->actionTools();
 
         return match (true) {
-            $deferred === [] => $this->actionTools(),
-            app(Packages::class)->toolSearch() => [new ToolSearch($deferred), ...$this->actionTools()],
-            default => [...$deferred, ...$this->actionTools()],
+            $deferred === [] => $loaded,
+            app(Packages::class)->toolSearch() && ($loaded !== [] || (new ReflectionClass(static::class))->getAttributes(CacheToolDefinitions::class) === []) => [new ToolSearch($deferred), ...$loaded],
+            default => [...$deferred, ...$loaded],
         };
     }
 

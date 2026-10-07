@@ -666,8 +666,8 @@ final class Checks
     /**
      * Tool search: agents that carry #[DeferToolset] while the installed laravel/ai takes a tool-search group only for
      * a provider that searches tools, so their deferred toolsets are sent as ordinary tools on every step; and an agent
-     * that carries laravel/ai's #[CacheToolDefinitions] but no #[UseToolset], so the last tool it sends, which carries
-     * the cache mark, is one the model finds through tool search, unless its own tools() adds a tool after the group.
+     * that carries laravel/ai's #[CacheToolDefinitions] but no #[UseToolset], which therefore defers nothing through the
+     * trait's tools(), and whose own tools(), when it ends with the group, puts the cache mark on a deferred tool.
      *
      * @return list<Finding>
      */
@@ -685,7 +685,7 @@ final class Checks
 
         foreach (array_keys($scan->deferred) as $agent) {
             if ($scan->agents[$agent] === [] && (new ReflectionClass($agent))->getAttributes(CacheToolDefinitions::class) !== []) {
-                $findings[] = self::warn('Tool search', "{$agent}: it carries #[CacheToolDefinitions] but no #[UseToolset], so unless its own tools() sends a loaded tool last, the cache mark falls on a tool the model finds through tool search, and Anthropic refuses the request. Load the actions it uses most with #[UseToolset], or remove #[CacheToolDefinitions].");
+                $findings[] = self::warn('Tool search', "{$agent}: it carries #[CacheToolDefinitions] but no #[UseToolset], so the tools() of InteractsWithActions sends its deferred toolsets as ordinary tools on every step, keeping the cache mark off a deferred tool, and it defers nothing. An own tools() that sends the tool-search group last puts the mark on a deferred tool, which Anthropic refuses. Load the actions it uses most with #[UseToolset], or remove #[CacheToolDefinitions].");
             }
         }
 
