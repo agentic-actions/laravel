@@ -692,10 +692,11 @@ final class BlogAssistant implements Agent, Conversational, HasTools
 - The limit leaves deferred toolsets out. An action that a loaded toolset holds is loaded, even when a deferred toolset holds it too.
 - A deferred action is the same action tool, through the same pipeline: it waits for the person's confirmation or answer, and a reload brings back its card, form or table.
 - Keep the actions most turns call loaded, since the model searches before it can call a deferred one. Say in the agent's instructions which areas it can search, such as "Reports and settings are available through tool search", and write each action's description in the words people use, since that is what the search reads.
-- Bare, `#[DeferToolset]` means `default`, as `#[UseToolset]` does. An agent may defer every toolset it has and load none, except with laravel/ai's `#[CacheToolDefinitions]`, which marks the last tool sent for caching: Anthropic refuses that mark on a deferred tool. `actions:check` warns about such an agent (the Tool search row).
+- Bare, `#[DeferToolset]` means `default`, as `#[UseToolset]` does. An agent may defer every toolset it has and load none.
+- laravel/ai's `#[CacheToolDefinitions]` marks the last tool sent for caching, and Anthropic refuses that mark on a deferred tool. The group comes first, so the mark lands on a loaded action. When the agent carries the attribute and the person gets none of its loaded actions, `InteractsWithActions` sends the deferred actions as ordinary tools instead, and that turn defers nothing. An agent with `#[CacheToolDefinitions]` and no `#[UseToolset]` therefore never defers, and `actions:check` warns about it (the Tool search row).
 - `actions.exposure.json` records both lists of an agent that defers toolsets, so moving a toolset from one attribute to the other is a reviewed diff. MCP is not affected: the server lists every tool a token reaches, and the client decides what its model reads.
 
-An agent with a `tools()` of its own builds the group from `deferredActionTools()`, which returns the actions of its `#[DeferToolset]` toolsets without those it already loads. laravel/ai takes one tool-search group per request, so put every tool you defer in it:
+An agent with a `tools()` of its own builds the group from `deferredActionTools()`, which returns the actions of its `#[DeferToolset]` toolsets without those it already loads. laravel/ai takes one tool-search group per request, so put every tool you defer in it. With `#[CacheToolDefinitions]`, end the list with a loaded tool, as below, and on a turn with no loaded tool, send the deferred tools without the group:
 
 ```php
 use Laravel\Ai\Providers\Tools\ToolSearch;

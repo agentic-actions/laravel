@@ -472,7 +472,7 @@ describe('tool search rows', function () {
     it('warns about an agent that caches its tool definitions and loads no toolset', function () {
         expect(inRow(findingsFor([CreateNote::class, SupportNote::class, CachedSearchOnly::class, SearchDesk::class]), 'Tool search'))->toBe([
             ...($this->laravelAiBefore('1.1.0') ? [['warn', 'Tool search', '#[DeferToolset] on ['.CachedSearchOnly::class.', '.SearchDesk::class.'] needs laravel/ai 1.1 or later: with the version installed, their deferred toolsets are loaded on every step. Run composer require laravel/ai:^1.1.']] : []),
-            ['warn', 'Tool search', CachedSearchOnly::class.': it carries #[CacheToolDefinitions] but no #[UseToolset], so unless its own tools() sends a loaded tool last, the cache mark falls on a tool the model finds through tool search, and Anthropic refuses the request. Load the actions it uses most with #[UseToolset], or remove #[CacheToolDefinitions].'],
+            ['warn', 'Tool search', CachedSearchOnly::class.': it carries #[CacheToolDefinitions] but no #[UseToolset], so the tools() of InteractsWithActions sends its deferred toolsets as ordinary tools on every step, keeping the cache mark off a deferred tool, and it defers nothing. An own tools() that sends the tool-search group last puts the mark on a deferred tool, which Anthropic refuses. Load the actions it uses most with #[UseToolset], or remove #[CacheToolDefinitions].'],
         ]);
     });
 

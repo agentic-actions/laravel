@@ -4,7 +4,9 @@ use AgenticActions\Ai\ActionTool;
 use Illuminate\Support\Facades\Auth;
 use Laravel\Ai\Providers\Tools\ToolSearch;
 use Laravel\Ai\Responses\Data\ToolCall;
+use Tests\Fixtures\Ai\AnthropicRequests;
 use Tests\Fixtures\Approvals\ScriptedGateway;
+use Tests\Fixtures\Deferred\CachingAgent;
 use Tests\Fixtures\Deferred\ReportsAgent;
 use Tests\Fixtures\Streaming\Parts;
 use Tests\Fixtures\Streaming\SearchingGateway;
@@ -68,6 +70,16 @@ it('sends no group to a person who gets none of the deferred actions', function 
 
     expect($tools)->toHaveCount(1)
         ->and(actionToolNames($tools))->toBe(['note-stats']);
+});
+
+it('sends the deferred toolsets as ordinary tools when it loads none for this person and caches its tool definitions, so the cache mark lands on a tool the model reads', function () {
+    config(['agentic-actions.discovery.paths' => [...config('agentic-actions.discovery.paths'), dirname(__DIR__, 2).'/Fixtures/Approvals']]);
+    $this->refreshActions();
+    AnthropicRequests::fake();
+
+    (new CachingAgent($this->user))->prompt('How many notes?', provider: 'anthropic');
+
+    expect(AnthropicRequests::tools())->toBe([['note-stats', false, true]]);
 });
 
 it('runs a deferred action on a provider that searches tools, and on one that does not', function (string $provider) {
