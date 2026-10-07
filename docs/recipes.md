@@ -356,6 +356,98 @@ So whoever may start the job gets every call it makes. Queue it from code whose 
 
 With no person behind the work, such as a nightly import, build the context with `ActionContext::system($team)`: there is no actor, no token check and no membership, and `authorize()` decides, so the action must let `$context->isSystem()` through. Never build one with `ActionContext::queued()`: the package builds it for its own queued runs, and it is `@internal`.
 
+## State created the first time it is read
+
+A team's inbound address, made the first time anyone opens the page that shows it, in an app whose tenant is a team, set up as in [tenants](concepts.md#tenants). When every team should have one from the start, create it with the team instead and backfill the teams that exist once ([a Read that creates its own state](concepts.md#a-read-that-creates-its-own-state)); this recipe is for state that should exist only once someone looks.
+
+The table holds one row per team, and the unique key on `team_id` is what keeps it at one when two first reads arrive at once:
+
+```php
+Schema::create('team_inboxes', function (Blueprint $table) {
+    $table->id();
+    $table->foreignId('team_id')->unique()->constrained()->cascadeOnDelete();
+    $table->string('address')->unique();
+    $table->timestamps();
+});
+```
+
+`Team` gains `public function inbox(): HasOne { return $this->hasOne(TeamInbox::class); }`, and `TeamInbox` lists `address` in `$fillable`. The action adds the row in `initialize()`, which may only add rows to the tables `$initializes` lists, and `handle()` only reads it:
+
+```php
+<?php
+
+namespace App\Actions;
+
+use AgenticActions\Action;
+use AgenticActions\ActionContext;
+use AgenticActions\Attributes\Expose;
+use AgenticActions\Effect;
+use App\Models\Team;
+use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\Support\Str;
+
+#[Expose]
+final class ShowTeamInbox extends Action
+{
+    protected string $description = 'The address that forwards email into this team.';
+
+    protected ?Effect $effect = Effect::Read;
+
+    protected array $initializes = ['team_inboxes'];
+
+    public function outputSchema(JsonSchema $schema): array
+    {
+        return ['address' => $schema->string()->required()];
+    }
+
+    public function authorize(ActionContext $context): bool
+    {
+        return $context->actor !== null;
+    }
+
+    /**
+     * Add the team's inbox when it has none. The address comes from the server, never from input.
+     */
+    public function initialize(ActionContext $context): void
+    {
+        $context->tenant(Team::class)->inbox()->firstOrCreate([], fn (): array => ['address' => Str::lower(Str::random(24))]);
+    }
+
+    /**
+     * @return array{address: string}
+     */
+    public function handle(ActionContext $context): array
+    {
+        return ['address' => $context->tenant(Team::class)->inbox()->sole()->address.'@in.example.com'];
+    }
+}
+```
+
+`firstOrCreate()` reads first and adds the row only when it finds none, so every later call sends nothing but reads. When two first reads arrive at once, both find none and the unique key refuses the second insert: `createOrFirst()`, where `firstOrCreate()` ends, then reads the row the first one added, and both calls answer the same address. Inside a transaction it inserts in a savepoint, so the transaction goes on. Without the unique key the team would get two inboxes.
+
+`initialize()` runs after every check, membership and `authorize()` included, so a person outside the team never adds one. Whoever may read the inbox may cause it to exist, a token with only `actions:read` included, and the action stays a Read for every caller: the copilot's row reads "Looking it up…", MCP clients read it as read-only, and nothing reaches the change feed. Its other rules, and when to use a Write instead, are in [a Read that creates its own state](concepts.md#a-read-that-creates-its-own-state).
+
+A test runs it twice and finds one row:
+
+```php
+use AgenticActions\ActionContext;
+use App\Actions\ShowTeamInbox;
+use App\Models\Team;
+use App\Models\User;
+
+it('gives a team one inbox, made the first time it is read', function () {
+    $user = User::factory()->create();
+    $team = Team::factory()->create();
+    $user->teams()->attach($team);
+
+    $first = ShowTeamInbox::run([], ActionContext::http($user, $team));
+    $second = ShowTeamInbox::run([], ActionContext::http($user, $team));
+
+    expect($second)->toBe($first)
+        ->and($team->inbox()->count())->toBe(1);
+});
+```
+
 ## laravel-data
 
 The validated input is a plain array, so a data object is one line inside `handle()`: `PostData::from($input->all())`. `schema()` stays the one place the input is described and validated.

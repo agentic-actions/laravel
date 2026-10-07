@@ -52,7 +52,7 @@ final class CreatePost extends Action
 
 Check: run `php artisan actions:check --update`, review the diff of `actions.exposure.json`, and run `php artisan actions:typescript` when the action has a route.
 
-Mistakes to avoid: calling `auth()` or `request()` inside `handle()` (it breaks for agents, MCP, the queue and the CLI), forgetting `$effect` (the action is then exposed nowhere and `actions:check` fails), and writing a controller for a file upload (a `$schema->string()->format('binary')` field takes the file on the action's own route under `#[Expose(web: true)]`, as https://agentic-actions.com/recipes#file-uploads shows).
+Mistakes to avoid: calling `auth()` or `request()` inside `handle()` (it breaks for agents, MCP, the queue and the CLI), forgetting `$effect` (the action is then exposed nowhere and `actions:check` fails), declaring a Read `Effect::Write` because its first call adds a row it needs (create the row with its owner, or list its table in `protected array $initializes` and add it with `firstOrCreate()` in `initialize(ActionContext $context)`, as https://agentic-actions.com/recipes#state-created-the-first-time-it-is-read shows), and writing a controller for a file upload (a `$schema->string()->format('binary')` field takes the file on the action's own route under `#[Expose(web: true)]`, as https://agentic-actions.com/recipes#file-uploads shows).
 
 ## 2. Wire an agent
 

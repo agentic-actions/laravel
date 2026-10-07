@@ -228,9 +228,11 @@ return [
     | While a Read action's own code runs (authorize() through handle() and
     | its reply), statements that write are refused before they execute.
     | Cache, session and queue tables are derived from the app's own config;
-    | list any other table a Read may write here. The guard also stops a
-    | Read's own code from queueing an action that is not a Read
-    | (Action::dispatch()); off, both are off.
+    | list any other table a Read may write here, and every Read may then
+    | run any statement on it. For rows one Read adds the first time it is
+    | read, list the table in that action's $initializes instead. The guard
+    | also stops a Read's own code from queueing an action that is not a
+    | Read (Action::dispatch()); off, both are off.
     |
     */
 

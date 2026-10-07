@@ -126,16 +126,18 @@ It is thrown when the action is called, so the call fails as a crash. `actions:c
 A Read action tried to write [posts]. The statement did not run: give the action a writing effect, or list the table in agentic-actions.reads.writable_tables.
 ```
 
-An action declared `Effect::Read` sent a statement that writes, for example by stamping `last_viewed_at` or logging to a table of its own. The guard refused the statement before it ran, and the call failed as a crash. Fix: if the action changes data, make it `Effect::Write`. If the table is bookkeeping that a read may touch, list it in `reads.writable_tables`. Your cache, session and queue tables are already writable.
+An action declared `Effect::Read` sent a statement that writes, for example by stamping `last_viewed_at`, logging to a table of its own, or creating a row it needs the first time it is read. The guard refused the statement before it ran, and the call failed as a crash. Fix: if the action changes data, make it `Effect::Write`. If the row should exist once someone reads it, such as a post's share link, add it in `initialize()` and list its table in `$initializes` ([a Read that creates its own state](concepts.md#a-read-that-creates-its-own-state)). If the table is bookkeeping that a read may touch, list it in `reads.writable_tables`, which lets every Read update and delete its rows too. Your cache, session and queue tables are already writable.
 
-Two related messages:
+Related messages:
 
 ```text
 A Read action sent a statement the Read guard could not check: […]. …
 A Read action tried to queue [App\Actions\ImportPosts], which is not a Read. Nothing was queued: give the calling action a writing effect.
+A Read action's initialize() tried to change rows of [share_links]. The statement did not run: initialize() only adds rows, and an update, delete, replace or upsert belongs in a Write action.
+A Read action's initialize() tried to write [posts]. The statement did not run: initialize() only adds rows to the tables its $initializes lists.
 ```
 
-The guard refuses a statement it cannot read to the end. On Postgres, a `LIKE` escape written as a backslash is the usual cause: use `like ? escape '!'`. A Read may only queue Reads. See [security](security.md) for what the guard covers.
+The guard refuses a statement it cannot read to the end. On Postgres, a `LIKE` escape written as a backslash is the usual cause: use `like ? escape '!'`. A Read may only queue Reads. The last two come from `initialize()`, which may only add rows to the tables `$initializes` lists: an `updateOrCreate()` that finds the row, an upsert, an Eloquent event that writes elsewhere, or a model whose `$touches` updates its parent sends one of them. Use `firstOrCreate()`, inside `Model::withoutTouching()` when the model touches its parent. See [security](security.md) for what the guard covers.
 
 ## Tokens and MCP
 

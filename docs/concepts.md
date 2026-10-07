@@ -19,6 +19,7 @@ An action declares facts as properties and behaviour as methods.
 | `$errorBag` | The error bag browser visits receive. A Laravel 13 `#[ErrorBag]` attribute on the class wins. |
 | `$validationMessagesToModel` | Sends validation messages, and not only the failing keys, to a model when the action raises a `ValidationException` itself. |
 | `$askForMissing` | A Read or Write action asks the person, in a form in the chat, for the fields a model's call left out or got wrong, instead of refusing the call. See [asking the person](asking.md). |
+| `$initializes` | The tables a Read's `initialize()` may add rows to, for state that should exist once someone reads it. Empty by default. See [a Read that creates its own state](#a-read-that-creates-its-own-state). |
 
 The package reads these as the class's declared defaults, through reflection, without running a constructor. Do not change them in a constructor.
 
@@ -30,6 +31,7 @@ The package reads these as the class's declared defaults, through reflection, wi
 | `prepareForValidation(array $input, ActionContext $context)` | Normalises raw input before validation. |
 | `authorize(ActionContext $context[, ValidatedInput $input], ...$services)` | Not declared on the base class. Without it, the action is denied everywhere. Without a `ValidatedInput` parameter it runs before any input is read; with one, after validation; with one that may be null (`?ValidatedInput $input = null`), both: first with null before any input is read, then with the input after validation (see [what an agent's tool list shows](#what-an-agents-tool-list-shows)). The input is passed by the parameter's name, so type it `ValidatedInput` or a contract it implements, such as `ValidatedData` (alone or in a union): a subclass fails the call. |
 | `handle(ActionContext $context, ValidatedInput $input, ...$services)` | Does the work. Services are injected by the container. |
+| `initialize(ActionContext $context[, ValidatedInput $input], ...$services)` | Not declared on the base class. Called only on a Read that lists tables in `$initializes`, right before `handle()`, to add the rows it finds missing: inserts into those tables only. See [a Read that creates its own state](#a-read-that-creates-its-own-state). |
 | `shouldRegister(ActionContext $context)` | Exposure, not authorization: false reads exactly like an action that does not exist. |
 | `agentSchema()` and `fromAgent()` | A separate vocabulary for agents, translated into the canonical input. See [strict agent schemas](recipes.md#strict-agent-schemas-no-ids). |
 | `requiredForAgents()` | Fields a model's call must give, agents' and MCP clients' alike, though the route, the CLI and your own code may leave them out. They are offered as required, and a model's call without one is refused or [asks the person](asking.md#fields-only-a-model-must-give). |
@@ -235,6 +237,38 @@ A Read or Write action may ask the person, in a form in the chat, for the fields
 
 The effect also picks the token ability a call needs (`actions:read` and so on) and whether the Read guard runs. See [security](security.md).
 
+### A Read that creates its own state
+
+A Read never writes: the Read guard refuses the statement. Some reads need state that should exist before they can answer, such as a team's inbound email address or a post's share link, and the first read finds it missing.
+
+Create it with its owner when you can. The action or observer that creates the team also creates its inbox, a one-off command adds one to each team that has none, and the Read treats a missing row as not set up:
+
+```php
+Team::query()->whereDoesntHave('inbox')->each(fn (Team $team) => $team->inbox()->create(['address' => Str::lower(Str::random(24))]));
+```
+
+Then no Read writes, whoever calls it.
+
+For state that should exist only once someone looks, such as a share link for each post, list its table in `$initializes` and add the row in `initialize()`. It takes what `handle()` takes, through the container:
+
+```php
+protected array $initializes = ['share_links'];
+
+public function initialize(ValidatedInput $input): void
+{
+    ShareLink::query()->firstOrCreate(['post_id' => $input->integer('post')], fn (): array => ['token' => Str::random(32)]);
+}
+```
+
+- `initialize()` runs on every call, after every check (the token, membership, both `authorize()` steps, validation and a form's claim) and right before `handle()`. It never runs while an agent's tool list, a card or a form is built, and a call that any check refuses never reaches it.
+- While it runs, the Read guard allows a statement only when it adds rows to the tables `$initializes` lists: an insert, `insertOrIgnore()`, or `firstOrCreate()` on a row that is missing. An update, a delete, a replace or an upsert, and a write to any other table, are refused. So is what it runs: a Write's statements are held to the same rule, a Read it runs is fully guarded again, and it cannot queue a Write. `handle()` stays fully guarded.
+- Give the table a unique key on what the row belongs to. Two first reads at once then add one row, and `firstOrCreate()` returns that row to both ([the recipe](recipes.md#state-created-the-first-time-it-is-read)).
+- Whoever may run the Read may cause the insert: a token with only `actions:read`, an OAuth client approved to read, and a member whose membership answers only for a Read. Build the row's values on the server; the caller's input may name the record, never what the row holds.
+- Every caller still sees a Read: the token ability, the membership check, MCP's `readOnlyHint`, "Found." above the output, the copilot's label, the events and the change feed are a Read's.
+- With `reads.guard` off nothing is guarded, `initialize()` included.
+
+Use a Write instead when making the state turns something on, costs money or counts against a limit, reaches outside the app, or takes its values from the caller. `reads.writable_tables` is no narrower way: it makes a table writable for every Read and every statement, updates and deletes included. `actions:list` shows the tables an action's `initialize()` adds rows to, and `actions:check` fails `$initializes` that can never add one: on an action that is not a Read, on a dataset, or without a public `initialize()`. See [security](security.md) for what the guarantee covers.
+
 ## Doors
 
 Every caller enters the pipeline through one of five doors. The door decides only whether the class's own `#[Expose]` is consulted.
@@ -260,7 +294,7 @@ Middleware declared on the action class, through Laravel's `HasMiddleware` or La
 7. The fixed input overlays the body, strings are converted where no information is lost (`"12"` to `12`), an empty string, or one of only whitespace, becomes null for every key at every depth, a string field and a key only `rules()` declares included, as Laravel's `TrimStrings` and `ConvertEmptyStringsToNull` make it on the web, so validation refuses it unless the field is nullable (no other string is trimmed, and a blank `password`, `password_confirmation` or `current_password` stays as given, as `TrimStrings` leaves it), and `prepareForValidation()` runs.
 8. Validation: the compiled `schema()` plus `rules()`.
 9. `authorize()` with input, when it takes `ValidatedInput` (nullable or not).
-10. For an agent's Destructive or External call: the person's confirmation, taken once. Then `handle()`, the output projection, and `modelReply()`.
+10. For an agent's Destructive or External call: the person's confirmation, taken once. Then, for a Read that lists tables in `$initializes`, `initialize()` ([a Read that creates its own state](#a-read-that-creates-its-own-state)), then `handle()`, the output projection, and `modelReply()`.
 11. One event: `ActionCompleted`, `ActionRefused` or `ActionFailed` ([events](#events)). Events carry no input values.
 
 Steps 1 to 4 answer "not found" when they stop, so an action a caller may not see reads exactly like one that does not exist. A denied `authorize()` answers 403, or 404 when it returns `Response::denyAsNotFound()`. A crash is reported once and rendered by your exception handler.
