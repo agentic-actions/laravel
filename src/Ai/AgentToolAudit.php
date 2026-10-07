@@ -6,6 +6,7 @@ use AgenticActions\Ai\Concerns\InteractsWithActions;
 use AgenticActions\Attributes\WithPageContext;
 use AgenticActions\Security\ForbiddenKeys;
 use AgenticActions\Streaming\PageContext;
+use AgenticActions\Support\Packages;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\JsonSchema\Types\ObjectType;
 use Laravel\Ai\Contracts\Agent;
@@ -179,6 +180,8 @@ final class AgentToolAudit
     /**
      * Fail when the agent loads more action tools on every step than agents.max_tools: those at the top level of its
      * tools(), for this person. The actions it finds through tool search, inside a tool-search group, do not count.
+     * While laravel/ai is older than 1.1, the trait's tools() sends #[DeferToolset] toolsets as ordinary tools, so they
+     * count, and the message says to update laravel/ai rather than to defer them.
      *
      * @param  list<mixed>  $declared  its tools() as it returns them
      */
@@ -188,10 +191,13 @@ final class AgentToolAudit
         $loaded = count(array_unique(self::actionToolNames($declared)));
 
         Assert::assertFalse($loaded > $limit, sprintf(
-            '%s loads %d action tools on every step, more than agents.max_tools (%d). Move the toolsets it needs only sometimes to #[DeferToolset], or raise the limit.',
+            '%s loads %d action tools on every step, more than agents.max_tools (%d). %s',
             $agent::class,
             $loaded,
             $limit,
+            Toolsets::deferred($agent::class) !== [] && ! app(Packages::class)->toolSearch()
+                ? 'With laravel/ai older than 1.1, the tools() of InteractsWithActions sends its #[DeferToolset] toolsets as ordinary tools, so they count too: run composer require laravel/ai:^1.1, or raise the limit.'
+                : 'Move the toolsets it needs only sometimes to #[DeferToolset], or raise the limit.',
         ));
     }
 

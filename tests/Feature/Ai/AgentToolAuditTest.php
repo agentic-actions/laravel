@@ -24,6 +24,7 @@ use Tests\Fixtures\Ai\SubAgentMixedAgent;
 use Tests\Fixtures\Ai\SupportAgent;
 use Tests\Fixtures\Deferred\DroppedGroupAgent;
 use Tests\Fixtures\Deferred\OwnGroupAgent;
+use Tests\Fixtures\Deferred\ReportsAgent;
 use Tests\Fixtures\Streaming\PageAgent;
 use Tests\Fixtures\Streaming\StreamAgent;
 use Workbench\App\Models\User;
@@ -175,6 +176,18 @@ describe('an agent with #[DeferToolset]', function () {
         config(['agentic-actions.agents.max_tools' => 1]);
 
         Actions::assertAgentTools(new OwnGroupAgent($this->user));
+    });
+
+    it('counts the deferred toolsets the trait\'s tools() sends only while laravel/ai is older than 1.1, and then says to update it', function () {
+        config(['agentic-actions.agents.max_tools' => 3]);
+
+        $audit = fn () => Actions::assertAgentTools(new ReportsAgent($this->user));
+
+        if ($this->laravelAiBefore('1.1.0')) {
+            expect($audit)->toThrow(AssertionFailedError::class, ReportsAgent::class.' loads 7 action tools on every step, more than agents.max_tools (3). With laravel/ai older than 1.1, the tools() of InteractsWithActions sends its #[DeferToolset] toolsets as ordinary tools, so they count too: run composer require laravel/ai:^1.1, or raise the limit.');
+        } else {
+            $audit();
+        }
     });
 
     it('fails one whose tools() returns none of its #[DeferToolset] toolsets\' action tools', function () {

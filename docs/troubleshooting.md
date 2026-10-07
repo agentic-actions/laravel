@@ -246,7 +246,7 @@ App\Ai\Assistant: its #[UseToolset] toolsets hold 87 actions, all loaded on ever
 App\Ai\Assistant loads 87 action tools on every step, more than agents.max_tools (20). Move the toolsets it needs only sometimes to #[DeferToolset], or raise the limit.
 ```
 
-The first is the Toolsets row of `actions:check`, a warning; the second is `Actions::assertAgentTools()` failing in a test. Both count the actions one agent loads across all of its `#[UseToolset]` toolsets, each action once, since the model reads every one of them on every step: an agent whose toolsets each hold fewer is flagged when together they hold more, and splitting a toolset in two changes nothing.
+The first is the Toolsets row of `actions:check`, a warning; the second is `Actions::assertAgentTools()` failing in a test. Both count the actions one agent loads across all of its `#[UseToolset]` toolsets, each action once, since the model reads every one of them on every step: an agent whose toolsets each hold fewer is flagged when together they hold more, and splitting a toolset in two changes nothing. With laravel/ai 1.0, the `tools()` of `InteractsWithActions` sends an agent's `#[DeferToolset]` toolsets as ordinary tools, so `assertAgentTools()` counts them too, and its message says to update laravel/ai to 1.1 instead.
 
 Fix: give the agent only the toolsets its job needs, move the ones it needs only sometimes to `#[DeferToolset]`, or raise `agents.max_tools`, as [many actions](copilot.md#many-actions) describes. A published config that still sets the old `agents.max_tools_per_toolset` keeps its value: rename the key to `agents.max_tools`.
 
