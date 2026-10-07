@@ -73,8 +73,9 @@ final class CheckCommand extends Command
     }
 
     /**
-     * Write the snapshot from a fresh scan. A scan that finds two actions under one name writes nothing; the Names row
-     * reports it.
+     * Write the snapshot from a fresh scan, and name each action it now lists under another name than the file did,
+     * since the rows that run next read the new file. A scan that finds two actions under one name writes nothing; the
+     * Names row reports it.
      */
     private function update(Scanner $scanner): void
     {
@@ -89,8 +90,46 @@ final class CheckCommand extends Command
             return;
         }
 
-        Snapshot::write(Snapshot::build($scan));
+        $stored = Snapshot::read();
+        $built = Snapshot::build($scan);
+
+        Snapshot::write($built);
 
         $this->components->info('Wrote '.Snapshot::path().'.');
+
+        if (($renames = self::renames($stored, $built)) !== []) {
+            $this->components->warn('Renamed: '.implode(', ', $renames).'. Update what calls an action by its old name, or keep that name with $name on its class and run php artisan actions:check --update again.');
+        }
+    }
+
+    /**
+     * Each class the built snapshot lists under another name than the stored one did, as "old to new", in the order of
+     * the new names.
+     *
+     * @param  array<string, mixed>|null  $stored
+     * @param  array{version: int, actions: array<string, array<string, mixed>>, agents: array<string, list<string>>}  $built
+     * @return list<string>
+     */
+    private static function renames(?array $stored, array $built): array
+    {
+        $before = [];
+
+        foreach (is_array($stored['actions'] ?? null) ? $stored['actions'] : [] as $name => $row) {
+            if (is_array($row) && is_string($row['class'] ?? null)) {
+                $before[$row['class']] = (string) $name;
+            }
+        }
+
+        $renames = [];
+
+        foreach ($built['actions'] as $name => $row) {
+            $previous = is_string($row['class'] ?? null) ? ($before[$row['class']] ?? null) : null;
+
+            if ($previous !== null && $previous !== $name) {
+                $renames[] = "{$previous} to {$name}";
+            }
+        }
+
+        return $renames;
     }
 }

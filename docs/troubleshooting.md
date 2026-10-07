@@ -336,6 +336,22 @@ git diff actions.exposure.json
 
 Read the diff. Every new route, toolset or MCP tool in it is a decision. Commit the file once you agree with it ([the snapshot](concepts.md#discovery-the-manifest-and-the-snapshot)).
 
+### An action's default name changed
+
+```text
+App\Actions\ImportCSVFile: its name is now [import-csv-file], since a run of capitals is one word; 0.9.0-beta.3 and earlier named it [import-c-s-v-file]. What calls it by the old name, such as its route's name or URL, the TypeScript file, an agent, an MCP client or actions:run, needs the new one. Keep the old name with protected string $name = 'import-c-s-v-file'; or update those callers, then run php artisan actions:check --update.
+```
+
+An action without `$name` takes its name from its class name, where a run of capitals is now one word ([the action](concepts.md#the-action)). Only classes with such a run changed, such as `ImportCSVFile`, `SendSMS` or `GetUserID`; `CreatePost`, `CreateAPost` and every class that sets `$name` kept their names. `actions:check` warns about each one in its Names row while `actions.exposure.json` still lists it under the old name, or while there is no snapshot, and the [Snapshot row](#actionsexposurejson-is-stale) fails beside it until you update the file.
+
+Fix: choose for each action. To keep the name that agents, MCP clients and your own code already use, set it on the class:
+
+```php
+protected string $name = 'import-c-s-v-file';
+```
+
+To take the new one, update what calls the action by name: `route('actions.import-c-s-v-file')` and links to its URL, a scheduled `actions:run`, listeners and front-end code that read the action's name, and your tests. Run `php artisan actions:typescript`, where `importCSVFile` is now `importCsvFile`. Then run `php artisan actions:check --update`, which names each action it renamed, and commit `actions.exposure.json`.
+
 ## Other messages
 
 | Message | Cause and fix |

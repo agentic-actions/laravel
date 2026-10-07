@@ -29,6 +29,7 @@ use Tests\Fixtures\Ai\ParentToolsAgent;
 use Tests\Fixtures\Ai\TraitlessToolsetAgent;
 use Tests\Fixtures\Authorize\TwoStepAuthorize;
 use Tests\Fixtures\Checks\EmptyRequiredOutput;
+use Tests\Fixtures\Checks\ExportCSVNotes;
 use Tests\Fixtures\Checks\FileBehindAgentSchema;
 use Tests\Fixtures\Checks\FileForAgents;
 use Tests\Fixtures\Checks\ForbiddenSecret;
@@ -36,6 +37,7 @@ use Tests\Fixtures\Checks\HttpOnlyAttributes;
 use Tests\Fixtures\Checks\IdEarlyAuthorize;
 use Tests\Fixtures\Checks\IdScopedExists;
 use Tests\Fixtures\Checks\IdUnscopedExists;
+use Tests\Fixtures\Checks\ImportCSVNotes;
 use Tests\Fixtures\Checks\OrderWithoutShouldRegister;
 use Tests\Fixtures\Checks\OrderWithTwoStepAuthorize;
 use Tests\Fixtures\Checks\RulesNeedActor;
@@ -53,6 +55,8 @@ use Workbench\App\Models\Team;
 use Workbench\App\Models\User;
 
 const STRICT_RECIPE = 'the "Strict agent schemas (no ids)" recipe (https://agentic-actions.com/recipes#strict-agent-schemas-no-ids): agentSchema() plus fromAgent().';
+
+const RENAMED_NOTES = ImportCSVNotes::class.": its name is now [import-csv-notes], since a run of capitals is one word; 0.9.0-beta.3 and earlier named it [import-c-s-v-notes]. What calls it by the old name, such as its route's name or URL, the TypeScript file, an agent, an MCP client or actions:run, needs the new one. Keep the old name with protected string \$name = 'import-c-s-v-notes'; or update those callers, then run php artisan actions:check --update.";
 
 beforeEach(function () {
     $this->fixtures = dirname(__DIR__, 2).'/Fixtures';
@@ -97,6 +101,19 @@ function findingsFor(array $classes, array $paths = [], bool $production = false
         fn (Finding $finding): array => [$finding->level, $finding->row, $finding->message],
         array_filter(app(Checks::class)->run($production), fn (Finding $finding): bool => $finding->row !== 'Snapshot'),
     ));
+}
+
+/**
+ * Write actions.exposure.json as 0.9.0-beta.3 wrote it for ImportCSVNotes: its row under the name that release
+ * derived, import-c-s-v-notes, naming the given class.
+ */
+function writeSnapshotBeforeAcronyms(string $class = ImportCSVNotes::class): void
+{
+    Snapshot::write([
+        'version' => 1,
+        'actions' => ['import-c-s-v-notes' => ['class' => $class, 'effect' => 'write', 'web' => false, 'agents' => [], 'mcp' => false, 'tenant_scoped' => false]],
+        'agents' => [],
+    ]);
 }
 
 /**
@@ -175,6 +192,39 @@ describe('the snapshot', function () {
         [$code, $output] = checkActionsCommand();
 
         expect($code)->toBe(1)->and($output)->toContain("✗ [Snapshot] {$this->snapshot} is stale: review the change, then run php artisan actions:check --update");
+    });
+});
+
+describe('the names row', function () {
+    it('warns only while the snapshot lists this class under the name 0.9.0-beta.3 derived, with the line that keeps it', function (string $class, array $findings) {
+        writeSnapshotBeforeAcronyms($class);
+
+        expect(inRow(findingsFor([ImportCSVNotes::class]), 'Names'))->toBe($findings);
+    })->with([
+        'that name for this class' => [ImportCSVNotes::class, [['warn', 'Names', RENAMED_NOTES]]],
+        'that name for another class' => ['App\Actions\ImportCSVNotes', []],
+    ]);
+
+    it('warns without a snapshot, and never about a class that sets $name', function () {
+        expect(inRow(findingsFor([ExportCSVNotes::class, ImportCSVNotes::class]), 'Names'))->toBe([['warn', 'Names', RENAMED_NOTES]]);
+    });
+
+    it('goes quiet once --update writes the new name, and --update says what it renamed', function () {
+        config(['agentic-actions.discovery.paths' => [], 'agentic-actions.discovery.classes' => [ImportCSVNotes::class]]);
+
+        writeSnapshotBeforeAcronyms();
+
+        [$code, $output] = checkActionsCommand();
+        [$updateCode, $update] = checkActionsCommand(['--update' => true]);
+        [$afterCode, $after] = checkActionsCommand();
+
+        expect($code)->toBe(1)
+            ->and($output)->toContain("✗ [Snapshot] {$this->snapshot} is stale: review the change, then run php artisan actions:check --update. Added: import-csv-notes. Removed: import-c-s-v-notes.")
+            ->and($output)->toContain('! [Names] '.ImportCSVNotes::class.': its name is now [import-csv-notes]')
+            ->and($updateCode)->toBe(0)
+            ->and($update)->toContain('Renamed: import-c-s-v-notes to import-csv-notes.')
+            ->and($afterCode)->toBe(0)
+            ->and($after)->not->toContain('[Names]');
     });
 });
 

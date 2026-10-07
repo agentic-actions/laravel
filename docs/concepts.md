@@ -434,7 +434,7 @@ The scanner walks `discovery.paths` (default `app`; globs and absolute paths wor
 
 `php artisan optimize` (or `actions:cache`) writes a manifest to `bootstrap/cache/agentic-actions.php`, so production requests do not scan. The console, local requests and test runs always scan. The manifest only nominates: every gate re-reads the class, so a stale manifest can hide a new action but never widen an old one. [Deploying](setup.md#deploying) says what to run on each deploy.
 
-`actions.exposure.json` is the reviewable form of the same facts, committed with your code. Only `php artisan actions:check --update` writes it. `actions:check` fails while it differs from what the classes declare, so a new route or a widened toolset is a diff someone approved.
+`actions.exposure.json` is the reviewable form of the same facts, committed with your code. Only `php artisan actions:check --update` writes it. `actions:check` fails while it differs from what the classes declare, so a new route or a widened toolset is a diff someone approved. `--update` also prints each action it now lists under another name, since a new name moves its route, its tools and its TypeScript export.
 
 ## Tenants
 
