@@ -3,6 +3,7 @@
 namespace AgenticActions\Testing;
 
 use AgenticActions\Ai\ActionTool;
+use Laravel\Ai\Providers\Tools\ToolSearch;
 use Pest\Expectation;
 use PHPUnit\Framework\Assert;
 
@@ -16,7 +17,7 @@ final class Expectations
 {
     /**
      * Register the Pest expectations when Pest is loaded. Each test's application registers them again, under the
-     * same names.
+     * same names. toContainActionTool looks at the top level of the tools and inside a tool-search group.
      */
     public static function register(): void
     {
@@ -25,7 +26,14 @@ final class Expectations
         }
 
         expect()->extend('toContainActionTool', function (string $name): Expectation {
-            $tools = is_iterable($this->value) ? [...$this->value] : [];
+            $tools = [];
+
+            foreach (is_iterable($this->value) ? $this->value : [] as $tool) {
+                foreach ($tool instanceof ToolSearch ? $tool->tools : [$tool] as $inner) {
+                    $tools[] = $inner;
+                }
+            }
+
             $names = array_map(fn ($tool) => $tool->name(), array_filter($tools, fn ($tool) => $tool instanceof ActionTool));
 
             Assert::assertContains($name, $names, "No action tool [{$name}] among: ".implode(', ', $names));

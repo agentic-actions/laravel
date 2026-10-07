@@ -6,6 +6,7 @@ use AgenticActions\Refusal;
 use AgenticActions\Testing\ActionAssertions;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
+use Laravel\Ai\Providers\Tools\ToolSearch;
 use PHPUnit\Framework\ExpectationFailedException;
 use Tests\Fixtures\Actions\CreateNote;
 use Tests\Fixtures\Actions\ListNotes;
@@ -27,6 +28,11 @@ beforeEach(function () {
 
     $this->user = User::factory()->create();
 });
+
+dataset('agent tools', [
+    'as the agent returns them' => [fn (NotesAgent $agent): iterable => $agent->tools()],
+    'inside a tool-search group' => [fn (NotesAgent $agent): array => [new ToolSearch([...$agent->tools()])]],
+]);
 
 describe('a faked action behind a generated route', function () {
     beforeEach(function () {
@@ -106,18 +112,18 @@ describe('the testing kit on real agent tools', function () {
         Auth::shouldUse('web');
     });
 
-    it('passes toContainActionTool for a tool the agent holds', function () {
+    it('passes toContainActionTool for a tool the agent holds', function (Closure $tools) {
         $this->skipUnlessAi();
 
-        expect((new NotesAgent($this->user))->tools())->toContainActionTool('create-note');
-    });
+        expect($tools(new NotesAgent($this->user)))->toContainActionTool('create-note');
+    })->with('agent tools');
 
-    it('fails toContainActionTool naming the tools the agent holds', function () {
+    it('fails toContainActionTool naming the tools the agent holds', function (Closure $tools) {
         $this->skipUnlessAi();
 
-        expect(fn () => expect((new NotesAgent($this->user))->tools())->toContainActionTool('nope'))
+        expect(fn () => expect($tools(new NotesAgent($this->user)))->toContainActionTool('nope'))
             ->toThrow(ExpectationFailedException::class, 'No action tool [nope] among: create-note, late-authorize, list-notes, team-note, translated-note');
-    });
+    })->with('agent tools');
 
     it('audits the agent\'s real tools through the trait', function () {
         $this->skipUnlessAi();
