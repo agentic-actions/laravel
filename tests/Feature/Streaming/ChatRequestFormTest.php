@@ -9,7 +9,9 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Route;
 use Laravel\Ai\Approvals\Decision;
+use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\ConversationStore;
+use Tests\Fixtures\Ai\ToolSearchAgent;
 use Tests\Fixtures\Approvals\ScriptedGateway;
 use Tests\Fixtures\Elicitation\AskingAgent;
 use Tests\Fixtures\Elicitation\AskingChoices;
@@ -43,15 +45,15 @@ beforeEach(function () {
     $this->user = User::factory()->create(['name' => 'Ada']);
     $this->team = null;
 
-    // Pause the user's asking agent on the scripted calls; the conversation's id.
-    $this->pause = function (array $calls = [['asking-draft', ['title' => 'Launch notes']]]): string {
+    // Pause the user's asking agent, or another agent class, on the scripted calls; the conversation's id.
+    $this->pause = function (array $calls = [['asking-draft', ['title' => 'Launch notes']]], string $agent = AskingAgent::class): string {
         $this->gateway = (new ScriptedGateway($calls, 'Saved it.', 'A few details first.'))->install();
 
-        return (string) (new AskingAgent($this->user, $this->team))->forUser($this->user)->prompt('Draft a post.')->conversationId;
+        return (string) (new $agent($this->user, $this->team))->forUser($this->user)->prompt('Draft a post.')->conversationId;
     };
 
     // The agent the host's route builds: continued in the conversation, for the person.
-    $this->agent = fn (string $id, ?User $as = null): AskingAgent => (new AskingAgent($as ?? $this->user, $this->team))->continue($id, as: $as ?? $this->user);
+    $this->agent = fn (string $id, ?User $as = null, string $agent = AskingAgent::class): Agent => (new $agent($as ?? $this->user, $this->team))->continue($id, as: $as ?? $this->user);
 
     // One answered tool part carrying an ElicitResult; approved agrees with it unless given.
     $this->answer = fn (?array $result, string $id = 'call_1', ?bool $approved = null, string $tool = 'asking-draft'): array => [
@@ -67,7 +69,7 @@ beforeEach(function () {
     $this->body = fn (array $parts): array => ['messages' => [['id' => 'msg-a1', 'role' => 'assistant', 'parts' => $parts]]];
 
     // ChatRequest::from() over a JSON body, as the given user, optionally as a Precognition request.
-    $this->read = function (array $body, AskingAgent $agent, ?User $as = null, bool $precognition = false): ChatRequest {
+    $this->read = function (array $body, Agent $agent, ?User $as = null, bool $precognition = false): ChatRequest {
         $request = Request::create('/assistant', 'POST', server: ['CONTENT_TYPE' => 'application/json', ...($precognition ? ['HTTP_PRECOGNITION' => 'true'] : [])], content: json_encode($body, JSON_THROW_ON_ERROR));
         $request->setUserResolver(fn (): User => $as ?? $this->user);
 
@@ -174,6 +176,20 @@ describe('an accept', function () {
             ->and(formDecisions(($this->read)($answer('2026-10-01'), ($this->agent)($id)))['call_1'])->toBe(['approve', null]);
     });
 
+    it('counts for an action tool inside a tool-search group: the turn runs, and the action gets the person\'s values', function () {
+        $id = ($this->pause)(agent: ToolSearchAgent::class);
+        $agent = ($this->agent)($id, agent: ToolSearchAgent::class);
+
+        $response = ($this->read)(($this->body)([($this->accept)($this->valid)]), $agent)->respond(function (ChatRequest $chat) use ($agent) {
+            $agent->prompt($chat);
+
+            return response()->noContent();
+        });
+
+        expect($response->getStatusCode())->toBe(204)
+            ->and(AskingDraft::$handled)->toBe($this->valid);
+    });
+
     it('is no answer once the call\'s stored arguments pass on their own, so nothing matches: 409', function () {
         $this->travelTo('2026-09-20 12:00:00');
         $id = ($this->pause)([['asking-rules', ['when' => '2026-09-19']]]);
@@ -229,18 +245,21 @@ describe('a decline, a cancel and any other answer', function () {
         'an elicitation that is a string' => [['accept'], true],
     ]);
 
-    it('runs nothing for a bare approval of a form\'s call, even once the model\'s own arguments would pass', function () {
+    it('runs nothing for a bare approval of a form\'s call, even once the model\'s own arguments would pass', function (string $class) {
         $this->travelTo('2026-09-20 12:00:00');
-        $id = ($this->pause)([['asking-rules', ['when' => '2026-09-19']]]);
+        $id = ($this->pause)([['asking-rules', ['when' => '2026-09-19']]], $class);
         $this->travelTo('2026-09-10 12:00:00');
-        $agent = ($this->agent)($id);
+        $agent = ($this->agent)($id, agent: $class);
 
         $agent->prompt(($this->read)(($this->body)([($this->answer)(null, approved: true, tool: 'asking-rules')]), $agent));
 
         expect(AskingRules::$handled)->toBeNull()
             ->and(app(ConversationStore::class)->pendingApprovalsFor($id))->toBe([])
             ->and(json_encode($this->gateway->sent, JSON_THROW_ON_ERROR))->toContain(trans('agentic-actions::model.declined'));
-    });
+    })->with([
+        'an action tool' => [AskingAgent::class],
+        'an action tool inside a tool-search group' => [ToolSearchAgent::class],
+    ]);
 });
 
 describe('a card and a form', function () {

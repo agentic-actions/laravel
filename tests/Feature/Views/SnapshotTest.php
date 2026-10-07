@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Schema;
 use Laravel\Ai\Responses\Data\ToolCall;
+use Tests\Fixtures\Ai\ToolSearchAgent;
 use Tests\Fixtures\Streaming\OneStepGateway;
 use Tests\Fixtures\Streaming\Parts;
 use Tests\Fixtures\Views\PostsByStatus;
@@ -54,8 +55,8 @@ beforeEach(function () {
     Post::factory()->for($this->user)->create(['title' => 'Launch notes', 'status' => 'published']);
 
     // One streamed turn of the agent, with the tool calls in one provider step, then a reply.
-    $this->turn = function (ViewsAgent $agent, array $toolCalls): array {
-        (new OneStepGateway($toolCalls, 'Replied.'))->fake(ViewsAgent::class);
+    $this->turn = function (ViewsAgent|ToolSearchAgent $agent, array $toolCalls): array {
+        (new OneStepGateway($toolCalls, 'Replied.'))->fake($agent::class);
 
         return Parts::of(Parts::body($agent->stream('Show me.')));
     };
@@ -156,7 +157,7 @@ describe('record()', function () {
 describe('the reload', function () {
     beforeEach(function () {
         // The page's reload of the author's last conversation, with the agent as it stands now.
-        $this->reload = fn (?ViewsAgent $agent = null): array => Transcript::forUseChat(
+        $this->reload = fn (ViewsAgent|ToolSearchAgent|null $agent = null): array => Transcript::forUseChat(
             (string) DB::table('agent_conversations')->orderByDesc('id')->value('id'),
             $this->user,
             agent: ($agent ?? new ViewsAgent($this->user))->continueLastConversation($this->user),
@@ -173,6 +174,13 @@ describe('the reload', function () {
 
         expect(array_column($reloaded, 'role'))->toBe(['user', 'assistant'])
             ->and($reloaded[1]['parts'])->toBe([...viewParts($parts), ['type' => 'text', 'text' => 'Replied.']]);
+    });
+
+    it('gives a table back for an action tool inside a tool-search group', function () {
+        $parts = ($this->turn)((new ToolSearchAgent($this->user))->forUser($this->user), [new ToolCall('call_1', 'posts-by-status', ['status' => 'published'])]);
+
+        expect(viewParts($parts))->toHaveCount(1)
+            ->and(($this->reload)(new ToolSearchAgent($this->user))[1]['parts'])->toBe([...viewParts($parts), ['type' => 'text', 'text' => 'Replied.']]);
     });
 
     it('gives a table back only while the agent\'s tools still offer its action', function () {

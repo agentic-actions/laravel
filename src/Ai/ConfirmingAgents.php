@@ -9,6 +9,7 @@ use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\HasTools;
 use Laravel\Ai\Contracts\ResolvesPendingApprovals;
 use Laravel\Ai\Contracts\VerifiesConversationOwnership;
+use Laravel\Ai\Providers\Tools\ToolSearch;
 use Throwable;
 
 /**
@@ -63,7 +64,10 @@ final class ConfirmingAgents
     }
 
     /**
-     * The agent's own action tools, as it builds them now, by name; none when it declares no tools.
+     * The agent's own action tools, as it builds them now, by name, at the top level of its tools and inside a
+     * tool-search group; none when it declares no tools.
+     *
+     * @upstream An action tool inside a tool-search group is found as one at the top level is.
      *
      * @return array<string, ActionTool>
      */
@@ -72,8 +76,10 @@ final class ConfirmingAgents
         $tools = [];
 
         foreach ($agent instanceof HasTools ? $agent->tools() : [] as $tool) {
-            if ($tool instanceof ActionTool) {
-                $tools[$tool->name()] = $tool;
+            foreach ($tool instanceof ToolSearch ? $tool->tools : [$tool] as $inner) {
+                if ($inner instanceof ActionTool) {
+                    $tools[$inner->name()] = $inner;
+                }
             }
         }
 

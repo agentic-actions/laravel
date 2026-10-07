@@ -1,10 +1,14 @@
 <?php
 
+use AgenticActions\Streaming\ChatRequest;
 use AgenticActions\Streaming\Transcript;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Exceptions;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Approvals\Decisions;
+use Laravel\Ai\Contracts\Agent;
 use Tests\Fixtures\Actions\Trace;
+use Tests\Fixtures\Ai\ToolSearchAgent;
 use Tests\Fixtures\Approvals\ConfirmingAgent;
 use Tests\Fixtures\Approvals\HostConfirmedTool;
 use Tests\Fixtures\Approvals\HostToolAgent;
@@ -32,14 +36,15 @@ beforeEach(function () {
     $this->user = User::factory()->create();
     $this->post = $this->user->posts()->create(['title' => 'Launch notes', 'body' => 'x', 'status' => 'draft']);
 
-    // A turn paused on deleting the post; the model's arguments carry a canary the schema does not advertise.
-    $this->pause = function (string $lead = 'I can delete it once you confirm.'): string {
+    // A turn of the confirming agent, or another agent class, paused on deleting the post; the model's arguments carry a
+    // canary the schema does not advertise.
+    $this->pause = function (string $lead = 'I can delete it once you confirm.', string $agent = ConfirmingAgent::class): string {
         (new ScriptedGateway([['confirmed-delete', ['post' => $this->post->id, 'note' => 'CANARY-ARG']]], 'Deleted it.', $lead))->install();
 
-        return (new ConfirmingAgent($this->user))->forUser($this->user)->prompt('Delete my post.')->conversationId;
+        return (new $agent($this->user))->forUser($this->user)->prompt('Delete my post.')->conversationId;
     };
 
-    $this->agent = fn (string $conversation, ?User $as = null): ConfirmingAgent => (new ConfirmingAgent($as ?? $this->user))
+    $this->agent = fn (string $conversation, ?User $as = null, string $agent = ConfirmingAgent::class): Agent => (new $agent($as ?? $this->user))
         ->continue($conversation, as: $as ?? $this->user);
 
     $this->waitingParts = fn (): array => [
@@ -63,6 +68,25 @@ it('keeps a paused turn with no words, with the waiting parts only', function ()
 
     expect(end($transcript)['role'])->toBe('assistant')
         ->and(end($transcript)['parts'])->toEqual(($this->waitingParts)());
+});
+
+it('restores the card of an action tool inside a tool-search group, and confirming it resumes the turn', function () {
+    $conversation = ($this->pause)('', ToolSearchAgent::class);
+
+    $transcript = Transcript::forUseChat($conversation, $this->user, agent: ($this->agent)($conversation, agent: ToolSearchAgent::class));
+
+    expect(end($transcript)['parts'])->toEqual(($this->waitingParts)());
+
+    // Confirming the restored card, on the stored message's id.
+    $part = ['type' => 'tool-confirmed-delete', 'toolCallId' => 'call_1', 'state' => 'approval-responded', 'approval' => ['id' => 'call_1', 'approved' => true]];
+    $request = Request::create('/assistant', 'POST', server: ['CONTENT_TYPE' => 'application/json'], content: json_encode(['messages' => [['id' => end($transcript)['id'], 'role' => 'assistant', 'parts' => [$part]]]], JSON_THROW_ON_ERROR));
+    $request->setUserResolver(fn (): User => $this->user);
+    $agent = ($this->agent)($conversation, agent: ToolSearchAgent::class);
+
+    $agent->prompt(ChatRequest::from($request, $agent));
+
+    expect(Trace::$calls)->toContain('ConfirmedDelete::handle')
+        ->and($this->post->fresh())->toBeNull();
 });
 
 it('gives 0.2\'s words without the agent', function () {
