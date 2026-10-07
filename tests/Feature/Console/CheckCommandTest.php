@@ -45,6 +45,11 @@ use Tests\Fixtures\Checks\RulesNeedActor;
 use Tests\Fixtures\Checks\RulesOnlyAgentKey;
 use Tests\Fixtures\Checks\TenantKeyInSchema;
 use Tests\Fixtures\Checks\UnsupportedUnion;
+use Tests\Fixtures\Initialize\InitializesWithoutMethod;
+use Tests\Fixtures\Initialize\InitializingDataset;
+use Tests\Fixtures\Initialize\InitializingWrite;
+use Tests\Fixtures\Initialize\OwnInitialize;
+use Tests\Fixtures\Initialize\ShowShareLink;
 use Tests\Fixtures\Misconfigured\NoAuthorize;
 use Tests\Fixtures\Misconfigured\UndeclaredEffect;
 use Tests\Fixtures\Misconfigured\WebWithAgentSchema;
@@ -641,6 +646,18 @@ describe('other rows', function () {
             ->and($fresh)->toBe([])
             ->and($without)->toBe([])
             ->and($differs)->toBe([['fail', 'Manifest', 'The actions manifest differs from the actions on disk: run php artisan actions:cache.']]);
+    });
+});
+
+describe('the initialize row', function () {
+    it('fails $initializes that adds no rows, warns about an initialize() the package never calls, and passes a Read with both', function () {
+        // In the scan's order, by action name.
+        expect(inRow(findingsFor([ShowShareLink::class, InitializingWrite::class, InitializingDataset::class, InitializesWithoutMethod::class, OwnInitialize::class]), 'Initialize'))->toBe([
+            ['fail', 'Initialize', InitializesWithoutMethod::class.': $initializes lists [share_links], but the class declares no public initialize(), so the rows are never added. Declare initialize(ActionContext $context), which adds them before handle() reads them.'],
+            ['fail', 'Initialize', InitializingDataset::class.': $initializes lists [share_links], but a dataset\'s call is generated, so initialize() never runs on it. Remove $initializes, and create the rows with the record they belong to.'],
+            ['fail', 'Initialize', InitializingWrite::class.': $initializes lists [share_links], but its effect is write, and only a Read runs initialize(). Declare Effect::Read if the action only shows the rows it adds, or remove $initializes and add them in handle().'],
+            ['warn', 'Initialize', OwnInitialize::class.': it declares initialize(), but $initializes lists no table, so the package never calls it. List the tables it adds rows to in $initializes, or rename it if it is a method of your own.'],
+        ]);
     });
 });
 

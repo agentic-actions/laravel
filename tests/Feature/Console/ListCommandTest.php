@@ -16,6 +16,7 @@ use Tests\Fixtures\Checks\HeaderTokenReader;
 use Tests\Fixtures\Checks\McpAccount;
 use Tests\Fixtures\Checks\McpRoutes;
 use Tests\Fixtures\Discovery\Segments\KebabNamed;
+use Tests\Fixtures\Initialize\ShowShareLink;
 use Tests\Fixtures\Misconfigured\DestructiveForAgents;
 use Tests\Fixtures\Misconfigured\ExposesNothing;
 use Tests\Fixtures\Misconfigured\NoAuthorize;
@@ -143,6 +144,15 @@ describe('blocks', function () {
 
         expect(actionBlock($output, 'team-note'))->toContain('  tenant     scoped')
             ->and(actionBlock($output, 'create-note'))->toContain('  tenant     scoped');
+    });
+
+    it('shows the tables a Read\'s initialize() adds rows to, and no such line for any other action', function () {
+        config(['agentic-actions.discovery.classes' => [ShowShareLink::class]]);
+
+        [, $output] = listActionsCommand();
+
+        expect(actionBlock($output, 'show-share-link'))->toContain('  authorize  before input and after validation', '  initialize inserts into share_links only, before handle()')
+            ->and(implode("\n", actionBlock($output, 'create-note')))->not->toContain('initialize');
     });
 
     it('prints exposure errors under their block inside a test run, where the registry would throw', function () {
