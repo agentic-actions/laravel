@@ -5,7 +5,7 @@
 The demo's copilot follows a script. The actions it runs are real.
 
 <!-- #region getting-started -->
-> **Beta.** 0.9.0-beta.3 is the current release. The API can still change before 1.0: [the changelog](https://github.com/agentic-actions/laravel/blob/main/CHANGELOG.md) lists every change and how to upgrade.
+> **Beta.** 0.9.0-beta.4 is the current release. The API can still change before 1.0: [the changelog](https://github.com/agentic-actions/laravel/blob/main/CHANGELOG.md) lists every change and how to upgrade.
 
 **Try it first** at [demo.agentic-actions.com](https://demo.agentic-actions.com): a team task board built with the package, where you get a private sandbox for 24 hours with no sign-up. Its forms, its copilot and MCP clients all call the same actions. The source is [agentic-actions/demo](https://github.com/agentic-actions/demo).
 

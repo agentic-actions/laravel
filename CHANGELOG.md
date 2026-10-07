@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.9.0-beta.4 - 2026-10-07
+
+An `authorize()` may run before and after the input, a Read may add its own missing rows in `initialize()`, an agent may defer the toolsets it needs only sometimes, a confirmation can bind what its card cannot show, code an action calls can read `ActionContext::current()`, a measure's `where()` takes an operator, and a run of capitals stays one word in a derived name. A dataset whose declaration throws no longer takes an agent's or MCP client's other tools down, and an action whose `schema()` takes a file is no longer offered to agents.
 
 ### Upgrading
 
