@@ -14,6 +14,7 @@ use Tests\Fixtures\Approvals\HostConfirmedTool;
 use Tests\Fixtures\Approvals\HostToolAgent;
 use Tests\Fixtures\Approvals\ScriptedGateway;
 use Tests\Fixtures\Approvals\StatelessAgent;
+use Tests\Fixtures\Deferred\DeferringAgent;
 use Workbench\App\Models\User;
 
 /*
@@ -70,10 +71,10 @@ it('keeps a paused turn with no words, with the waiting parts only', function ()
         ->and(end($transcript)['parts'])->toEqual(($this->waitingParts)());
 });
 
-it('restores the card of an action tool inside a tool-search group, and confirming it resumes the turn', function () {
-    $conversation = ($this->pause)('', ToolSearchAgent::class);
+it('restores the card of an action tool inside a tool-search group, and confirming it resumes the turn', function (string $class) {
+    $conversation = ($this->pause)('', $class);
 
-    $transcript = Transcript::forUseChat($conversation, $this->user, agent: ($this->agent)($conversation, agent: ToolSearchAgent::class));
+    $transcript = Transcript::forUseChat($conversation, $this->user, agent: ($this->agent)($conversation, agent: $class));
 
     expect(end($transcript)['parts'])->toEqual(($this->waitingParts)());
 
@@ -81,13 +82,16 @@ it('restores the card of an action tool inside a tool-search group, and confirmi
     $part = ['type' => 'tool-confirmed-delete', 'toolCallId' => 'call_1', 'state' => 'approval-responded', 'approval' => ['id' => 'call_1', 'approved' => true]];
     $request = Request::create('/assistant', 'POST', server: ['CONTENT_TYPE' => 'application/json'], content: json_encode(['messages' => [['id' => end($transcript)['id'], 'role' => 'assistant', 'parts' => [$part]]]], JSON_THROW_ON_ERROR));
     $request->setUserResolver(fn (): User => $this->user);
-    $agent = ($this->agent)($conversation, agent: ToolSearchAgent::class);
+    $agent = ($this->agent)($conversation, agent: $class);
 
     $agent->prompt(ChatRequest::from($request, $agent));
 
     expect(Trace::$calls)->toContain('ConfirmedDelete::handle')
         ->and($this->post->fresh())->toBeNull();
-});
+})->with([
+    'a group its tools() builds' => ToolSearchAgent::class,
+    'a toolset it defers' => DeferringAgent::class,
+]);
 
 it('gives 0.2\'s words without the agent', function () {
     $conversation = ($this->pause)();

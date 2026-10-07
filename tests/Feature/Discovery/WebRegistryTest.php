@@ -4,6 +4,7 @@ use AgenticActions\Discovery\ActionRegistry;
 use AgenticActions\Discovery\Manifest;
 use AgenticActions\Discovery\ManifestWriter;
 use AgenticActions\Discovery\Scanner;
+use AgenticActions\Discovery\Snapshot;
 use AgenticActions\Exceptions\MisconfiguredExposure;
 use AgenticActions\Exceptions\StaleActionManifest;
 use AgenticActions\Exposure\Entry;
@@ -11,6 +12,8 @@ use AgenticActions\Surface;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\File;
+use Tests\Fixtures\Discovery\Deferring\DeferringDesk;
+use Tests\Fixtures\Discovery\Deferring\SearchDesk;
 use Tests\Fixtures\Misconfigured\UndeclaredEffect;
 
 /*
@@ -73,6 +76,16 @@ it('reads a fresh manifest in production', function () {
     $this->app['env'] = 'production';
 
     expect(ActionRegistry::load($this->app)->all())->toEqual($manifest)->toHaveKey('create-note');
+});
+
+it('reads the agents from a fresh manifest in production, with both lists of one that defers toolsets', function () {
+    config(['agentic-actions.discovery.paths' => [dirname(__DIR__, 2).'/Fixtures/Discovery/Agents', dirname(__DIR__, 2).'/Fixtures/Discovery/Deferring']]);
+    $scanned = Snapshot::build(app(Scanner::class)->scan(config('agentic-actions.discovery.paths')))['agents'];
+    writeManifestThenScanNothing();
+    $this->app['env'] = 'production';
+
+    expect(Snapshot::build(ActionRegistry::load($this->app))['agents'])->toBe($scanned)
+        ->and($scanned)->toHaveKeys([DeferringDesk::class, SearchDesk::class]);
 });
 
 it('reads a manifest written in the same second as the route cache', function () {

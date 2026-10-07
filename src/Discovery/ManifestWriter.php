@@ -46,7 +46,7 @@ final class ManifestWriter
         $manifest = [
             'version' => ActionRegistry::VERSION,
             'actions' => array_map(fn (Entry $entry): array => $entry->toManifest(), $scan->actions),
-            'agents' => $scan->agents,
+            'agents' => $scan->recordedAgents(),
         ];
 
         $path = Manifest::path($this->app);

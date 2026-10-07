@@ -3,15 +3,20 @@
 use AgenticActions\Action;
 use AgenticActions\ActionContext;
 use AgenticActions\Effect;
+use AgenticActions\Facades\Actions;
 use AgenticActions\Schema\AdvertisedSchema;
+use AgenticActions\Support\Packages;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 use Laravel\Ai\AiManager;
+use Laravel\Ai\AnonymousAgent;
 use Laravel\Ai\Approvals\Approval;
 use Laravel\Ai\Approvals\Decision;
 use Laravel\Ai\Approvals\Decisions;
 use Laravel\Ai\Approvals\PendingApproval;
+use Laravel\Ai\Attributes\CacheToolDefinitions;
 use Laravel\Ai\Concerns\RemembersConversations;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Approvable;
@@ -26,6 +31,7 @@ use Laravel\Ai\Contracts\VerifiesConversationOwnership;
 use Laravel\Ai\Enums\MessageStatus;
 use Laravel\Ai\Events\ToolApprovalRequested;
 use Laravel\Ai\Gateway\ParentInvocation;
+use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Models\Conversation;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Promptable;
@@ -38,6 +44,9 @@ use Laravel\Ai\Tools\McpServerTool;
 use Laravel\Ai\Tools\McpTool;
 use Laravel\Ai\Tools\Request;
 use Laravel\Ai\Tools\ToolNameResolver;
+use Tests\Fixtures\Approvals\ScriptedGateway;
+use Workbench\App\Models\Post;
+use Workbench\App\Models\User;
 
 /*
  * Every laravel/ai symbol the AI module touches, pinned by reflection, so an upstream change fails here first.
@@ -151,6 +160,35 @@ it('closes the advertised node exactly as laravel/ai closes a tool schema', func
     $types = app(AdvertisedSchema::class)->types($action, new JsonSchemaTypeFactory, $context);
 
     expect(app(AdvertisedSchema::class)->node($action, $context))->toBe((new ObjectSchema($types))->toSchema());
+});
+
+describe('tool search', function () {
+    it('pins the ToolSearch constructor InteractsWithActions calls with the deferred action tools', function () {
+        expect(aiSignature(ToolSearch::class, '__construct'))->toBe('__construct(array $tools, ?string $strategy): mixed');
+    });
+
+    it('pins what Packages::toolSearch() reads: a provider without tool search runs a group\'s tools from laravel/ai 1.1 on', function () {
+        Auth::shouldUse('web');
+        config(['ai.conversations.generate_title' => false]);
+        $user = User::factory()->create();
+        (new ScriptedGateway([['create-note', ['title' => 'Found it', 'body' => 'x']]]))->install('ollama');
+
+        try {
+            (new AnonymousAgent('Help.', [], [new ToolSearch(Actions::tools(ActionContext::agent($user), ['default']))]))->prompt('Write a note.', provider: 'ollama');
+        } catch (LogicException $exception) {
+            expect($exception->getMessage())->toBe('Provider [ollama] does not support tool search.');
+        }
+
+        expect(Post::query()->where('user_id', $user->id)->exists())->toBe(app(Packages::class)->toolSearch())
+            ->and(app(Packages::class)->toolSearch())->toBe(! $this->laravelAiBefore('1.1.0'));
+    });
+
+    it('pins #[CacheToolDefinitions], which laravel/ai reads from the agent\'s class and actions:check reads too', function () {
+        $agent = new #[CacheToolDefinitions] class('Help.', [], []) extends AnonymousAgent {};
+
+        expect(TextGenerationOptions::forAgent($agent)->cacheToolDefinitions)->toBeInstanceOf(CacheToolDefinitions::class)
+            ->and(TextGenerationOptions::forAgent(new AnonymousAgent('Help.', [], []))->cacheToolDefinitions)->toBeNull();
+    });
 });
 
 describe('confirmations', function () {

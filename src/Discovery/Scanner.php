@@ -3,6 +3,7 @@
 namespace AgenticActions\Discovery;
 
 use AgenticActions\Action;
+use AgenticActions\Attributes\DeferToolset;
 use AgenticActions\Attributes\UseToolset;
 use AgenticActions\Attributes\WithPageContext;
 use AgenticActions\Exceptions\DuplicateActionName;
@@ -55,6 +56,7 @@ final class Scanner
         $actions = [];
         $segments = [];
         $agents = [];
+        $deferred = [];
         $pageContext = [];
         $warnings = [];
 
@@ -99,8 +101,18 @@ final class Scanner
 
                 $actions[$entry->name] = $entry;
                 $segments[$segment] = $class;
-            } elseif (($toolsets = $reflection->getAttributes(UseToolset::class)[0] ?? null) !== null) {
-                $agents[$class] = $toolsets->newInstance()->names;
+            } else {
+                $loaded = $reflection->getAttributes(UseToolset::class)[0] ?? null;
+                $searched = $reflection->getAttributes(DeferToolset::class)[0] ?? null;
+
+                // An agent may carry #[DeferToolset] alone: it loads no toolset.
+                if ($loaded !== null || $searched !== null) {
+                    $agents[$class] = $loaded?->newInstance()->names ?? [];
+                }
+
+                if ($searched !== null) {
+                    $deferred[$class] = $searched->newInstance()->names;
+                }
             }
 
             // An agent may carry #[WithPageContext] without #[UseToolset].
@@ -112,9 +124,10 @@ final class Scanner
         // A stable order keeps the tool block byte-identical, so a provider's prompt cache survives.
         ksort($actions, SORT_STRING);
         ksort($agents, SORT_STRING);
+        ksort($deferred, SORT_STRING);
         sort($pageContext, SORT_STRING);
 
-        return new Scan($actions, $agents, $directories, $warnings, $pageContext);
+        return new Scan($actions, $agents, $directories, $warnings, $pageContext, $deferred);
     }
 
     /**

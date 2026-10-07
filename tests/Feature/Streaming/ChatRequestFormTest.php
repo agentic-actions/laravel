@@ -13,6 +13,7 @@ use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\ConversationStore;
 use Tests\Fixtures\Ai\ToolSearchAgent;
 use Tests\Fixtures\Approvals\ScriptedGateway;
+use Tests\Fixtures\Deferred\DeferringAgent;
 use Tests\Fixtures\Elicitation\AskingAgent;
 use Tests\Fixtures\Elicitation\AskingChoices;
 use Tests\Fixtures\Elicitation\AskingDelete;
@@ -176,9 +177,9 @@ describe('an accept', function () {
             ->and(formDecisions(($this->read)($answer('2026-10-01'), ($this->agent)($id)))['call_1'])->toBe(['approve', null]);
     });
 
-    it('counts for an action tool inside a tool-search group: the turn runs, and the action gets the person\'s values', function () {
-        $id = ($this->pause)(agent: ToolSearchAgent::class);
-        $agent = ($this->agent)($id, agent: ToolSearchAgent::class);
+    it('counts for an action tool inside a tool-search group: the turn runs, and the action gets the person\'s values', function (string $class) {
+        $id = ($this->pause)(agent: $class);
+        $agent = ($this->agent)($id, agent: $class);
 
         $response = ($this->read)(($this->body)([($this->accept)($this->valid)]), $agent)->respond(function (ChatRequest $chat) use ($agent) {
             $agent->prompt($chat);
@@ -188,7 +189,10 @@ describe('an accept', function () {
 
         expect($response->getStatusCode())->toBe(204)
             ->and(AskingDraft::$handled)->toBe($this->valid);
-    });
+    })->with([
+        'a group its tools() builds' => ToolSearchAgent::class,
+        'a toolset it defers' => DeferringAgent::class,
+    ]);
 
     it('is no answer once the call\'s stored arguments pass on their own, so nothing matches: 409', function () {
         $this->travelTo('2026-09-20 12:00:00');

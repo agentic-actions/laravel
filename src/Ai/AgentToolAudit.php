@@ -85,32 +85,46 @@ final class AgentToolAudit
     }
 
     /**
-     * Fail when an agent on InteractsWithActions with a #[UseToolset] does not implement HasTools, whose tools() is
-     * the only one laravel/ai reads, or returns none of the action tools its toolsets give this person: a tools() the
-     * class declares replaces the trait's. A toolset that gives this person no action tools passes, and so does a
-     * tools() that keeps some of them.
+     * Fail when an agent on InteractsWithActions with a #[UseToolset] or #[DeferToolset] does not implement HasTools,
+     * whose tools() is the only one laravel/ai reads, or returns none of the action tools one of those attributes'
+     * toolsets give this person, at its top level or inside a tool-search group: a tools() the class declares replaces
+     * the trait's. Toolsets that give this person no action tools pass, and so does a tools() that keeps some of them.
      *
      * @param  list<Tool>  $tools
      */
     private function assertActionToolsReached(Agent $agent, array $tools): void
     {
-        if (Toolsets::declared($agent::class) === null || ! in_array(InteractsWithActions::class, class_uses_recursive($agent), true)) {
+        $loads = Toolsets::declared($agent::class) !== null;
+        $defers = Toolsets::deferred($agent::class) !== [];
+
+        if ((! $loads && ! $defers) || ! in_array(InteractsWithActions::class, class_uses_recursive($agent), true)) {
             return;
         }
 
         Assert::assertInstanceOf(HasTools::class, $agent, sprintf(
-            '%s carries #[UseToolset] and uses InteractsWithActions, but does not implement Laravel\\Ai\\Contracts\\HasTools, so laravel/ai never asks it for its tools. Add implements HasTools to the class.',
+            '%s carries %s and uses InteractsWithActions, but does not implement Laravel\\Ai\\Contracts\\HasTools, so laravel/ai never asks it for its tools. Add implements HasTools to the class.',
             $agent::class,
+            $loads ? '#[UseToolset]' : '#[DeferToolset]',
         ));
 
-        $offered = (new ReflectionMethod($agent, 'actionTools'))->invoke($agent);
-        $reached = array_filter($tools, fn (Tool $tool): bool => $tool instanceof ActionTool);
+        $reached = self::actionToolNames($tools);
 
-        Assert::assertFalse($offered !== [] && $reached === [], sprintf(
-            '%s carries #[UseToolset], whose toolsets give this person %d action tools, but its tools() returns none of them: a tools() the class declares replaces the one InteractsWithActions gives it. Delete the tools() it declares, or merge the package\'s tools into it: return [...$this->actionTools(), ...].',
-            $agent::class,
-            is_array($offered) ? count($offered) : 0,
-        ));
+        $methods = [
+            'actionTools' => [$loads, '#[UseToolset]', 'merge the package\'s tools into it: return [...$this->actionTools(), ...].'],
+            'deferredActionTools' => [$defers, '#[DeferToolset]', 'put them in a tool-search group in it: return [new ToolSearch([...$this->deferredActionTools(), ...]), ...$this->actionTools()].'],
+        ];
+
+        foreach ($methods as $method => [$carries, $attribute, $fix]) {
+            $offered = $carries ? self::actionToolNames((new ReflectionMethod($agent, $method))->invoke($agent)) : [];
+
+            Assert::assertFalse($offered !== [] && array_intersect($offered, $reached) === [], sprintf(
+                '%s carries %s, whose toolsets give this person %d action tools, but its tools() returns none of them: a tools() the class declares replaces the one InteractsWithActions gives it. Delete the tools() it declares, or %s',
+                $agent::class,
+                $attribute,
+                count($offered),
+                $fix,
+            ));
+        }
     }
 
     /**
@@ -189,6 +203,24 @@ final class AgentToolAudit
             $limit,
             implode(', ', $oversized),
         ));
+    }
+
+    /**
+     * The names of the action tools among these values.
+     *
+     * @return list<string>
+     */
+    private static function actionToolNames(mixed $tools): array
+    {
+        $names = [];
+
+        foreach (is_iterable($tools) ? $tools : [] as $tool) {
+            if ($tool instanceof ActionTool) {
+                $names[] = $tool->name();
+            }
+        }
+
+        return $names;
     }
 
     /**

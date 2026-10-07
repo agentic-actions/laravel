@@ -7,6 +7,10 @@ use AgenticActions\Facades\Actions;
 use AgenticActions\Support\PackageStatus;
 use Illuminate\Support\Facades\File;
 use Tests\Fixtures\Actions\CreateNote;
+use Tests\Fixtures\Discovery\Agents\BlogWriter;
+use Tests\Fixtures\Discovery\Agents\SupportDesk;
+use Tests\Fixtures\Discovery\Deferring\DeferringDesk;
+use Tests\Fixtures\Discovery\Deferring\SearchDesk;
 
 beforeEach(function () {
     $this->snapshot = Snapshot::path();
@@ -144,6 +148,18 @@ describe('build()', function () {
             ->and($snapshot['actions']['create-note'])->toBe(app(ActionRegistry::class)->find('create-note')?->toSnapshot())
             ->and($snapshot['actions']['plain-note'])->toMatchArray(['web' => false, 'agents' => [], 'mcp' => false, 'effect' => 'write'])
             ->and($snapshot['agents'])->toBe(app(ActionRegistry::class)->agents());
+    });
+
+    it('records both lists of an agent that defers toolsets, and the #[UseToolset] list alone of one that does not', function () {
+        config(['agentic-actions.discovery.paths' => [dirname(__DIR__, 2).'/Fixtures/Discovery/Agents', dirname(__DIR__, 2).'/Fixtures/Discovery/Deferring']]);
+        $this->refreshActions();
+
+        expect(Snapshot::build(app(ActionRegistry::class))['agents'])->toBe([
+            BlogWriter::class => ['default'],
+            SupportDesk::class => ['support'],
+            DeferringDesk::class => ['use' => ['default'], 'defer' => ['support']],
+            SearchDesk::class => ['use' => [], 'defer' => ['support']],
+        ]);
     });
 
     it('is what Actions::exposure() returns, for the registry and for a fresh scan alike', function () {

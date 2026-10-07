@@ -450,7 +450,7 @@ A class without `#[Expose]` is still discovered: `run()`, `attempt()` and `actio
 
 ### Toolsets
 
-`#[Expose]` puts an action in toolsets, and `#[UseToolset]` on an agent class names the toolsets it receives. A bare `#[Expose]` puts the action in `default` when agents may receive it; `agents: [...]` names its toolsets; an `#[Expose]` that names other surfaces and not `agents` puts it in none.
+`#[Expose]` puts an action in toolsets, and `#[UseToolset]` on an agent class names the toolsets it receives, which it loads: the model reads their tools on every step. A bare `#[Expose]` puts the action in `default` when agents may receive it; `agents: [...]` names its toolsets; an `#[Expose]` that names other surfaces and not `agents` puts it in none.
 
 ```php
 use AgenticActions\Attributes\UseToolset;
@@ -460,7 +460,9 @@ use AgenticActions\Attributes\UseToolset;
 #[UseToolset('default', 'support')]  // both
 ```
 
-The names are separate strings, not an array: `#[UseToolset(['support'])]` throws a `TypeError` as soon as the package reads it. An agent that uses `InteractsWithActions` without the attribute throws a `LogicException` when its tools are built. The attribute is not inherited either. `assertToolset()` and `assertAgentTools()` pin both sides in your tests ([testing](testing.md#toolsets-and-agents)).
+`#[DeferToolset]` names toolsets the agent finds through tool search instead: their tools go in one tool-search group, which a provider that searches tools shows the model only when it searches. `#[UseToolset('posts')]` with `#[DeferToolset('reports')]` loads `posts` and finds `reports`. Bare, it means `default` too, and an agent may carry either attribute or both. [Many actions](copilot.md#many-actions) says when to defer a toolset, and which providers search.
+
+In both attributes the names are separate strings, not an array: `#[UseToolset(['support'])]` throws a `TypeError` as soon as the package reads it. An agent that uses `InteractsWithActions` without either attribute throws a `LogicException` when its tools are built. Neither attribute is inherited. `assertToolset()` and `assertAgentTools()` pin both sides in your tests ([testing](testing.md#toolsets-and-agents)).
 
 ## Discovery, the manifest and the snapshot
 
@@ -782,7 +784,7 @@ When an agent streams its turn through `ActionsProtocol`, each call of an action
 | `attempt($action, $input, $context)` | Runs the pipeline in-process and returns an [`Outcome`](#the-pipeline). |
 | `tools(ActionContext $context, array $toolsets, ?Agent $agent = null)` | The action tools of these toolsets for an agent that does not use `InteractsWithActions` (below). |
 | `conversation($agent, $participant, $tenant = null)` | The conversation a person continues with an agent in a tenant. See [the copilot](copilot.md#one-conversation-per-tenant). |
-| `exposure()` | What `actions.exposure.json` would hold now, as `actions:list --json` prints it: `version`, `actions` by name, and `agents`. |
+| `exposure()` | What `actions.exposure.json` would hold now, as `actions:list --json` prints it: `version`, `actions` by name, and `agents`, each agent's toolsets by class (`use` and `defer` for one that carries `#[DeferToolset]`). |
 | `refuse($exception, $map)`, `translateUsing($translator)` | See [refusals](#refusals). |
 | `membershipUsing($closure)`, `scopeUsing($closure)` | See [tenants](#tenants). |
 | `fake()`, `assertToolset()`, `assertAgentTools()` | See [testing](testing.md). |

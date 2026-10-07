@@ -45,11 +45,11 @@ final class ScriptedGateway extends FakeTextGateway
     }
 
     /**
-     * Answer the default provider's turns with this gateway, from now on in this test.
+     * Answer the turns of the default provider, or of the named one, with this gateway, from now on in this test.
      */
-    public function install(): self
+    public function install(?string $provider = null): self
     {
-        Ai::textProvider()->useTextGateway($this);
+        Ai::textProvider($provider)->useTextGateway($this);
 
         return $this;
     }

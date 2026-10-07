@@ -58,6 +58,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Exists;
 use Illuminate\Validation\Rules\Unique;
 use InvalidArgumentException;
+use Laravel\Ai\Attributes\CacheToolDefinitions;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\ConversationStore;
 use Laravel\Ai\Contracts\HasMiddleware;
@@ -156,6 +157,7 @@ final class Checks
             ...$this->tenantKeys($subjects),
             ...$this->tenantRoutes($scan, $routes),
             ...$this->toolsets($scan, $subjects),
+            ...$this->toolSearch($scan),
             ...$this->approvals($scan, $subjects),
             ...$this->pageContext($scan),
             ...$this->routes($scan, $routes),
@@ -293,7 +295,7 @@ final class Checks
      * The added, removed and changed action names between the stored snapshot and the built one.
      *
      * @param  array<string, mixed>  $stored
-     * @param  array{version: int, actions: array<string, array<string, mixed>>, agents: array<string, list<string>>}  $built
+     * @param  array{version: int, actions: array<string, array<string, mixed>>, agents: array<string, list<string>|array{use: list<string>, defer: list<string>}>}  $built
      */
     private static function changes(array $stored, array $built): string
     {
@@ -521,8 +523,8 @@ final class Checks
     }
 
     /**
-     * Toolsets: a toolset an agent receives that no action joins, an agent whose own tools() leaves its toolsets out,
-     * one no agent receives, and one that is too large.
+     * Toolsets: a toolset an agent loads or defers that no action joins, one it names in both attributes, an agent
+     * whose own tools() leaves its toolsets out, a toolset no agent receives, and one that is too large.
      *
      * @param  list<Subject>  $subjects
      * @return list<Finding>
@@ -537,20 +539,27 @@ final class Checks
             }
         }
 
-        $received = array_merge([], ...array_values($scan->agents));
         $findings = [];
 
         foreach ($scan->agents as $agent => $toolsets) {
-            foreach ($toolsets as $toolset) {
-                if (! isset($members[$toolset])) {
-                    $findings[] = self::fail('Toolsets', "{$agent}: #[UseToolset] names [{$toolset}], which no action joins.");
+            $deferred = $scan->deferred[$agent] ?? [];
+
+            foreach (['UseToolset' => $toolsets, 'DeferToolset' => $deferred] as $attribute => $names) {
+                foreach ($names as $toolset) {
+                    if (! isset($members[$toolset])) {
+                        $findings[] = self::fail('Toolsets', "{$agent}: #[{$attribute}] names [{$toolset}], which no action joins.");
+                    }
                 }
             }
 
-            if (($wiring = self::toolsWiring($agent)) !== null) {
-                $findings[] = $wiring;
+            if (($both = array_intersect($toolsets, $deferred)) !== []) {
+                $findings[] = self::warn('Toolsets', "{$agent}: #[UseToolset] and #[DeferToolset] both name [".implode(', ', $both).'], so it loads those actions on every step and never defers them. Name each toolset in one of them.');
             }
+
+            array_push($findings, ...self::toolsWiring($agent, $toolsets !== [], $deferred !== []));
         }
+
+        $received = $scan->received();
 
         foreach ($subjects as $subject) {
             // A bare #[Expose] joins "default" implicitly; only toolsets named on purpose are checked.
@@ -579,65 +588,110 @@ final class Checks
     }
 
     /**
-     * How an agent class carrying #[UseToolset] hands its toolsets' actions to laravel/ai: a failure when it uses
-     * InteractsWithActions without implementing HasTools, whose tools() is the only one laravel/ai reads; a warning when
-     * it does not use the trait, which is what turns the attribute into tools; and a warning when its own tools()
-     * replaces the trait's and its source names neither actionTools(), a parent's tools() nor the trait's tools() under
-     * an alias. The last is read from the source, so a warning: a tools() that reaches actionTools() through another
-     * method is flagged too. A class that is not a laravel/ai agent is skipped.
+     * How an agent class carrying #[UseToolset] or #[DeferToolset] hands its toolsets' actions to laravel/ai: a failure
+     * when it uses InteractsWithActions without implementing HasTools, whose tools() is the only one laravel/ai reads; a
+     * warning when it does not use the trait, which is what turns the attributes into tools; and a warning for each of
+     * the two attributes it carries whose own tools() replaces the trait's and whose source names neither that
+     * attribute's method (actionTools() or deferredActionTools()), a parent's tools(), nor the trait's tools() or that
+     * method under an alias. The last is read from the source, so a warning: a tools() that reaches the method through
+     * another one is flagged too. A class that is not a laravel/ai agent is skipped.
+     *
+     * @return list<Finding>
      */
-    private static function toolsWiring(string $agent): ?Finding
+    private static function toolsWiring(string $agent, bool $loads, bool $defers): array
     {
         if (! class_exists($agent) || ! is_subclass_of($agent, Agent::class)) {
-            return null;
+            return [];
         }
 
         if (! in_array(InteractsWithActions::class, class_uses_recursive($agent), true)) {
-            return self::warn('Toolsets', "{$agent}: it carries #[UseToolset] but does not use InteractsWithActions, which turns its toolsets into tools, so the attribute alone gives it none of its toolsets' actions. Add use InteractsWithActions; and an actionContext() (https://agentic-actions.com/copilot#the-server).");
+            $attribute = $loads ? '#[UseToolset]' : '#[DeferToolset]';
+
+            return [self::warn('Toolsets', "{$agent}: it carries {$attribute} but does not use InteractsWithActions, which turns its toolsets into tools, so the attribute alone gives it none of its toolsets' actions. Add use InteractsWithActions; and an actionContext() (https://agentic-actions.com/copilot#the-server).")];
         }
 
         if (! is_subclass_of($agent, HasTools::class)) {
-            return self::fail('Toolsets', "{$agent}: it uses InteractsWithActions but does not implement Laravel\\Ai\\Contracts\\HasTools, so laravel/ai never asks it for its tools and none of its toolsets' actions reach the model. Add implements HasTools to the class.");
+            return [self::fail('Toolsets', "{$agent}: it uses InteractsWithActions but does not implement Laravel\\Ai\\Contracts\\HasTools, so laravel/ai never asks it for its tools and none of its toolsets' actions reach the model. Add implements HasTools to the class.")];
         }
 
         $method = new ReflectionMethod($agent, 'tools');
 
         if (($file = $method->getFileName()) === false) {
-            return null;
+            return [];
         }
 
         $lines = array_slice(file($file) ?: [], $method->getStartLine() - 1, $method->getEndLine() - $method->getStartLine() + 1);
         $source = implode('', $lines);
 
-        foreach (['actionTools', 'parent::tools', ...self::traitAliases($agent)] as $call) {
-            if (str_contains($source, "{$call}(")) {
-                return null;
-            }
+        $calls = fn (string $method): bool => array_filter(
+            [$method, 'parent::tools', ...self::traitAliases($agent, ['tools', $method])],
+            fn (string $call): bool => str_contains($source, "{$call}("),
+        ) !== [];
+
+        $findings = [];
+
+        if ($loads && ! $calls('actionTools')) {
+            $findings[] = self::warn('Toolsets', "{$agent}: its own tools() replaces the one InteractsWithActions gives it, and its source calls neither \$this->actionTools() nor the trait's tools(), so its toolsets' actions may never reach the model. Delete the tools() it declares, or merge the package's tools into it: return [...\$this->actionTools(), ...].");
         }
 
-        return self::warn('Toolsets', "{$agent}: its own tools() replaces the one InteractsWithActions gives it, and its source calls neither \$this->actionTools() nor the trait's tools(), so its toolsets' actions may never reach the model. Delete the tools() it declares, or merge the package's tools into it: return [...\$this->actionTools(), ...].");
+        if ($defers && ! $calls('deferredActionTools')) {
+            $findings[] = self::warn('Toolsets', "{$agent}: its own tools() replaces the one InteractsWithActions gives it, and its source calls neither \$this->deferredActionTools() nor the trait's tools(), so its #[DeferToolset] toolsets' actions may never reach the model. Delete the tools() it declares, or put them in a tool-search group in it: return [new ToolSearch([...\$this->deferredActionTools(), ...]), ...\$this->actionTools()].");
+        }
+
+        return $findings;
     }
 
     /**
-     * The names an agent class or its parents give InteractsWithActions' tools() and actionTools() in a trait alias,
-     * such as packageTools in `use InteractsWithActions { tools as packageTools; }`.
+     * The names an agent class or its parents give these InteractsWithActions methods in a trait alias, such as
+     * packageTools in `use InteractsWithActions { tools as packageTools; }`.
      *
      * @param  class-string  $agent
+     * @param  list<string>  $methods
      * @return list<string>
      */
-    private static function traitAliases(string $agent): array
+    private static function traitAliases(string $agent, array $methods): array
     {
+        $originals = array_map(fn (string $method): string => InteractsWithActions::class."::{$method}", $methods);
         $aliases = [];
 
         for ($class = new ReflectionClass($agent); $class !== false; $class = $class->getParentClass()) {
             foreach ($class->getTraitAliases() as $alias => $original) {
-                if (in_array($original, [InteractsWithActions::class.'::tools', InteractsWithActions::class.'::actionTools'], true)) {
+                if (in_array($original, $originals, true)) {
                     $aliases[] = $alias;
                 }
             }
         }
 
         return $aliases;
+    }
+
+    /**
+     * Tool search: agents that carry #[DeferToolset] while the installed laravel/ai takes a tool-search group only for
+     * a provider that searches tools, so their deferred toolsets are sent as ordinary tools on every step; and an agent
+     * that carries laravel/ai's #[CacheToolDefinitions] but no #[UseToolset], so the last tool it sends, which carries
+     * the cache mark, is one the model finds through tool search, unless its own tools() adds a tool after the group.
+     *
+     * @return list<Finding>
+     */
+    private function toolSearch(Scan $scan): array
+    {
+        if ($scan->deferred === []) {
+            return [];
+        }
+
+        $findings = [];
+
+        if ($this->packages->laravelAi() !== PackageStatus::Missing && ! $this->packages->toolSearch()) {
+            $findings[] = self::warn('Tool search', '#[DeferToolset] on ['.implode(', ', array_keys($scan->deferred)).'] needs laravel/ai 1.1 or later: with the version installed, their deferred toolsets are loaded on every step. Run composer require laravel/ai:^1.1.');
+        }
+
+        foreach (array_keys($scan->deferred) as $agent) {
+            if ($scan->agents[$agent] === [] && (new ReflectionClass($agent))->getAttributes(CacheToolDefinitions::class) !== []) {
+                $findings[] = self::warn('Tool search', "{$agent}: it carries #[CacheToolDefinitions] but no #[UseToolset], so unless its own tools() sends a loaded tool last, the cache mark falls on a tool the model finds through tool search, and Anthropic refuses the request. Load the actions it uses most with #[UseToolset], or remove #[CacheToolDefinitions].");
+            }
+        }
+
+        return $findings;
     }
 
     /**
@@ -657,8 +711,8 @@ final class Checks
 
         $findings = [];
 
-        foreach ($scan->agents as $agent => $toolsets) {
-            $held = array_filter($waiting, fn (array $subject): bool => array_intersect($subject['entry']->toolsets, $toolsets) !== []);
+        foreach (array_keys($scan->agents) as $agent) {
+            $held = array_filter($waiting, fn (array $subject): bool => array_intersect($subject['entry']->toolsets, $scan->toolsets($agent)) !== []);
 
             if ($held !== [] && ! ConfirmingAgents::classSupports($agent)) {
                 $findings[] = self::warn('Approvals', "{$agent}: its toolsets hold [".self::names($held).'], which wait on the person (a confirmation, or a form for missing fields), but it does not store its conversations, so it is never offered the first kind and never asks for the second: those calls are refused instead. Implement Laravel\\Ai\\Contracts\\Conversational and use Laravel\\Ai\\Concerns\\RemembersConversations.');
@@ -1566,7 +1620,7 @@ final class Checks
             $needs['Actions::conversation() keeps a conversation per tenant'] = [(new AgenticConversation)->getConnectionName(), ['agentic_conversations'], '--copilot --tenancy'];
         }
 
-        $received = array_merge([], ...array_values($scan->agents));
+        $received = $scan->received();
         $showing = array_filter($subjects, fn (array $subject): bool => $subject['entry']->shows() && array_intersect($subject['entry']->toolsets, $received) !== []);
 
         if ($showing !== []) {
@@ -1640,7 +1694,7 @@ final class Checks
         $expected = [
             'version' => ActionRegistry::VERSION,
             'actions' => array_map(fn (Entry $entry): array => $entry->toManifest(), $scan->actions),
-            'agents' => $scan->agents,
+            'agents' => $scan->recordedAgents(),
         ];
 
         // The snapshot's canonical text compares both sides key-order-free and type-exact.

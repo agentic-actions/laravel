@@ -6,6 +6,8 @@ use AgenticActions\Exceptions\DuplicateActionName;
 use Tests\Fixtures\Actions\CreateNote;
 use Tests\Fixtures\Discovery\Agents\BlogWriter;
 use Tests\Fixtures\Discovery\Agents\SupportDesk;
+use Tests\Fixtures\Discovery\Deferring\DeferringDesk;
+use Tests\Fixtures\Discovery\Deferring\SearchDesk;
 use Tests\Fixtures\Discovery\PageContext\BasePageAssistant;
 use Tests\Fixtures\Discovery\PageContext\PageAssistant;
 use Tests\Fixtures\Discovery\PageContext\ToolsetAssistant;
@@ -147,6 +149,13 @@ describe('what it finds', function () {
         expect($found->agents)->toBe([BlogWriter::class => ['default'], SupportDesk::class => ['support']])
             ->and($found->actions)->toBe([])
             ->and(array_keys($listed->agents))->toBe([BlogWriter::class, SupportDesk::class]);
+    });
+
+    it('records #[DeferToolset] agents with their deferred toolsets, and one that loads none among the agents', function () {
+        $scan = app(Scanner::class)->scan([$this->discovery.'/Deferring'], [BlogWriter::class]);
+
+        expect($scan->agents)->toBe([BlogWriter::class => ['default'], DeferringDesk::class => ['default'], SearchDesk::class => []])
+            ->and($scan->deferred)->toBe([DeferringDesk::class => ['support'], SearchDesk::class => ['support']]);
     });
 
     it('throws DuplicateActionName for two actions with one name', function () {
