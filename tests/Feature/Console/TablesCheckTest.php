@@ -13,7 +13,9 @@ use Tests\Fixtures\Actions\CreateNote;
 use Tests\Fixtures\Approvals\ConfirmingAgent;
 use Tests\Fixtures\Approvals\ForgetfulStore;
 use Tests\Fixtures\Approvals\StatelessAgent;
+use Tests\Fixtures\Deferred\DeferringAgent;
 use Tests\Fixtures\Install\DetachedToken;
+use Tests\Fixtures\Views\PostsByStatus;
 use Tests\Fixtures\Views\PostStats;
 use Tests\Fixtures\Views\ViewsAgent;
 
@@ -149,14 +151,17 @@ describe('the tables agents show', function () {
         $this->skipUnlessAi();
     });
 
-    it('warns when an agent is offered a table action and the database lacks agentic_views', function () {
+    it('warns when an agent is offered a table action and the database lacks agentic_views', function (string $agent, string $action, string $name) {
         config(['ai.conversations.connection' => 'empty']);
 
-        expect(tablesFindings([ViewsAgent::class, PostStats::class]))->toContain([
+        expect(tablesFindings([$agent, $action]))->toContain([
             'warn',
-            'Agents show the tables of [post-stats], kept with each conversation, but the database has no [agentic_views] table: run php artisan actions:install --copilot',
+            "Agents show the tables of [{$name}], kept with each conversation, but the database has no [agentic_views] table: run php artisan actions:install --copilot",
         ]);
-    });
+    })->with([
+        'loaded' => [ViewsAgent::class, PostStats::class, 'post-stats'],
+        'found through tool search' => [DeferringAgent::class, PostsByStatus::class, 'posts-by-status'],
+    ]);
 
     it('passes once the table exists, and reads nothing while no agent is offered a table action', function () {
         expect(tablesFindings([ViewsAgent::class, PostStats::class]))->toBe([]);

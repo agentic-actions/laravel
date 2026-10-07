@@ -465,11 +465,9 @@ describe('toolset rows', function () {
 });
 
 describe('tool search rows', function () {
-    beforeEach(function () {
-        $this->skipUnlessAi();
-    });
-
     it('warns about an agent that caches its tool definitions and loads no toolset', function () {
+        $this->skipUnlessAi();
+
         expect(inRow(findingsFor([CreateNote::class, SupportNote::class, CachedSearchOnly::class, SearchDesk::class]), 'Tool search'))->toBe([
             ...($this->laravelAiBefore('1.1.0') ? [['warn', 'Tool search', '#[DeferToolset] on ['.CachedSearchOnly::class.', '.SearchDesk::class.'] needs laravel/ai 1.1 or later: with the version installed, their deferred toolsets are loaded on every step. Run composer require laravel/ai:^1.1.']] : []),
             ['warn', 'Tool search', CachedSearchOnly::class.': it carries #[CacheToolDefinitions] but no #[UseToolset], so the tools() of InteractsWithActions sends its deferred toolsets as ordinary tools on every step, keeping the cache mark off a deferred tool, and it defers nothing. An own tools() that sends the tool-search group last puts the mark on a deferred tool, which Anthropic refuses. Load the actions it uses most with #[UseToolset], or remove #[CacheToolDefinitions].'],
@@ -477,11 +475,19 @@ describe('tool search rows', function () {
     });
 
     it('warns that #[DeferToolset] needs laravel/ai 1.1, only while an older one is installed', function () {
+        $this->skipUnlessAi();
+
         $findings = inRow(findingsFor([CreateNote::class, SupportNote::class, DeferringDesk::class, SearchDesk::class]), 'Tool search');
 
         expect($findings)->toBe($this->laravelAiBefore('1.1.0') ? [
             ['warn', 'Tool search', '#[DeferToolset] on ['.DeferringDesk::class.', '.SearchDesk::class.'] needs laravel/ai 1.1 or later: with the version installed, their deferred toolsets are loaded on every step. Run composer require laravel/ai:^1.1.'],
         ] : []);
+    });
+
+    it('says nothing about laravel/ai 1.1 while laravel/ai is missing', function () {
+        $this->usePackages(['laravel/ai' => PackageStatus::Missing]);
+
+        expect(inRow(findingsFor([CreateNote::class, DeferringDesk::class, SearchDesk::class]), 'Tool search'))->toBe([]);
     });
 });
 
@@ -690,22 +696,25 @@ describe('other rows', function () {
         expect(inRow(findingsFor([CreateNote::class]), 'npm'))->toBe([]);
     });
 
-    it('requires a manifest that matches the scan with --production', function () {
-        config(['agentic-actions.discovery.paths' => [], 'agentic-actions.discovery.classes' => [CreateNote::class]]);
+    it('requires a manifest that matches the scan with --production', function (array $classes) {
+        config(['agentic-actions.discovery.paths' => [], 'agentic-actions.discovery.classes' => $classes]);
 
-        $missing = inRow(findingsFor([CreateNote::class], [], production: true), 'Manifest');
+        $missing = inRow(findingsFor($classes, [], production: true), 'Manifest');
 
         $this->artisan('actions:cache')->assertSuccessful();
 
-        $fresh = inRow(findingsFor([CreateNote::class], [], production: true), 'Manifest');
-        $without = inRow(findingsFor([CreateNote::class]), 'Manifest');
-        $differs = inRow(findingsFor([CreateNote::class, ListNotes::class], [], production: true), 'Manifest');
+        $fresh = inRow(findingsFor($classes, [], production: true), 'Manifest');
+        $without = inRow(findingsFor($classes), 'Manifest');
+        $differs = inRow(findingsFor([...$classes, ListNotes::class], [], production: true), 'Manifest');
 
         expect($missing)->toBe([['fail', 'Manifest', 'The actions manifest is missing: run php artisan optimize, or actions:cache, on deploy.']])
             ->and($fresh)->toBe([])
             ->and($without)->toBe([])
             ->and($differs)->toBe([['fail', 'Manifest', 'The actions manifest differs from the actions on disk: run php artisan actions:cache.']]);
-    });
+    })->with([
+        'an action' => [[CreateNote::class]],
+        'agents that defer toolsets' => [[CreateNote::class, DeferringDesk::class, SearchDesk::class]],
+    ]);
 });
 
 describe('the initialize row', function () {
