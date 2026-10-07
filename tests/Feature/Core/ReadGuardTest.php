@@ -463,3 +463,20 @@ final class RecordingPdo extends PDO
         return parent::prepare(preg_match('/^\s*set\b/i', $query) === 1 ? 'select 1' : $query, $options);
     }
 }
+
+it('lets initialize() add rows to its tables on a connection with a table prefix, and still refuses an update there', function () {
+    config(['database.connections.second' => ['driver' => 'sqlite', 'database' => ':memory:', 'prefix' => 'app_']]);
+
+    $connection = DB::connection('second');
+    $connection->getSchemaBuilder()->create('share_links', function ($table): void {
+        $table->unsignedBigInteger('post_id')->primary();
+        $table->string('token');
+    });
+    $guard = app(ReadGuard::class);
+
+    $guard->run(fn () => $guard->initializing(['share_links'], fn () => $connection->table('share_links')->insert(['post_id' => 1, 'token' => 'first'])));
+
+    expect($connection->table('share_links')->value('token'))->toBe('first')
+        ->and(fn () => $guard->run(fn () => $guard->initializing(['share_links'], fn () => $connection->table('share_links')->update(['token' => 'rotated']))))
+        ->toThrow(ReadActionWrote::class, '[app_share_links]');
+});

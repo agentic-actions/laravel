@@ -409,7 +409,7 @@ final class Checks
             $lists = '$initializes lists ['.implode(', ', $tables).']';
 
             $finding = match (true) {
-                $tables === [] => $declared ? self::warn('Initialize', "{$class}: it declares initialize(), but \$initializes lists no table, so the package never calls it. List the tables it adds rows to in \$initializes, or rename it if it is a method of your own.") : null,
+                $tables === [] => $declared && $subject['entry']->effect === Effect::Read && ! $subject['action'] instanceof Dataset ? self::warn('Initialize', "{$class}: it declares initialize(), but \$initializes lists no table, so the package never calls it. List the tables it adds rows to in \$initializes, or rename it if it is a method of your own.") : null,
                 $subject['entry']->effect !== Effect::Read => self::fail('Initialize', "{$class}: {$lists}, but its effect is ".($subject['entry']->effect->value ?? 'undeclared').', and only a Read runs initialize(). Declare Effect::Read if the action only shows the rows it adds, or remove $initializes and add them in handle().'),
                 $subject['action'] instanceof Dataset => self::fail('Initialize', "{$class}: {$lists}, but a dataset's call is generated, so initialize() never runs on it. Remove \$initializes, and create the rows with the record they belong to."),
                 ! $declared => self::fail('Initialize', "{$class}: {$lists}, but the class declares no public initialize(), so the rows are never added. Declare initialize(ActionContext \$context), which adds them before handle() reads them."),
