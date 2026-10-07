@@ -4,6 +4,7 @@ namespace AgenticActions\Support;
 
 use Composer\InstalledVersions;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Gateway\TextGenerationLoop;
 use Laravel\Passport\Passport;
 
 /**
@@ -50,6 +51,17 @@ final class Packages
         $status = $this->status('laravel/ai');
 
         return interface_exists(Tool::class) ? $status : PackageStatus::Missing;
+    }
+
+    /**
+     * Whether the installed laravel/ai takes an agent's tool-search group whatever its provider: a provider that
+     * searches tools searches the group, and any other receives its tools as ordinary tools. False without laravel/ai.
+     *
+     * @upstream Deferred toolsets are sent as ordinary tools while laravel/ai is older than 1.1.
+     */
+    public function toolSearch(): bool
+    {
+        return class_exists(TextGenerationLoop::class) && ! method_exists(TextGenerationLoop::class, 'ensureToolSearchIsApplicable');
     }
 
     /**

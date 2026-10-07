@@ -2,6 +2,7 @@
 
 use AgenticActions\ActionContext;
 use AgenticActions\Ai\Concerns\InteractsWithActions;
+use AgenticActions\Attributes\DeferToolset;
 use AgenticActions\Attributes\UseToolset;
 use AgenticActions\Facades\Actions;
 use Illuminate\Support\Facades\Auth;
@@ -21,6 +22,8 @@ use Tests\Fixtures\Ai\OwnToolsAgent;
 use Tests\Fixtures\Ai\SearchMixedAgent;
 use Tests\Fixtures\Ai\SubAgentMixedAgent;
 use Tests\Fixtures\Ai\SupportAgent;
+use Tests\Fixtures\Deferred\DroppedGroupAgent;
+use Tests\Fixtures\Deferred\OwnGroupAgent;
 use Tests\Fixtures\Streaming\PageAgent;
 use Tests\Fixtures\Streaming\StreamAgent;
 use Workbench\App\Models\User;
@@ -28,8 +31,8 @@ use Workbench\App\Models\User;
 /*
  * Actions::assertAgentTools(): one agent's tools, resolved as laravel/ai resolves them before a turn, have unique
  * names, offer no forbidden key and stay within agents.max_tools_per_toolset, an agent on InteractsWithActions returns
- * at least one of the action tools its toolsets give the person, and an agent carrying #[WithPageContext] returns the
- * PageContext middleware.
+ * at least one of the action tools each of its attributes' toolsets give the person, and an agent carrying
+ * #[WithPageContext] returns the PageContext middleware.
  */
 
 beforeEach(function () {
@@ -142,6 +145,54 @@ describe('an agent whose own tools() leaves out its action tools', function () {
         };
 
         Actions::assertAgentTools($agent);
+    });
+});
+
+describe('an agent with #[DeferToolset]', function () {
+    beforeEach(function () {
+        config(['agentic-actions.discovery.paths' => [
+            ...config('agentic-actions.discovery.paths'),
+            dirname(__DIR__, 2).'/Fixtures/Deferred',
+        ]]);
+
+        $this->refreshActions();
+    });
+
+    it('passes one whose own tools() puts deferredActionTools() in a tool-search group', function () {
+        Actions::assertAgentTools(new OwnGroupAgent($this->user));
+    });
+
+    it('fails one whose tools() returns none of its #[DeferToolset] toolsets\' action tools', function () {
+        expect(fn () => Actions::assertAgentTools(new DroppedGroupAgent($this->user)))
+            ->toThrow(AssertionFailedError::class, DroppedGroupAgent::class.' carries #[DeferToolset], whose toolsets give this person 6 action tools, but its tools() returns none of them: a tools() the class declares replaces the one InteractsWithActions gives it. Delete the tools() it declares, or put them in a tool-search group in it: return [new ToolSearch([...$this->deferredActionTools(), ...]), ...$this->actionTools()].');
+    });
+
+    it('fails one whose tools() returns its tool-search group but none of its #[UseToolset] toolsets\' action tools', function () {
+        $agent = new #[UseToolset('reports')] #[DeferToolset] class($this->user) implements Agent, HasTools
+        {
+            use InteractsWithActions;
+            use Promptable;
+
+            public function __construct(public User $user) {}
+
+            public function instructions(): string
+            {
+                return 'You help the signed-in author.';
+            }
+
+            public function tools(): iterable
+            {
+                return [new ToolSearch($this->deferredActionTools())];
+            }
+
+            protected function actionContext(): ActionContext
+            {
+                return ActionContext::agent($this->user);
+            }
+        };
+
+        expect(fn () => Actions::assertAgentTools($agent))
+            ->toThrow(AssertionFailedError::class, $agent::class.' carries #[UseToolset], whose toolsets give this person 1 action tools, but its tools() returns none of them');
     });
 });
 

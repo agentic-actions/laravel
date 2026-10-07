@@ -252,6 +252,17 @@ describe('agents and guards', function () {
         );
     });
 
+    it('marks an agent that finds a toolset through tool search', function () {
+        config(['agentic-actions.discovery.paths' => [$this->fixtures.'/Actions', $this->fixtures.'/Discovery/Deferring']]);
+
+        [, $output] = listActionsCommand();
+
+        expect($output)->toContain(
+            '  default: Tests\Fixtures\Discovery\Deferring\DeferringDesk'."\n",
+            '  support: Tests\Fixtures\Discovery\Deferring\DeferringDesk (deferred), Tests\Fixtures\Discovery\Deferring\SearchDesk (deferred)',
+        );
+    });
+
     it('describes each configured guard from its driver, without resolving it', function () {
         config([
             'auth.guards.api-key' => ['driver' => 'api-key'],

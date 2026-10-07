@@ -215,7 +215,7 @@ App\Ai\Agents\Assistant must override actionContext() and return ActionContext::
 App\Ai\Agents\Assistant has no #[UseToolset]: name the toolsets it receives.
 ```
 
-The first message means the class uses `InteractsWithActions` and does not say whom its tools act for. Add `actionContext()` and build the context from the agent's own state. The second means the class has no `#[UseToolset]`. A bare `#[UseToolset]` means the `default` toolset. To name toolsets, pass them as separate strings: `#[UseToolset('default', 'support')]`. An array, `#[UseToolset(['support'])]`, fails every scan with PHP's `UseToolset::__construct(): Argument #1 must be of type string, array given`.
+The first message means the class uses `InteractsWithActions` and does not say whom its tools act for. Add `actionContext()` and build the context from the agent's own state. The second means the class has neither `#[UseToolset]` nor `#[DeferToolset]`. A bare `#[UseToolset]` means the `default` toolset. To name toolsets, pass them as separate strings: `#[UseToolset('default', 'support')]`. An array, `#[UseToolset(['support'])]`, fails every scan with PHP's `UseToolset::__construct(): Argument #1 must be of type string, array given`.
 
 ### An action is missing from the agent's tools
 
@@ -238,6 +238,14 @@ App\Actions\PostActivity: agents cannot be offered it: The measure [posts] compa
 ```
 
 In production such a tool is left out quietly, the agent keeps its other tools, and the error is reported at most once an hour per class.
+
+### #[DeferToolset] needs laravel/ai 1.1
+
+```text
+#[DeferToolset] on [App\Ai\Assistant] needs laravel/ai 1.1 or later: with the version installed, their deferred toolsets are loaded on every step. Run composer require laravel/ai:^1.1.
+```
+
+The Tool search row of `actions:check`. With laravel/ai 1.0, the package sends the actions of `#[DeferToolset]` toolsets as ordinary tools, to every provider, so nothing is deferred until you update laravel/ai.
 
 ### The reply stopped before it finished
 

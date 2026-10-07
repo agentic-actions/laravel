@@ -29,6 +29,7 @@ use Tests\Fixtures\Ai\OwnToolsAgent;
 use Tests\Fixtures\Ai\ParentToolsAgent;
 use Tests\Fixtures\Ai\TraitlessToolsetAgent;
 use Tests\Fixtures\Authorize\TwoStepAuthorize;
+use Tests\Fixtures\Checks\CachedSearchOnly;
 use Tests\Fixtures\Checks\EmptyRequiredOutput;
 use Tests\Fixtures\Checks\ExportCSVNotes;
 use Tests\Fixtures\Checks\FileBehindAgentSchema;
@@ -39,12 +40,19 @@ use Tests\Fixtures\Checks\IdEarlyAuthorize;
 use Tests\Fixtures\Checks\IdScopedExists;
 use Tests\Fixtures\Checks\IdUnscopedExists;
 use Tests\Fixtures\Checks\ImportCSVNotesAction;
+use Tests\Fixtures\Checks\MisnamedDeferral;
 use Tests\Fixtures\Checks\OrderWithoutShouldRegister;
 use Tests\Fixtures\Checks\OrderWithTwoStepAuthorize;
 use Tests\Fixtures\Checks\RulesNeedActor;
 use Tests\Fixtures\Checks\RulesOnlyAgentKey;
 use Tests\Fixtures\Checks\TenantKeyInSchema;
 use Tests\Fixtures\Checks\UnsupportedUnion;
+use Tests\Fixtures\Deferred\DroppedGroupAgent;
+use Tests\Fixtures\Deferred\NoteStats;
+use Tests\Fixtures\Deferred\OwnGroupAgent;
+use Tests\Fixtures\Discovery\Deferring\DeferringDesk;
+use Tests\Fixtures\Discovery\Deferring\SearchDesk;
+use Tests\Fixtures\Discovery\Toolsets\SupportNote;
 use Tests\Fixtures\Initialize\InitializesWithoutMethod;
 use Tests\Fixtures\Initialize\InitializingDataset;
 use Tests\Fixtures\Initialize\InitializingWrite;
@@ -396,6 +404,31 @@ describe('toolset rows', function () {
         ]);
     });
 
+    it('passes agents that defer toolsets some action joins, one of them loading none', function () {
+        $this->skipUnlessAi();
+
+        $findings = findingsFor([], [$this->fixtures.'/Actions', $this->fixtures.'/Discovery/Toolsets', $this->fixtures.'/Discovery/Deferring']);
+
+        expect(inRow($findings, 'Toolsets'))->toBe([]);
+    });
+
+    it('fails a #[DeferToolset] toolset no action joins, and warns about one #[UseToolset] names too', function () {
+        $this->skipUnlessAi();
+
+        expect(inRow(findingsFor([CreateNote::class, MisnamedDeferral::class]), 'Toolsets'))->toBe([
+            ['fail', 'Toolsets', MisnamedDeferral::class.': #[DeferToolset] names [archive], which no action joins.'],
+            ['warn', 'Toolsets', MisnamedDeferral::class.': #[UseToolset] and #[DeferToolset] both name [default], so it loads those actions on every step and never defers them. Name each toolset in one of them.'],
+        ]);
+    });
+
+    it('passes an agent whose own tools() calls deferredActionTools(), and warns about one whose own tools() never does', function () {
+        $this->skipUnlessAi();
+
+        expect(inRow(findingsFor([CreateNote::class, NoteStats::class, OwnGroupAgent::class, DroppedGroupAgent::class]), 'Toolsets'))->toBe([
+            ['warn', 'Toolsets', DroppedGroupAgent::class.': its own tools() replaces the one InteractsWithActions gives it, and its source calls neither $this->deferredActionTools() nor the trait\'s tools(), so its #[DeferToolset] toolsets\' actions may never reach the model. Delete the tools() it declares, or put them in a tool-search group in it: return [new ToolSearch([...$this->deferredActionTools(), ...]), ...$this->actionTools()].'],
+        ]);
+    });
+
     it('warns about an agent whose own tools() replaces the trait\'s and never calls actionTools()', function () {
         $this->skipUnlessAi();
 
@@ -424,6 +457,27 @@ describe('toolset rows', function () {
         expect(inRow(findingsFor([CreateNote::class, TraitlessToolsetAgent::class]), 'Toolsets'))->toBe([
             ['warn', 'Toolsets', TraitlessToolsetAgent::class.': it carries #[UseToolset] but does not use InteractsWithActions, which turns its toolsets into tools, so the attribute alone gives it none of its toolsets\' actions. Add use InteractsWithActions; and an actionContext() (https://agentic-actions.com/copilot#the-server).'],
         ]);
+    });
+});
+
+describe('tool search rows', function () {
+    beforeEach(function () {
+        $this->skipUnlessAi();
+    });
+
+    it('warns about an agent that caches its tool definitions and loads no toolset', function () {
+        expect(inRow(findingsFor([CreateNote::class, SupportNote::class, CachedSearchOnly::class, SearchDesk::class]), 'Tool search'))->toBe([
+            ...($this->laravelAiBefore('1.1.0') ? [['warn', 'Tool search', '#[DeferToolset] on ['.CachedSearchOnly::class.', '.SearchDesk::class.'] needs laravel/ai 1.1 or later: with the version installed, their deferred toolsets are loaded on every step. Run composer require laravel/ai:^1.1.']] : []),
+            ['warn', 'Tool search', CachedSearchOnly::class.': it carries #[CacheToolDefinitions] but no #[UseToolset], so unless its own tools() sends a loaded tool last, the cache mark falls on a tool the model finds through tool search, and Anthropic refuses the request. Load the actions it uses most with #[UseToolset], or remove #[CacheToolDefinitions].'],
+        ]);
+    });
+
+    it('warns that #[DeferToolset] needs laravel/ai 1.1, only while an older one is installed', function () {
+        $findings = inRow(findingsFor([CreateNote::class, SupportNote::class, DeferringDesk::class, SearchDesk::class]), 'Tool search');
+
+        expect($findings)->toBe($this->laravelAiBefore('1.1.0') ? [
+            ['warn', 'Tool search', '#[DeferToolset] on ['.DeferringDesk::class.', '.SearchDesk::class.'] needs laravel/ai 1.1 or later: with the version installed, their deferred toolsets are loaded on every step. Run composer require laravel/ai:^1.1.'],
+        ] : []);
     });
 });
 

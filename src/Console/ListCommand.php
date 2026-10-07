@@ -246,7 +246,7 @@ final class ListCommand extends Command
     }
 
     /**
-     * The #[UseToolset] agents, by toolset.
+     * The agents, by toolset, each marked "(deferred)" where it finds that toolset through tool search.
      */
     private function agents(Scan $scan): void
     {
@@ -259,6 +259,10 @@ final class ListCommand extends Command
         foreach ($scan->agents as $agent => $names) {
             foreach ($names as $toolset) {
                 $toolsets[$toolset][] = $agent;
+            }
+
+            foreach ($scan->deferred[$agent] ?? [] as $toolset) {
+                $toolsets[$toolset][] = "{$agent} (deferred)";
             }
         }
 

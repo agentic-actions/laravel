@@ -396,7 +396,7 @@ final class DeletePost extends Action
 
 The agent above qualifies: it implements `Conversational` and uses laravel/ai's `RemembersConversations` trait, beside `InteractsWithActions`. Implementing the contract without the trait does not. The agent also needs a participant when its tools are built (`continue($id, as: $user)`, `continueLastConversation($user)` or `forUser($user)`), and laravel/ai's database conversation store, or a store of your own that implements `ResolvesPendingApprovals` and `VerifiesConversationOwnership`.
 
-Its `tools()` may return the action tools inside a laravel/ai tool-search group (`Laravel\Ai\Providers\Tools\ToolSearch`), as `return [new ToolSearch($this->actionTools())];` does. Their calls wait for the person and take the person's answer as any other call does, and a reload brings back their cards, forms and tables.
+Its `tools()` may return the action tools inside a laravel/ai tool-search group (`Laravel\Ai\Providers\Tools\ToolSearch`), as `return [new ToolSearch($this->actionTools())];` does, and so does an agent that carries `#[DeferToolset]` ([many actions](#many-actions)). Their calls wait for the person and take the person's answer as any other call does, and a reload brings back their cards, forms and tables.
 
 An agent that does not store its conversations is never offered a Destructive or External action, and `actions:check` warns about it (the Approvals row).
 
@@ -666,6 +666,83 @@ With `#[WithPageContext]`, the agent knows which page the person has open. It ne
 - The page is context and nothing more. Tools authorize against the agent's own context, never against the page.
 
 `php artisan actions:check` fails an agent that carries the attribute while `inertiajs/inertia-laravel` is not installed for production, or that lacks the trait or `HasMiddleware`. `Actions::assertAgentTools()` fails when `middleware()` does not return the page context. In a test, read the page sentence from laravel/ai's `StartingStep` event (`$event->messages`), which carries each step's messages after middleware. Any other `StartingStep` listener of yours sees it too.
+
+## Many actions
+
+Every action tool an agent loads goes to the model on every step of a turn, with its name, description and input schema, whether the step needs it or not. The more there are, the more each step costs, and the less reliably the model picks the right one.
+
+Name toolsets after the parts of your app, such as `posts`, `comments`, `reports` and `settings`, whatever their size, and give each agent only the toolsets its job needs. An agent on the author's dashboard needs `posts` and `comments`, and one on the admin pages needs `settings`: two agents with separate jobs each read fewer tools than one agent that does both.
+
+### Toolsets found through tool search
+
+`#[DeferToolset]` names the toolsets an agent finds when it needs them, instead of loading them on every step:
+
+```php
+use AgenticActions\Attributes\DeferToolset;
+use AgenticActions\Attributes\UseToolset;
+
+#[UseToolset('posts', 'comments')]       // sent on every step
+#[DeferToolset('reports', 'settings')]   // found through tool search
+final class BlogAssistant implements Agent, Conversational, HasTools
+```
+
+- `InteractsWithActions` puts the actions of those toolsets in one laravel/ai tool-search group (`Laravel\Ai\Providers\Tools\ToolSearch`), sent before the actions it loads. A provider that searches tools keeps their definitions from the model until it searches for them: Anthropic, OpenAI (gpt-5.4 and later, with response storage on) and Azure OpenAI. Any other provider receives them as ordinary tools on every step, so deferring saves nothing there.
+- It needs laravel/ai 1.1. With 1.0, the deferred toolsets are sent as ordinary tools on every step, to every provider, and `actions:check` warns (the Tool search row).
+- An action that a loaded toolset holds is loaded, even when a deferred toolset holds it too.
+- A deferred action is the same action tool, through the same pipeline: it waits for the person's confirmation or answer, and a reload brings back its card, form or table.
+- Keep the actions most turns call loaded, since the model searches before it can call a deferred one. Say in the agent's instructions which areas it can search, such as "Reports and settings are available through tool search", and write each action's description in the words people use, since that is what the search reads.
+- Bare, `#[DeferToolset]` means `default`, as `#[UseToolset]` does. An agent may defer every toolset it has and load none, except with laravel/ai's `#[CacheToolDefinitions]`, which marks the last tool sent for caching: Anthropic refuses that mark on a deferred tool. `actions:check` warns about such an agent (the Tool search row).
+- `actions.exposure.json` records both lists of an agent that defers toolsets, so moving a toolset from one attribute to the other is a reviewed diff. MCP is not affected: the server lists every tool a token reaches, and the client decides what its model reads.
+
+An agent with a `tools()` of its own builds the group from `deferredActionTools()`, which returns the actions of its `#[DeferToolset]` toolsets without those it already loads. laravel/ai takes one tool-search group per request, so put every tool you defer in it:
+
+```php
+use Laravel\Ai\Providers\Tools\ToolSearch;
+
+public function tools(): iterable
+{
+    return [new ToolSearch([...$this->deferredActionTools(), new SearchArchive]), ...$this->actionTools(), new CountDrafts($this->user)];
+}
+```
+
+### A subset per turn
+
+On a provider that does not search tools, narrow the tools per turn instead. `Actions::tools($context, $toolsets, $agent)` builds the action tools of the toolsets you name, through the same checks, so an agent can take the toolsets a turn needs from your route, for example from the page the person is on:
+
+```php
+#[UseToolset('posts', 'comments', 'reports')]
+final class BlogAssistant implements Agent, Conversational, HasTools
+{
+    use InteractsWithActions;
+    use Promptable;
+    use RemembersConversations;
+
+    /**
+     * @param  list<string>|null  $toolsets  the toolsets this turn needs, or null for all of them
+     */
+    public function __construct(public User $user, public ?array $toolsets = null) {}
+
+    public function tools(): iterable
+    {
+        return $this->toolsets === null
+            ? $this->actionTools()
+            : Actions::tools($this->actionContext(), array_values(array_intersect($this->toolsets, ['posts', 'comments', 'reports'])), $this);
+    }
+
+    // instructions() and actionContext() as in the server above
+}
+```
+
+```php
+// In the route: every toolset for a request without the person's words.
+$toolsets = ChatRequest::from($request)->message() === null ? null : ['posts', 'comments'];
+$agent = (new BlogAssistant($user, $toolsets))->continueLastConversation($user);
+```
+
+- `array_intersect()` keeps a route from widening what the attribute names.
+- Build the agent with every toolset for a request without words, and for the reload. An answer to a confirmation or a form and the transcript both look up the waiting call among the agent's tools, so a narrower agent loses the card or form, and the answer gets 409.
+- A turn cannot reach a toolset it was not given, and a request that spans two parts of the app ("email the author last month's report") needs both.
+- `actions:check` reads the attribute, so it counts every toolset the attribute names.
 
 ## The stream
 

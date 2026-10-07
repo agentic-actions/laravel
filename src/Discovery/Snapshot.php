@@ -24,12 +24,12 @@ final class Snapshot
     /**
      * The snapshot array for a registry or a fresh scan (the console commands pass a Scan).
      *
-     * @return array{version: int, actions: array<string, array<string, mixed>>, agents: array<string, list<string>>}
+     * @return array{version: int, actions: array<string, array<string, mixed>>, agents: array<string, list<string>|array{use: list<string>, defer: list<string>}>}
      */
     public static function build(ActionRegistry|Scan $source): array
     {
         [$actions, $agents] = $source instanceof Scan
-            ? [$source->actions, $source->agents]
+            ? [$source->actions, $source->recordedAgents()]
             : [$source->all(), $source->agents()];
 
         return [

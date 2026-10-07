@@ -29,7 +29,7 @@ final class ActionRegistry
      * Create a registry.
      *
      * @param  array<string, Entry>  $actions  keyed by name, sorted
-     * @param  array<class-string, list<string>>  $agents
+     * @param  array<class-string, list<string>|array{use: list<string>, defer: list<string>}>  $agents  as Scan::recordedAgents() gives them
      */
     private function __construct(
         private readonly array $actions,
@@ -109,9 +109,9 @@ final class ActionRegistry
     }
 
     /**
-     * The agent classes that carry #[UseToolset], with their toolsets.
+     * The agent classes that carry #[UseToolset] or #[DeferToolset], with their toolsets as the snapshot records them.
      *
-     * @return array<class-string, list<string>>
+     * @return array<class-string, list<string>|array{use: list<string>, defer: list<string>}>
      */
     public function agents(): array
     {
@@ -147,7 +147,7 @@ final class ActionRegistry
             self::misconfigured($app, $errors);
         }
 
-        return new self($scan->actions, $scan->agents, false);
+        return new self($scan->actions, $scan->recordedAgents(), false);
     }
 
     /**
@@ -172,11 +172,25 @@ final class ActionRegistry
         $agents = [];
 
         foreach ((array) ($manifest['agents'] ?? []) as $class => $toolsets) {
+            $toolsets = (array) $toolsets;
+
             /** @var class-string $class */
-            $agents[$class] = array_values(array_map(strval(...), (array) $toolsets));
+            $agents[$class] = array_key_exists('use', $toolsets)
+                ? ['use' => self::names($toolsets['use']), 'defer' => self::names($toolsets['defer'] ?? [])]
+                : self::names($toolsets);
         }
 
         return new self($actions, $agents, true);
+    }
+
+    /**
+     * A manifest's list of toolset names, as strings.
+     *
+     * @return list<string>
+     */
+    private static function names(mixed $toolsets): array
+    {
+        return array_values(array_map(strval(...), (array) $toolsets));
     }
 
     /**

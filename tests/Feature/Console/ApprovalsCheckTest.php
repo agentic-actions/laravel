@@ -14,6 +14,7 @@ use Tests\Fixtures\Approvals\ConfirmingAgent;
 use Tests\Fixtures\Approvals\ContractOnlyAgent;
 use Tests\Fixtures\Approvals\ForgetfulStore;
 use Tests\Fixtures\Approvals\StatelessAgent;
+use Tests\Fixtures\Approvals\StatelessSearchAgent;
 use Tests\Fixtures\Approvals\TraitOnlyAgent;
 use Tests\Fixtures\Checks\AskDraft;
 use Tests\Fixtures\Checks\AskWebOnly;
@@ -75,6 +76,7 @@ it('warns about an agent that does not store its conversations, naming what its 
     'no Conversational' => StatelessAgent::class,
     'the trait without the contract' => TraitOnlyAgent::class,
     'the contract without the trait' => ContractOnlyAgent::class,
+    'no Conversational, with the toolset deferred' => StatelessSearchAgent::class,
 ]);
 
 it('warns about an asking action with no confirmed action beside it', function () {

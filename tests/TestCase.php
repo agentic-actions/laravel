@@ -10,6 +10,7 @@ use AgenticActions\Http\ActionRequest;
 use AgenticActions\Support\Packages;
 use AgenticActions\Support\PackageStatus;
 use Closure;
+use Composer\InstalledVersions;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -179,6 +180,15 @@ abstract class TestCase extends OrchestraTestCase
         if (! interface_exists(Tool::class)) {
             $this->markTestSkipped('laravel/ai is not installed.');
         }
+    }
+
+    /**
+     * Whether the installed laravel/ai is older than the given version, as Composer records it (the floor cell's is):
+     * an oracle that does not go through the package's own reading of laravel/ai.
+     */
+    protected function laravelAiBefore(string $version): bool
+    {
+        return version_compare((string) InstalledVersions::getVersion('laravel/ai'), $version, '<');
     }
 
     /**
