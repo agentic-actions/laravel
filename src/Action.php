@@ -19,7 +19,8 @@ use Symfony\Component\HttpFoundation\Response;
  * An action declares two more methods, so that each one types its own dependencies (they are called through the
  * container): authorize(ActionContext $context[, ValidatedInput $input], ...$services): bool|Response, which runs
  * before any input is read, or after validation when it takes ValidatedInput (a missing authorize() is denied
- * everywhere); and handle(ActionContext $context, ValidatedInput $input, ...$services): mixed.
+ * everywhere); and handle(ActionContext $context, ValidatedInput $input, ...$services): mixed. A Read that lists tables
+ * in $initializes also declares initialize(ActionContext $context[, ValidatedInput $input], ...$services): void.
  *
  * Properties are read as declared defaults through reflection, so an action never changes them in a constructor.
  *
@@ -93,6 +94,18 @@ abstract class Action
      * declared default.
      */
     protected bool $askForMissing = false;
+
+    /**
+     * The tables a Read's initialize() may add rows to, for state that should exist once someone reads it. The
+     * pipeline calls initialize() after every check, right before handle(), and never while a tool list, a preview or
+     * a form is built. Inside it the Read guard allows an INSERT into these tables only: an update, delete, replace or
+     * upsert, or a write to any other table, is refused as it is in handle(), which stays fully guarded. Whoever may
+     * run the Read may cause the insert, a read-only token included. Empty, the default, calls no initialize(); on an
+     * action that is not a Read, or on a dataset, it is ignored and fails actions:check. Read as a declared default.
+     *
+     * @var list<string>
+     */
+    protected array $initializes = [];
 
     /**
      * The canonical input: HTTP, JSON API, CLI and TypeScript. Pure and cheap. Defaults are advertised, never merged.

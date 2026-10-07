@@ -8,7 +8,8 @@ use Illuminate\Database\Connection;
 
 /**
  * A Read cannot write through Laravel's database connection. While a Read action's own code runs, a statement that
- * would write is refused before it executes.
+ * would write is refused before it executes; while its initialize() runs, an INSERT that only adds rows to the tables
+ * its $initializes lists runs too.
  *
  * @internal
  */
@@ -21,7 +22,15 @@ final class ReadGuard
     private int $depth = 0;
 
     /**
-     * Run part of a Read's pipeline with writes refused.
+     * The tables the running initialize() may add rows to, as its action names them; empty everywhere else.
+     *
+     * @var list<string>
+     */
+    private array $insertable = [];
+
+    /**
+     * Run part of a Read's pipeline with writes refused. The tables an enclosing initialize() may add rows to do not
+     * reach it, so a Read that initialize() runs is fully guarded again, and so is what that Read runs.
      *
      * @template T
      *
@@ -30,13 +39,36 @@ final class ReadGuard
      */
     public function run(Closure $callback): mixed
     {
-        $previous = $this->depth;
+        [$depth, $insertable] = [$this->depth, $this->insertable];
         $this->depth++;
+        $this->insertable = [];
 
         try {
             return $callback();
         } finally {
-            $this->depth = $previous;
+            [$this->depth, $this->insertable] = [$depth, $insertable];
+        }
+    }
+
+    /**
+     * Run a Read's initialize(): a statement that only adds rows to these tables runs too, and every other one is
+     * refused as it is in handle(). Outside run(), as with reads.guard off, nothing is guarded, and this changes nothing.
+     *
+     * @template T
+     *
+     * @param  list<string>  $tables  as the action names them, without the connection's prefix
+     * @param  Closure(): T  $callback
+     * @return T
+     */
+    public function initializing(array $tables, Closure $callback): mixed
+    {
+        $previous = $this->insertable;
+        $this->insertable = $tables;
+
+        try {
+            return $callback();
+        } finally {
+            $this->insertable = $previous;
         }
     }
 
@@ -50,13 +82,14 @@ final class ReadGuard
      */
     public function unguarded(Closure $callback): mixed
     {
-        $previous = $this->depth;
+        [$depth, $insertable] = [$this->depth, $this->insertable];
         $this->depth = 0;
+        $this->insertable = [];
 
         try {
             return $callback();
         } finally {
-            $this->depth = $previous;
+            [$this->depth, $this->insertable] = [$depth, $insertable];
         }
     }
 
@@ -80,7 +113,10 @@ final class ReadGuard
             return;
         }
 
-        $refusal = SqlStatement::refusal($query, app(WritableTables::class)->for($connection), $connection->getDriverName());
+        $tables = app(WritableTables::class);
+        $insertable = $this->insertable === [] ? [] : $tables->named($this->insertable, $connection);
+
+        $refusal = SqlStatement::refusal($query, $tables->for($connection), $connection->getDriverName(), $insertable);
 
         if ($refusal !== null) {
             throw $refusal;

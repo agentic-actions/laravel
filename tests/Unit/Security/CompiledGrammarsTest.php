@@ -107,3 +107,41 @@ it('reads the foreign-key pragma SQLite\'s schema grammar compiles, and refuses 
         ->and(SqlStatement::allowed($grammar->pragma('foreign_keys', 0), []))->toBeFalse()
         ->and(SqlStatement::allowed($grammar->pragma('writable_schema', 1), []))->toBeFalse();
 });
+
+it('lets initialize() send every insert a grammar compiles into a table it names, and nothing that changes a row', function (Closure $connect) {
+    $connection = $connect();
+    $grammar = $connection->getQueryGrammar();
+    $table = fn () => $connection->table('share_links');
+    $values = [['post_id' => 1, 'token' => 't']];
+    $posts = $connection->table('posts')->select('id', 'title')->toSql();
+
+    $adds = [
+        'insert' => $grammar->compileInsert($table(), $values),
+        'insertGetId' => $grammar->compileInsertGetId($table(), $values[0], 'id'),
+        'insertUsing' => $grammar->compileInsertUsing($table(), ['post_id', 'token'], $posts),
+    ];
+
+    // SQL Server's grammar compiles no insert that ignores errors.
+    if ($connection->getDriverName() !== 'sqlsrv') {
+        $adds['insertOrIgnore'] = $grammar->compileInsertOrIgnore($table(), $values);
+        $adds['insertOrIgnoreUsing'] = $grammar->compileInsertOrIgnoreUsing($table(), ['post_id', 'token'], $posts);
+    }
+
+    $changes = [
+        'update' => $grammar->compileUpdate($table()->where('post_id', 1), ['token' => 'u']),
+        'delete' => $grammar->compileDelete($table()->where('post_id', 1)),
+        'upsert' => $grammar->compileUpsert($table(), $values, ['post_id'], ['token']),
+        'insert into posts' => $grammar->compileInsert($connection->table('posts'), [['title' => 't']]),
+    ];
+
+    foreach ([$connection->getDriverName(), null] as $driver) {
+        foreach ($adds as $kind => $sql) {
+            expect(SqlStatement::allowed($sql, [], $driver, ['app_share_links']))->toBeTrue("{$kind}: {$sql}")
+                ->and(SqlStatement::allowed($sql, [], $driver))->toBeFalse("{$kind} outside initialize(): {$sql}");
+        }
+
+        foreach ($changes as $kind => $sql) {
+            expect(SqlStatement::allowed($sql, [], $driver, ['app_share_links']))->toBeFalse("{$kind}: {$sql}");
+        }
+    }
+})->with(grammarConnections());

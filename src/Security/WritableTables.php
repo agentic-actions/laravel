@@ -70,6 +70,19 @@ final class WritableTables
     }
 
     /**
+     * Tables an action names, such as its $initializes, as the connection's grammar writes them, lower-cased.
+     *
+     * @param  list<string>  $tables
+     * @return list<string>
+     */
+    public function named(array $tables, Connection $connection): array
+    {
+        $prefix = (string) $connection->getTablePrefix();
+
+        return array_values(array_unique(array_map(fn (string $table): string => self::prefixed($table, $prefix), $tables)));
+    }
+
+    /**
      * A table name as the connection's grammar writes it, lower-cased: the prefix goes on the last segment, so a
      * schema-qualified "public.cache" becomes "public.app_cache", which is how SqlStatement reads a qualified name.
      */

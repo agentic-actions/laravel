@@ -14,6 +14,9 @@ use Tests\Fixtures\Actions\PublishNote;
 use Tests\Fixtures\Actions\SyncActionItems;
 use Tests\Fixtures\Actions\TeamNote;
 use Tests\Fixtures\Actions\TracedNote;
+use Tests\Fixtures\Initialize\InitializingDataset;
+use Tests\Fixtures\Initialize\InitializingWrite;
+use Tests\Fixtures\Initialize\ShowShareLink;
 use Tests\Fixtures\Misconfigured\DestructiveForAgents;
 
 beforeEach(fn () => TracedNote::reset());
@@ -150,6 +153,27 @@ it('builds the snapshot row', function () {
         'mcp' => true,
         'tenant_scoped' => false,
     ]);
+});
+
+it('keeps $initializes for a Read that is no dataset, and writes it in the rows only when it lists a table', function () {
+    $this->usePackages(['laravel/ai' => PackageStatus::Missing]);
+
+    $read = Entry::fromClass(ShowShareLink::class);
+
+    expect($read->initializes)->toBe(['share_links'])
+        ->and($read->toManifest()['initializes'])->toBe(['share_links'])
+        ->and(Entry::fromManifest($read->toManifest()))->toEqual($read)
+        ->and($read->toSnapshot())->toBe([
+            'class' => ShowShareLink::class,
+            'effect' => 'read',
+            'web' => true,
+            'agents' => [],
+            'mcp' => true,
+            'tenant_scoped' => false,
+            'initializes' => ['share_links'],
+        ])
+        ->and(Entry::fromClass(InitializingWrite::class)->toSnapshot())->not->toHaveKey('initializes')
+        ->and(Entry::fromClass(InitializingDataset::class)->toManifest())->not->toHaveKey('initializes');
 });
 
 it('refuses a class that is not a concrete action', function () {
