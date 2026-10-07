@@ -30,7 +30,8 @@ final class ReadGuard
 
     /**
      * Run part of a Read's pipeline with writes refused. The tables an enclosing initialize() may add rows to do not
-     * reach it, so a Read that initialize() runs is fully guarded again, and so is what that Read runs.
+     * reach it, so a Read that initialize() runs is fully guarded again, and so is what that Read runs, apart from the
+     * rows that Read's own initialize() adds.
      *
      * @template T
      *

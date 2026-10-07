@@ -14,6 +14,7 @@ use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Route;
+use Laravel\Sanctum\Sanctum;
 use Tests\Fixtures\Actions\Trace;
 use Tests\Fixtures\Initialize\InitializeProbe;
 use Tests\Fixtures\Initialize\InitializingDataset;
@@ -126,6 +127,14 @@ it('adds the row for a token that may only read, never for one that may not, and
             'idempotentHint' => false,
             'openWorldHint' => false,
         ]);
+});
+
+it('never runs initialize() while an MCP client\'s tool list is built, with or without laravel/ai', function () {
+    Sanctum::actingAs($this->user, ['actions:read']);
+
+    expect(app(Runner::class)->exposed(ClassExposure::of(ShowShareLink::class), ActionContext::mcp($this->user, null), Door::Mcp, []))->toBeTrue()
+        ->and(Trace::$calls)->toBe(['authorize'])
+        ->and(ShareLink::query()->count())->toBe(0);
 });
 
 describe('a model\'s call', function () {

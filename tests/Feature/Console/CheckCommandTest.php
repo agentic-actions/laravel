@@ -49,6 +49,7 @@ use Tests\Fixtures\Initialize\InitializesWithoutMethod;
 use Tests\Fixtures\Initialize\InitializingDataset;
 use Tests\Fixtures\Initialize\InitializingWrite;
 use Tests\Fixtures\Initialize\OwnInitialize;
+use Tests\Fixtures\Initialize\OwnInitializeOnWrite;
 use Tests\Fixtures\Initialize\ShowShareLink;
 use Tests\Fixtures\Misconfigured\NoAuthorize;
 use Tests\Fixtures\Misconfigured\UndeclaredEffect;
@@ -650,9 +651,9 @@ describe('other rows', function () {
 });
 
 describe('the initialize row', function () {
-    it('fails $initializes that adds no rows, warns about an initialize() the package never calls, and passes a Read with both', function () {
+    it('fails $initializes that adds no rows, warns about a Read\'s initialize() the package never calls, and passes a Read with both and a Write with its own initialize()', function () {
         // In the scan's order, by action name.
-        expect(inRow(findingsFor([ShowShareLink::class, InitializingWrite::class, InitializingDataset::class, InitializesWithoutMethod::class, OwnInitialize::class]), 'Initialize'))->toBe([
+        expect(inRow(findingsFor([ShowShareLink::class, InitializingWrite::class, InitializingDataset::class, InitializesWithoutMethod::class, OwnInitialize::class, OwnInitializeOnWrite::class]), 'Initialize'))->toBe([
             ['fail', 'Initialize', InitializesWithoutMethod::class.': $initializes lists [share_links], but the class declares no public initialize(), so the rows are never added. Declare initialize(ActionContext $context), which adds them before handle() reads them.'],
             ['fail', 'Initialize', InitializingDataset::class.': $initializes lists [share_links], but a dataset\'s call is generated, so initialize() never runs on it. Remove $initializes, and create the rows with the record they belong to.'],
             ['fail', 'Initialize', InitializingWrite::class.': $initializes lists [share_links], but its effect is write, and only a Read runs initialize(). Declare Effect::Read if the action only shows the rows it adds, or remove $initializes and add them in handle().'],
