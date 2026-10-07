@@ -31,6 +31,47 @@ it('removes only a trailing "Action" from the default name', function () {
         ->and(Entry::fromClass(SyncActionItems::class)->name)->toBe('sync-action-items');
 });
 
+it('derives the default name from the class basename, with a run of capitals as one word', function (string $basename, string $name) {
+    // One empty action per row, each in a namespace of its own: PHP reads class names without case, so ExportCSV and
+    // ExportCsv in one namespace would be one class.
+    $namespace = 'Tests\\Fixtures\\Names\\N'.md5($basename);
+    $class = "{$namespace}\\{$basename}";
+
+    if (! class_exists($class)) {
+        eval("namespace {$namespace}; final class {$basename} extends \\AgenticActions\\Action {}");
+    }
+
+    expect(Entry::fromClass($class)->name)->toBe($name);
+})->with([
+    'a run of capitals that starts it' => ['CSVExport', 'csv-export'],
+    'a run that ends it' => ['ExportCSV', 'export-csv'],
+    'the same word written in lower case, which collides with it' => ['ExportCsv', 'export-csv'],
+    'a run inside it' => ['ImportCSVFile', 'import-csv-file'],
+    'two runs' => ['HTMLToPDF', 'html-to-pdf'],
+    'a run of two that ends it' => ['GetUserID', 'get-user-id'],
+    'a run of two before a word' => ['ABTest', 'ab-test'],
+    'a run before a digit' => ['HTTP2Push', 'http2-push'],
+    'a run before one trailing "Action"' => ['ImportCSVFileAction', 'import-csv-file'],
+    'a lower-case first letter, which joins the run' => ['eIDCheck', 'eid-check'],
+    'a one-letter word, kept apart' => ['CreateAPost', 'create-a-post'],
+    'OAuth, split as a one-letter word is' => ['SyncOAuthToken', 'sync-o-auth-token'],
+    'a word with a capital inside, which still splits' => ['SyncDevOpsBoard', 'sync-dev-ops-board'],
+    'that word written as one' => ['SyncDevopsBoard', 'sync-devops-board'],
+    'a digit after a word' => ['UploadToS3', 'upload-to-s3'],
+    'a plural run, which splits before its last capital' => ['SendSMSs', 'send-sm-ss'],
+    'only "Action"' => ['Action', 'action'],
+]);
+
+it('keeps the route segment of a set name as Str::kebab() reads it, whatever derives the default names', function () {
+    $entry = Entry::fromClass((new class extends Action
+    {
+        protected string $name = 'sendSMS';
+    })::class);
+
+    expect($entry->name)->toBe('sendSMS')
+        ->and($entry->segment())->toBe('send-s-m-s');
+});
+
 it('does not inherit #[Expose]', function () {
     $entry = Entry::fromClass(ChildNote::class);
 

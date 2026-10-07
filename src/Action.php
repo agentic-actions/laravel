@@ -28,8 +28,10 @@ use Symfony\Component\HttpFoundation\Response;
 abstract class Action
 {
     /**
-     * The tool, CLI and TypeScript name. Empty means the kebab-case class basename with one trailing "Action" removed.
-     * The generated route segment is Str::kebab() of it. Pin it once an agent has used it.
+     * The tool, CLI and TypeScript name. Empty means the class basename with one trailing "Action" removed, in kebab
+     * case with a run of capitals kept as one word: ImportCSVFile is import-csv-file. A word with a capital inside
+     * still splits (SyncOAuthToken is sync-o-auth-token): set this, or write the class SyncOauthToken. The generated
+     * route segment is Str::kebab() of it. Pin it once an agent has used it.
      */
     protected string $name = '';
 
