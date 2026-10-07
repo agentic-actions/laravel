@@ -14,6 +14,7 @@ use AgenticActions\Discovery\Manifest;
 use AgenticActions\Discovery\Scan;
 use AgenticActions\Discovery\Scanner;
 use AgenticActions\Discovery\Snapshot;
+use AgenticActions\Effect;
 use AgenticActions\Exceptions\DuplicateActionName;
 use AgenticActions\Exceptions\UnsupportedSchema;
 use AgenticActions\Exposure\Entry;
@@ -149,6 +150,7 @@ final class Checks
             ...$this->discovery($scan),
             ...$this->authorization($subjects),
             ...$this->effect($subjects),
+            ...$this->initialize($subjects),
             ...$this->membership(),
             ...$this->tenantScope(),
             ...$this->tenantKeys($subjects),
@@ -382,6 +384,40 @@ final class Checks
         foreach ($subjects as $subject) {
             if ($subject['entry']->effect === null) {
                 $findings[] = self::fail('Effect', "{$subject['entry']->class}: \$effect is undeclared, so nothing remote reaches it. Declare Effect::Read, Effect::Write, Effect::Destructive or Effect::External.");
+            }
+        }
+
+        return $findings;
+    }
+
+    /**
+     * Initialize: $initializes that adds no rows, on an action that is not a Read, on a dataset (whose call is
+     * generated), or without a public initialize(); and, as a warning, since it may be the app's own method, a public
+     * initialize() the package never calls because $initializes lists no table.
+     *
+     * @param  list<Subject>  $subjects
+     * @return list<Finding>
+     */
+    private function initialize(array $subjects): array
+    {
+        $findings = [];
+
+        foreach ($subjects as $subject) {
+            $class = $subject['entry']->class;
+            $tables = array_map(strval(...), (array) ($subject['reflection']->getDefaultProperties()['initializes'] ?? []));
+            $declared = $subject['reflection']->hasMethod('initialize') && $subject['reflection']->getMethod('initialize')->isPublic();
+            $lists = '$initializes lists ['.implode(', ', $tables).']';
+
+            $finding = match (true) {
+                $tables === [] => $declared ? self::warn('Initialize', "{$class}: it declares initialize(), but \$initializes lists no table, so the package never calls it. List the tables it adds rows to in \$initializes, or rename it if it is a method of your own.") : null,
+                $subject['entry']->effect !== Effect::Read => self::fail('Initialize', "{$class}: {$lists}, but its effect is ".($subject['entry']->effect->value ?? 'undeclared').', and only a Read runs initialize(). Declare Effect::Read if the action only shows the rows it adds, or remove $initializes and add them in handle().'),
+                $subject['action'] instanceof Dataset => self::fail('Initialize', "{$class}: {$lists}, but a dataset's call is generated, so initialize() never runs on it. Remove \$initializes, and create the rows with the record they belong to."),
+                ! $declared => self::fail('Initialize', "{$class}: {$lists}, but the class declares no public initialize(), so the rows are never added. Declare initialize(ActionContext \$context), which adds them before handle() reads them."),
+                default => null,
+            };
+
+            if ($finding !== null) {
+                $findings[] = $finding;
             }
         }
 

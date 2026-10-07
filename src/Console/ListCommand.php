@@ -91,7 +91,8 @@ final class ListCommand extends Command
     }
 
     /**
-     * One action: its name and class, then one line per fact, then its exposure errors in red.
+     * One action: its name and class, then one line per fact (the tables initialize() adds rows to only on a Read that
+     * lists them), then its exposure errors in red.
      *
      * @param  list<Route>  $routes  every route whose controller is the action, generated or hand-written
      */
@@ -116,6 +117,10 @@ final class ListCommand extends Command
             AuthorizeTiming::Both => 'before input and after validation',
             AuthorizeTiming::Missing => 'missing: denied everywhere',
         });
+
+        if ($entry->initializes !== []) {
+            $this->detail('initialize', 'inserts into '.implode(', ', $entry->initializes).' only, before handle()');
+        }
 
         foreach ($entry->errors as $error) {
             $this->line('  <fg=red>'.OutputFormatter::escape($error).'</>');
