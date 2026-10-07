@@ -24,7 +24,7 @@ The list comes in pages of 15 tools, and clients follow the cursor. Each tool ca
 | Read | true | not sent | `$idempotent` | false |
 | Write | false | true | `$idempotent` | false |
 
-A Write carries `destructiveHint`, since a write may overwrite something, so a client that asks before destructive calls asks before each write.
+A Write carries `destructiveHint`, since a write may overwrite something, so a client that asks before destructive calls asks before each write. A Read whose `initialize()` adds its missing rows carries the Read's hints: those rows are its own state, never a change the caller asks for ([a Read that creates its own state](concepts.md#a-read-that-creates-its-own-state)), and a token with only `actions:read` may cause them.
 
 ### What a call answers
 
