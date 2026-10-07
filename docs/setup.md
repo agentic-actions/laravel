@@ -100,7 +100,7 @@ The package ships a [Laravel Boost](https://github.com/laravel/boost) guideline 
 
 | | |
 |---|---|
-| Packages | `laravel/ai` |
+| Packages | `laravel/ai`, 1.1 or later for `#[DeferToolset]` ([many actions](copilot.md#many-actions)) |
 | Tables | none, for an agent that keeps no conversations |
 | Routes | none |
 | Config and env | laravel/ai's `config/ai.php` and your provider's key; `agents.*`; `AGENTIC_ACTIONS_AGENTS=false` turns the surface off |
