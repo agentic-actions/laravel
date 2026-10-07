@@ -460,7 +460,7 @@ use AgenticActions\Attributes\UseToolset;
 #[UseToolset('default', 'support')]  // both
 ```
 
-`#[DeferToolset]` names toolsets the agent finds through tool search instead: their tools go in one tool-search group, which a provider that searches tools shows the model only when it searches. `#[UseToolset('posts')]` with `#[DeferToolset('reports')]` loads `posts` and finds `reports`. Bare, it means `default` too, and an agent may carry either attribute or both. [Many actions](copilot.md#many-actions) says when to defer a toolset, and which providers search.
+`#[DeferToolset]` names toolsets the agent finds through tool search instead: their tools go in one tool-search group, which a provider that searches tools holds back until the model searches. `#[UseToolset('posts')]` with `#[DeferToolset('reports')]` loads `posts` and finds `reports`. Bare, it means `default` too, and an agent may carry either attribute or both. [Many actions](copilot.md#many-actions) says when to defer a toolset, and which providers search.
 
 In both attributes the names are separate strings, not an array: `#[UseToolset(['support'])]` throws a `TypeError` as soon as the package reads it. An agent that uses `InteractsWithActions` without either attribute throws a `LogicException` when its tools are built. Neither attribute is inherited. `assertToolset()` and `assertAgentTools()` pin both sides in your tests ([testing](testing.md#toolsets-and-agents)).
 

@@ -130,7 +130,7 @@ final class ActionsManager
     /**
      * What the snapshot stores: the actions:list --json content.
      *
-     * @return array{version: int, actions: array<string, array<string, mixed>>, agents: array<string, list<string>>}
+     * @return array{version: int, actions: array<string, array<string, mixed>>, agents: array<string, list<string>|array{use: list<string>, defer: list<string>}>}
      */
     public function exposure(): array
     {
@@ -211,7 +211,7 @@ final class ActionsManager
 
     /**
      * Fail when one agent returns none of the action tools its toolsets give the person, or on duplicate tool names,
-     * forbidden keys or an oversized toolset.
+     * forbidden keys or more action tools loaded on every step than agents.max_tools.
      */
     public function assertAgentTools(Agent $agent): void
     {
