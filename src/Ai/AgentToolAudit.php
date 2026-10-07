@@ -23,8 +23,8 @@ use ReflectionMethod;
 
 /**
  * Audits one agent's tools as laravel/ai resolves them: its toolsets' action tools reached, unique names, no forbidden
- * input keys, toolsets within agents.max_tools_per_toolset, and the page context wired when the agent asks for it. Every check goes through
- * PHPUnit's Assert, so it works under PHPUnit and Pest.
+ * input keys, at most agents.max_tools action tools loaded on every step, and the page context wired when the agent
+ * asks for it. Every check goes through PHPUnit's Assert, so it works under PHPUnit and Pest.
  *
  * @upstream Tools are resolved the way the provider resolves them before a turn.
  *
@@ -33,17 +33,18 @@ use ReflectionMethod;
 final class AgentToolAudit
 {
     /**
-     * Assert the toolsets' action tools reached, unique tool names, no forbidden keys and toolsets within the limit,
-     * over the tools as laravel/ai resolves them, then the page context's wiring.
+     * Assert the toolsets' action tools reached, unique tool names and no forbidden keys, over the tools as laravel/ai
+     * resolves them, then the action tools loaded on every step within the limit, and the page context's wiring.
      */
     public function assert(Agent $agent): void
     {
-        $tools = $this->resolve($agent instanceof HasTools ? [...$agent->tools()] : []);
+        $declared = $agent instanceof HasTools ? [...$agent->tools()] : [];
+        $tools = $this->resolve($declared);
 
         $this->assertActionToolsReached($agent, $tools);
         $this->assertUniqueNames($agent, $tools);
         $this->assertNoForbiddenKeys($agent, $tools);
-        $this->assertToolsetSizes($agent, $tools);
+        $this->assertLoadedTools($agent, $declared);
         $this->assertPageContextWired($agent);
     }
 
@@ -176,32 +177,21 @@ final class AgentToolAudit
     }
 
     /**
-     * Fail when one of the agent's toolsets holds more action tools than agents.max_tools_per_toolset. An agent with
-     * no #[UseToolset] has no toolsets to measure.
+     * Fail when the agent loads more action tools on every step than agents.max_tools: those at the top level of its
+     * tools(), for this person. The actions it finds through tool search, inside a tool-search group, do not count.
      *
-     * @param  list<Tool>  $tools
+     * @param  list<mixed>  $declared  its tools() as it returns them
      */
-    private function assertToolsetSizes(Agent $agent, array $tools): void
+    private function assertLoadedTools(Agent $agent, array $declared): void
     {
-        $limit = (int) config('agentic-actions.agents.max_tools_per_toolset');
-        $oversized = [];
+        $limit = (int) config('agentic-actions.agents.max_tools', 20);
+        $loaded = count(array_unique(self::actionToolNames($declared)));
 
-        foreach (Toolsets::declared($agent::class) ?? [] as $toolset) {
-            $count = count(array_filter(
-                $tools,
-                fn (Tool $tool): bool => $tool instanceof ActionTool && in_array($toolset, $tool->entry()->toolsets, true),
-            ));
-
-            if ($count > $limit) {
-                $oversized[] = "{$toolset} ({$count})";
-            }
-        }
-
-        Assert::assertEmpty($oversized, sprintf(
-            '%s receives more than agents.max_tools_per_toolset (%d) action tools in [%s].',
+        Assert::assertFalse($loaded > $limit, sprintf(
+            '%s loads %d action tools on every step, more than agents.max_tools (%d). Move the toolsets it needs only sometimes to #[DeferToolset], or raise the limit.',
             $agent::class,
+            $loaded,
             $limit,
-            implode(', ', $oversized),
         ));
     }
 

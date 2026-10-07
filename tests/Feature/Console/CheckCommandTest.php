@@ -63,9 +63,12 @@ use Tests\Fixtures\Misconfigured\NoAuthorize;
 use Tests\Fixtures\Misconfigured\UndeclaredEffect;
 use Tests\Fixtures\Misconfigured\WebWithAgentSchema;
 use Tests\Fixtures\Tenancy\TeamScope;
+use Tests\Fixtures\Views\GuardedPosts;
 use Tests\Fixtures\Views\Invalid\BadColumns;
 use Tests\Fixtures\Views\Invalid\WriteWithTable;
+use Tests\Fixtures\Views\PostsByStatus;
 use Tests\Fixtures\Views\PostStats;
+use Tests\Fixtures\Views\ViewsAgent;
 use Workbench\App\Models\Team;
 use Workbench\App\Models\User;
 
@@ -394,13 +397,14 @@ describe('toolset rows', function () {
         ]);
     });
 
-    it('warns about a toolset larger than agents.max_tools_per_toolset', function () {
+    it('warns about an agent whose toolsets together hold more actions than agents.max_tools, leaving its deferred toolsets out', function () {
         $this->skipUnlessAi();
 
-        config(['agentic-actions.agents.max_tools_per_toolset' => 1]);
+        config(['agentic-actions.agents.max_tools' => 2]);
 
-        expect(inRow(findingsFor([CreateNote::class, ListNotes::class]), 'Toolsets'))->toBe([
-            ['warn', 'Toolsets', 'The [default] toolset holds 2 actions, more than agents.max_tools_per_toolset (1). An agent reads every tool on every turn: split the toolset, or raise the limit.'],
+        // Each toolset holds 2 actions. ViewsAgent loads views and default; DeferringDesk loads default and defers support.
+        expect(inRow(findingsFor([CreateNote::class, ListNotes::class, PostsByStatus::class, GuardedPosts::class, SupportNote::class, ViewsAgent::class, DeferringDesk::class]), 'Toolsets'))->toBe([
+            ['warn', 'Toolsets', ViewsAgent::class.': its #[UseToolset] toolsets hold 4 actions, all loaded on every step, more than agents.max_tools (2). Move the toolsets it needs only sometimes to #[DeferToolset], or raise the limit (https://agentic-actions.com/copilot#many-actions).'],
         ]);
     });
 

@@ -523,8 +523,9 @@ final class Checks
     }
 
     /**
-     * Toolsets: a toolset an agent loads or defers that no action joins, one it names in both attributes, an agent
-     * whose own tools() leaves its toolsets out, a toolset no agent receives, and one that is too large.
+     * Toolsets: a toolset an agent loads or defers that no action joins, one it names in both attributes, one that
+     * loads more actions on every step than agents.max_tools (counted over the actions its #[UseToolset] toolsets
+     * hold, once each), an agent whose own tools() leaves its toolsets out, and a toolset no agent receives.
      *
      * @param  list<Subject>  $subjects
      * @return list<Finding>
@@ -539,6 +540,7 @@ final class Checks
             }
         }
 
+        $limit = (int) config('agentic-actions.agents.max_tools', 20);
         $findings = [];
 
         foreach ($scan->agents as $agent => $toolsets) {
@@ -556,6 +558,12 @@ final class Checks
                 $findings[] = self::warn('Toolsets', "{$agent}: #[UseToolset] and #[DeferToolset] both name [".implode(', ', $both).'], so it loads those actions on every step and never defers them. Name each toolset in one of them.');
             }
 
+            $loaded = count(array_unique(array_merge([], ...array_map(fn (string $toolset): array => $members[$toolset] ?? [], $toolsets))));
+
+            if ($loaded > $limit) {
+                $findings[] = self::warn('Toolsets', "{$agent}: its #[UseToolset] toolsets hold {$loaded} actions, all loaded on every step, more than agents.max_tools ({$limit}). Move the toolsets it needs only sometimes to #[DeferToolset], or raise the limit (https://agentic-actions.com/copilot#many-actions).");
+            }
+
             array_push($findings, ...self::toolsWiring($agent, $toolsets !== [], $deferred !== []));
         }
 
@@ -571,16 +579,6 @@ final class Checks
                 if (! in_array($toolset, $received, true)) {
                     $findings[] = self::warn('Toolsets', "{$subject['entry']->class}: #[Expose(agents: …)] names the [{$toolset}] toolset, which no agent uses.");
                 }
-            }
-        }
-
-        $limit = (int) config('agentic-actions.agents.max_tools_per_toolset', 20);
-
-        ksort($members, SORT_STRING);
-
-        foreach ($members as $toolset => $names) {
-            if (count($names) > $limit) {
-                $findings[] = self::warn('Toolsets', "The [{$toolset}] toolset holds ".count($names)." actions, more than agents.max_tools_per_toolset ({$limit}). An agent reads every tool on every turn: split the toolset, or raise the limit.");
             }
         }
 

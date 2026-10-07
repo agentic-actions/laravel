@@ -43,7 +43,9 @@ final class AgenticActionsServiceProvider extends ServiceProvider
     }
 
     /**
-     * Merge the app's config over the defaults one level deep: a group's keys merge, lists and scalars replace.
+     * Merge the app's config over the defaults one level deep: a group's keys merge, lists and scalars replace. A
+     * published config's agents.max_tools_per_toolset, the key agents.max_tools replaced, counts as agents.max_tools
+     * when the config does not set that key itself.
      */
     private function mergeConfig(): void
     {
@@ -54,6 +56,10 @@ final class AgenticActionsServiceProvider extends ServiceProvider
         $defaults = require __DIR__.'/../config/agentic-actions.php';
         $config = $this->app->make('config');
         $app = $config->get('agentic-actions', []);
+
+        if (is_array($app['agents'] ?? null) && array_key_exists('max_tools_per_toolset', $app['agents']) && ! array_key_exists('max_tools', $app['agents'])) {
+            $app['agents']['max_tools'] = $app['agents']['max_tools_per_toolset'];
+        }
 
         foreach ($defaults as $key => $default) {
             $app[$key] = is_array($default) && ! array_is_list($default) && is_array($app[$key] ?? null)

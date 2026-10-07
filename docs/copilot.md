@@ -669,7 +669,7 @@ With `#[WithPageContext]`, the agent knows which page the person has open. It ne
 
 ## Many actions
 
-Every action tool an agent loads goes to the model on every step of a turn, with its name, description and input schema, whether the step needs it or not. The more there are, the more each step costs, and the less reliably the model picks the right one.
+Every action tool an agent loads goes to the model on every step of a turn, with its name, description and input schema, whether the step needs it or not. The more there are, the more each step costs, and the less reliably the model picks the right one. `agents.max_tools` (20 by default) is the most action tools one agent should load. `actions:check` warns about an agent whose `#[UseToolset]` toolsets hold more actions than that between them, each action counted once, and `Actions::assertAgentTools()` fails one that loads more for the person it is built for ([testing](testing.md#toolsets-and-agents)). Splitting a toolset in two changes nothing: the agent still loads both halves.
 
 Name toolsets after the parts of your app, such as `posts`, `comments`, `reports` and `settings`, whatever their size, and give each agent only the toolsets its job needs. An agent on the author's dashboard needs `posts` and `comments`, and one on the admin pages needs `settings`: two agents with separate jobs each read fewer tools than one agent that does both.
 
@@ -688,7 +688,7 @@ final class BlogAssistant implements Agent, Conversational, HasTools
 
 - `InteractsWithActions` puts the actions of those toolsets in one laravel/ai tool-search group (`Laravel\Ai\Providers\Tools\ToolSearch`), sent before the actions it loads. A provider that searches tools keeps their definitions from the model until it searches for them: Anthropic, OpenAI (gpt-5.4 and later, with response storage on) and Azure OpenAI. Any other provider receives them as ordinary tools on every step, so deferring saves nothing there.
 - It needs laravel/ai 1.1. With 1.0, the deferred toolsets are sent as ordinary tools on every step, to every provider, and `actions:check` warns (the Tool search row).
-- An action that a loaded toolset holds is loaded, even when a deferred toolset holds it too.
+- The limit leaves deferred toolsets out. An action that a loaded toolset holds is loaded, even when a deferred toolset holds it too.
 - A deferred action is the same action tool, through the same pipeline: it waits for the person's confirmation or answer, and a reload brings back its card, form or table.
 - Keep the actions most turns call loaded, since the model searches before it can call a deferred one. Say in the agent's instructions which areas it can search, such as "Reports and settings are available through tool search", and write each action's description in the words people use, since that is what the search reads.
 - Bare, `#[DeferToolset]` means `default`, as `#[UseToolset]` does. An agent may defer every toolset it has and load none, except with laravel/ai's `#[CacheToolDefinitions]`, which marks the last tool sent for caching: Anthropic refuses that mark on a deferred tool. `actions:check` warns about such an agent (the Tool search row).
@@ -743,6 +743,10 @@ $agent = (new BlogAssistant($user, $toolsets))->continueLastConversation($user);
 - Build the agent with every toolset for a request without words, and for the reload. An answer to a confirmation or a form and the transcript both look up the waiting call among the agent's tools, so a narrower agent loses the card or form, and the answer gets 409.
 - A turn cannot reach a toolset it was not given, and a request that spans two parts of the app ("email the author last month's report") needs both.
 - `actions:check` reads the attribute, so it counts every toolset the attribute names.
+
+### Raising the limit
+
+`agents.max_tools` keeps each step small and the model's choice clear. Raise it when an agent's job needs more tools on every step, its provider does not search tools, and it still picks the right tool in your own tests: publish the config (`php artisan vendor:publish --tag=agentic-actions-config`) and set `agents.max_tools`.
 
 ## The stream
 

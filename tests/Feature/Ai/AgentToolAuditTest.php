@@ -30,9 +30,9 @@ use Workbench\App\Models\User;
 
 /*
  * Actions::assertAgentTools(): one agent's tools, resolved as laravel/ai resolves them before a turn, have unique
- * names, offer no forbidden key and stay within agents.max_tools_per_toolset, an agent on InteractsWithActions returns
- * at least one of the action tools each of its attributes' toolsets give the person, and an agent carrying
- * #[WithPageContext] returns the PageContext middleware.
+ * names and offer no forbidden key, the agent loads at most agents.max_tools action tools on every step, an agent on
+ * InteractsWithActions returns at least one of the action tools each of its attributes' toolsets give the person, and
+ * an agent carrying #[WithPageContext] returns the PageContext middleware.
  */
 
 beforeEach(function () {
@@ -88,19 +88,32 @@ it('fails for a hand-written tool that offers a forbidden key, at any depth', fu
         ->toThrow(AssertionFailedError::class, 'offers input keys an agent may never be offered: [LeakyTool: account.client_secret]');
 });
 
-it('fails when a toolset holds more action tools than the limit', function () {
-    config(['agentic-actions.agents.max_tools_per_toolset' => 1]);
+it('fails an agent that loads more action tools than agents.max_tools, counted across its toolsets', function () {
+    config(['agentic-actions.agents.max_tools' => 6]);
 
-    expect(fn () => Actions::assertAgentTools(new NotesAgent($this->user)))
-        ->toThrow(AssertionFailedError::class, NotesAgent::class.' receives more than agents.max_tools_per_toolset (1) action tools in [default (6)].');
-});
+    // The default toolset gives this person 6 action tools and the support toolset 2, so each passes on its own.
+    $agent = new #[UseToolset('default', 'support')] class($this->user) implements Agent, HasTools
+    {
+        use InteractsWithActions;
+        use Promptable;
 
-it('counts action tools per toolset, not across toolsets', function () {
-    config(['agentic-actions.agents.max_tools_per_toolset' => 2]);
+        public function __construct(public User $user) {}
 
-    Actions::assertAgentTools(new SupportAgent($this->user));
+        public function instructions(): string
+        {
+            return 'You help the signed-in author.';
+        }
 
-    expect(fn () => Actions::assertAgentTools(new NotesAgent($this->user)))->toThrow(AssertionFailedError::class, 'default (6)');
+        protected function actionContext(): ActionContext
+        {
+            return ActionContext::agent($this->user);
+        }
+    };
+
+    Actions::assertAgentTools(new NotesAgent($this->user));
+
+    expect(fn () => Actions::assertAgentTools($agent))
+        ->toThrow(AssertionFailedError::class, $agent::class.' loads 8 action tools on every step, more than agents.max_tools (6). Move the toolsets it needs only sometimes to #[DeferToolset], or raise the limit.');
 });
 
 describe('an agent whose own tools() leaves out its action tools', function () {
@@ -158,7 +171,9 @@ describe('an agent with #[DeferToolset]', function () {
         $this->refreshActions();
     });
 
-    it('passes one whose own tools() puts deferredActionTools() in a tool-search group', function () {
+    it('passes one whose own tools() puts deferredActionTools() in a tool-search group, which the limit leaves out', function () {
+        config(['agentic-actions.agents.max_tools' => 1]);
+
         Actions::assertAgentTools(new OwnGroupAgent($this->user));
     });
 

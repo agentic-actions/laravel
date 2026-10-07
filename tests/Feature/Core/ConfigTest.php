@@ -31,7 +31,7 @@ it('keeps a partial group\'s other defaults, and a null the app sets', function 
 
     expect(config('agentic-actions.agents.forbidden_keys'))->toBe(['id'])
         ->and(config('agentic-actions.agents.forbidden_output_keys'))->toBe([])
-        ->and(config('agentic-actions.agents.max_tools_per_toolset'))->toBe(20)
+        ->and(config('agentic-actions.agents.max_tools'))->toBe(20)
         ->and(config('agentic-actions.agents.max_message_length'))->toBe(4000)
         ->and(config('agentic-actions.routes'))->toBe(['path' => 'actions', 'name' => 'actions.'])
         ->and(config('agentic-actions.reads.guard'))->toBeTrue()
@@ -68,7 +68,21 @@ it('keeps keys the app adds that the defaults lack', function () {
 
     expect(config('agentic-actions.later'))->toBe(['enabled' => true])
         ->and(config('agentic-actions.agents.extra'))->toBe(1)
-        ->and(config('agentic-actions.agents.max_tools_per_toolset'))->toBe(20);
+        ->and(config('agentic-actions.agents.max_tools'))->toBe(20);
+});
+
+it('reads a published config\'s agents.max_tools_per_toolset, the old name, as agents.max_tools, unless it sets agents.max_tools too', function () {
+    config(['agentic-actions' => ['agents' => ['max_tools_per_toolset' => 35]]]);
+
+    registerAgain();
+
+    expect(config('agentic-actions.agents.max_tools'))->toBe(35);
+
+    config(['agentic-actions' => ['agents' => ['max_tools_per_toolset' => 35, 'max_tools' => 12]]]);
+
+    registerAgain();
+
+    expect(config('agentic-actions.agents.max_tools'))->toBe(12);
 });
 
 it('replaces a scalar the app sets', function () {
