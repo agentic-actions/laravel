@@ -253,10 +253,10 @@ Fix: give the agent only the toolsets its job needs, move the ones it needs only
 ### #[DeferToolset] needs laravel/ai 1.1
 
 ```text
-#[DeferToolset] on [App\Ai\Assistant] needs laravel/ai 1.1 or later: with the version installed, their deferred toolsets are loaded on every step. Run composer require laravel/ai:^1.1.
+#[DeferToolset] on [App\Ai\Assistant] needs laravel/ai 1.1 or later: with the version installed, the tools() of InteractsWithActions sends their deferred toolsets as ordinary tools on every step, and a tool-search group an agent's own tools() builds fails on a provider that does not search tools. Run composer require laravel/ai:^1.1.
 ```
 
-The Tool search row of `actions:check`. With laravel/ai 1.0, the package sends the actions of `#[DeferToolset]` toolsets as ordinary tools, to every provider, so nothing is deferred until you update laravel/ai.
+The Tool search row of `actions:check`. With laravel/ai 1.0, the `tools()` that `InteractsWithActions` gives an agent sends the actions of its `#[DeferToolset]` toolsets as ordinary tools, to every provider, so nothing is deferred until you update laravel/ai. An agent whose own `tools()` puts them in a tool-search group defers them on a provider that searches tools, and every turn on any other provider fails until you update.
 
 ### The reply stopped before it finished
 

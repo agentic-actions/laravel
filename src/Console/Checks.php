@@ -665,9 +665,10 @@ final class Checks
 
     /**
      * Tool search: agents that carry #[DeferToolset] while the installed laravel/ai takes a tool-search group only for
-     * a provider that searches tools, so their deferred toolsets are sent as ordinary tools on every step; and an agent
-     * that carries laravel/ai's #[CacheToolDefinitions] but no #[UseToolset], which therefore defers nothing through the
-     * trait's tools(), and whose own tools(), when it ends with the group, puts the cache mark on a deferred tool.
+     * a provider that searches tools, so InteractsWithActions' tools() sends their deferred toolsets as ordinary tools on
+     * every step, and a group an agent's own tools() builds fails on any other provider; and an agent that carries
+     * laravel/ai's #[CacheToolDefinitions] but no #[UseToolset], which therefore defers nothing through the trait's
+     * tools(), and whose own tools(), when it ends with the group, puts the cache mark on a deferred tool.
      *
      * @return list<Finding>
      */
@@ -680,7 +681,7 @@ final class Checks
         $findings = [];
 
         if ($this->packages->laravelAi() !== PackageStatus::Missing && ! $this->packages->toolSearch()) {
-            $findings[] = self::warn('Tool search', '#[DeferToolset] on ['.implode(', ', array_keys($scan->deferred)).'] needs laravel/ai 1.1 or later: with the version installed, their deferred toolsets are loaded on every step. Run composer require laravel/ai:^1.1.');
+            $findings[] = self::warn('Tool search', '#[DeferToolset] on ['.implode(', ', array_keys($scan->deferred)).'] needs laravel/ai 1.1 or later: with the version installed, the tools() of InteractsWithActions sends their deferred toolsets as ordinary tools on every step, and a tool-search group an agent\'s own tools() builds fails on a provider that does not search tools. Run composer require laravel/ai:^1.1.');
         }
 
         foreach (array_keys($scan->deferred) as $agent) {

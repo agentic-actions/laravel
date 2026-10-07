@@ -469,7 +469,7 @@ describe('tool search rows', function () {
         $this->skipUnlessAi();
 
         expect(inRow(findingsFor([CreateNote::class, SupportNote::class, CachedSearchOnly::class, SearchDesk::class]), 'Tool search'))->toBe([
-            ...($this->laravelAiBefore('1.1.0') ? [['warn', 'Tool search', '#[DeferToolset] on ['.CachedSearchOnly::class.', '.SearchDesk::class.'] needs laravel/ai 1.1 or later: with the version installed, their deferred toolsets are loaded on every step. Run composer require laravel/ai:^1.1.']] : []),
+            ...($this->laravelAiBefore('1.1.0') ? [['warn', 'Tool search', '#[DeferToolset] on ['.CachedSearchOnly::class.', '.SearchDesk::class.'] needs laravel/ai 1.1 or later: with the version installed, the tools() of InteractsWithActions sends their deferred toolsets as ordinary tools on every step, and a tool-search group an agent\'s own tools() builds fails on a provider that does not search tools. Run composer require laravel/ai:^1.1.']] : []),
             ['warn', 'Tool search', CachedSearchOnly::class.': it carries #[CacheToolDefinitions] but no #[UseToolset], so the tools() of InteractsWithActions sends its deferred toolsets as ordinary tools on every step, keeping the cache mark off a deferred tool, and it defers nothing. An own tools() that sends the tool-search group last puts the mark on a deferred tool, which Anthropic refuses. Load the actions it uses most with #[UseToolset], or remove #[CacheToolDefinitions].'],
         ]);
     });
@@ -480,7 +480,7 @@ describe('tool search rows', function () {
         $findings = inRow(findingsFor([CreateNote::class, SupportNote::class, DeferringDesk::class, SearchDesk::class]), 'Tool search');
 
         expect($findings)->toBe($this->laravelAiBefore('1.1.0') ? [
-            ['warn', 'Tool search', '#[DeferToolset] on ['.DeferringDesk::class.', '.SearchDesk::class.'] needs laravel/ai 1.1 or later: with the version installed, their deferred toolsets are loaded on every step. Run composer require laravel/ai:^1.1.'],
+            ['warn', 'Tool search', '#[DeferToolset] on ['.DeferringDesk::class.', '.SearchDesk::class.'] needs laravel/ai 1.1 or later: with the version installed, the tools() of InteractsWithActions sends their deferred toolsets as ordinary tools on every step, and a tool-search group an agent\'s own tools() builds fails on a provider that does not search tools. Run composer require laravel/ai:^1.1.'],
         ] : []);
     });
 
