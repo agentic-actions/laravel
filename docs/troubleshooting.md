@@ -69,7 +69,7 @@ Fix: after upgrading from 0.9.0-beta.2 or earlier, run `npm dedupe` once and com
 Actions App\Actions\CreatePost and App\Actions\Admin\CreatePost share the name or route segment [create-post].
 ```
 
-Two classes resolve to one name or one route segment. When `$name` is empty, the name is the class name in kebab case with one trailing `Action` removed. So `CreatePost` in two namespaces collide, and so do `CreatePost` and `CreatePostAction`. Every scan throws this: a local request, the console, your tests and `actions:cache`. `actions:check` reports it in its Names row and skips the rows that need the action list.
+Two classes resolve to one name or one route segment. When `$name` is empty, the name is the class name in kebab case, with one trailing `Action` removed and a run of capitals kept as one word. So `CreatePost` in two namespaces collide, and so do `CreatePost` and `CreatePostAction`, or `ExportCSV` and `ExportCsv`. Every scan throws this: a local request, the console, your tests and `actions:cache`. `actions:check` reports it in its Names row and skips the rows that need the action list.
 
 Fix: pin the name on one of the two classes, as you would before an agent first uses it:
 

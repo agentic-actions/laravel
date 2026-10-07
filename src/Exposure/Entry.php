@@ -76,7 +76,7 @@ final class Entry
 
         $name = is_string($defaults['name'] ?? null) && $defaults['name'] !== ''
             ? $defaults['name']
-            : Str::kebab(Str::replaceEnd('Action', '', $reflection->getShortName()) ?: $reflection->getShortName());
+            : self::defaultName($reflection->getShortName());
 
         $effect = $defaults['effect'] ?? null;
         $effect = $effect instanceof Effect ? $effect : null;
@@ -121,6 +121,19 @@ final class Entry
             // neither does a dataset, whose call is generated.
             asks: ! $dataset && (bool) ($defaults['askForMissing'] ?? false) && $effect?->isModelSafe() !== false,
         );
+    }
+
+    /**
+     * The name of a class that declares no $name: its basename without one trailing "Action", in kebab case, with a
+     * run of capitals kept as one word. A word starts at each capital that follows anything but a capital, and at a
+     * capital that follows another when a lower-case letter comes after it; the first letter counts as a capital. So
+     * ImportCSVFile is import-csv-file and eIDCheck is eid-check, while CreateAPost stays create-a-post.
+     */
+    private static function defaultName(string $basename): string
+    {
+        $words = ucfirst(Str::replaceEnd('Action', '', $basename) ?: $basename);
+
+        return Str::lower((string) preg_replace('/(?<=[^A-Z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])/u', '-', $words));
     }
 
     /**
@@ -249,7 +262,8 @@ final class Entry
     }
 
     /**
-     * The generated route segment: Str::kebab($this->name).
+     * The generated route segment: Str::kebab($this->name). It leaves a derived name as it is, and reads a set name the
+     * same way in every release, so the rule that derives default names never moves the route of a class with $name.
      */
     public function segment(): string
     {

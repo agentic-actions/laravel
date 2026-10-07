@@ -8,7 +8,7 @@ An action declares facts as properties and behaviour as methods.
 
 | Property | Meaning |
 |---|---|
-| `$name` | The tool, CLI and TypeScript name. Empty means the kebab-case class name, with one trailing `Action` removed (`ArchivePostAction` is `archive-post`). Pin it once an agent has used it. |
+| `$name` | The tool, CLI and TypeScript name. Empty means the class name in kebab case, with one trailing `Action` removed and a run of capitals kept as one word: `ArchivePostAction` is `archive-post`, and `ImportCSVFile` is `import-csv-file`. A word with a capital inside still splits, as `SyncOAuthToken` is `sync-o-auth-token`, and so does a plural run, as `SendSMSs` is `send-sm-ss`: set `$name`, or write the word as one in the class name (`SyncOauthToken`). Pin it once an agent has used it. |
 | `$description` | What a model reads before it calls the action. Required on model surfaces (agents and MCP). |
 | `$effect` | `Effect::Read`, `Write`, `Destructive` or `External`. Null exposes nothing remote and fails `actions:check`. |
 | `$touches` | Neutral keys a success makes stale, such as `['posts']`. The client hands them to your reload or cache code. |
