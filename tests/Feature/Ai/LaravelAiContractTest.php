@@ -2,6 +2,7 @@
 
 use AgenticActions\Action;
 use AgenticActions\ActionContext;
+use AgenticActions\Ai\ActionTool;
 use AgenticActions\Effect;
 use AgenticActions\Facades\Actions;
 use AgenticActions\Schema\AdvertisedSchema;
@@ -44,6 +45,7 @@ use Laravel\Ai\Tools\McpServerTool;
 use Laravel\Ai\Tools\McpTool;
 use Laravel\Ai\Tools\Request;
 use Laravel\Ai\Tools\ToolNameResolver;
+use Tests\Fixtures\Ai\AnthropicRequests;
 use Tests\Fixtures\Approvals\ScriptedGateway;
 use Workbench\App\Models\Post;
 use Workbench\App\Models\User;
@@ -181,6 +183,22 @@ describe('tool search', function () {
 
         expect(Post::query()->where('user_id', $user->id)->exists())->toBe(app(Packages::class)->toolSearch())
             ->and(app(Packages::class)->toolSearch())->toBe(! $this->laravelAiBefore('1.1.0'));
+    });
+
+    it('pins where laravel/ai puts a tool-search group and the cache mark in an Anthropic request, which InteractsWithActions orders its tools for', function () {
+        Auth::shouldUse('web');
+        AnthropicRequests::fake();
+        $deferred = Actions::tools(ActionContext::agent(User::factory()->create()), ['default']);
+        $loaded = array_pop($deferred);
+
+        (new #[CacheToolDefinitions] class('Help.', [], [new ToolSearch($deferred), $loaded]) extends AnonymousAgent {})->prompt('Count the notes.', provider: 'anthropic');
+
+        expect($deferred)->not->toBe([])
+            ->and(AnthropicRequests::tools())->toBe([
+                ['tool_search_tool_regex', false, false],
+                ...array_map(fn (ActionTool $tool): array => [$tool->name(), true, false], $deferred),
+                [$loaded->name(), false, true],
+            ]);
     });
 
     it('pins #[CacheToolDefinitions], which laravel/ai reads from the agent\'s class and actions:check reads too', function () {
