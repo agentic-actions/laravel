@@ -125,7 +125,7 @@ final class CheckCommand extends Command
         foreach ($built['actions'] as $name => $row) {
             $previous = is_string($row['class'] ?? null) ? ($before[$row['class']] ?? null) : null;
 
-            if ($previous !== null && $previous !== $name) {
+            if ($previous !== null && $previous !== (string) $name) {
                 $renames[] = "{$previous} to {$name}";
             }
         }
