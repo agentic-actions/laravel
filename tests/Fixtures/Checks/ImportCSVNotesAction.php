@@ -7,10 +7,10 @@ use AgenticActions\ActionContext;
 use AgenticActions\Effect;
 
 /**
- * No $name, and a run of capitals in its class name: import-csv-notes, which 0.9.0-beta.3 and earlier named
- * import-c-s-v-notes.
+ * No $name, a run of capitals in its class name and a trailing "Action" a derived name drops: import-csv-notes, which
+ * 0.9.0-beta.3 and earlier named import-c-s-v-notes.
  */
-final class ImportCSVNotes extends Action
+final class ImportCSVNotesAction extends Action
 {
     protected ?Effect $effect = Effect::Write;
 
