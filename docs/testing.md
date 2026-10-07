@@ -132,7 +132,7 @@ it('keeps the exposure snapshot current', function () {
 });
 ```
 
-`toContainActionTool()` passes when the iterable holds an action tool with that name, and otherwise fails naming the action tools it does hold.
+`toContainActionTool()` passes when the iterable holds an action tool with that name, at the top level or inside a tool-search group, and otherwise fails naming the action tools it does hold.
 
 ## Confirmations
 
