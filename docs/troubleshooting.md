@@ -239,6 +239,17 @@ App\Actions\PostActivity: agents cannot be offered it: The measure [posts] compa
 
 In production such a tool is left out quietly, the agent keeps its other tools, and the error is reported at most once an hour per class.
 
+### An agent loads more action tools than agents.max_tools
+
+```text
+App\Ai\Assistant: its #[UseToolset] toolsets hold 87 actions, all loaded on every step, more than agents.max_tools (20). Move the toolsets it needs only sometimes to #[DeferToolset], or raise the limit (https://agentic-actions.com/copilot#many-actions).
+App\Ai\Assistant loads 87 action tools on every step, more than agents.max_tools (20). Move the toolsets it needs only sometimes to #[DeferToolset], or raise the limit.
+```
+
+The first is the Toolsets row of `actions:check`, a warning; the second is `Actions::assertAgentTools()` failing in a test. Both count the actions one agent loads across all of its `#[UseToolset]` toolsets, each action once, since the model reads every one of them on every step: an agent whose toolsets each hold fewer is flagged when together they hold more, and splitting a toolset in two changes nothing.
+
+Fix: give the agent only the toolsets its job needs, move the ones it needs only sometimes to `#[DeferToolset]`, or raise `agents.max_tools`, as [many actions](copilot.md#many-actions) describes. A published config that still sets the old `agents.max_tools_per_toolset` keeps its value: rename the key to `agents.max_tools`.
+
 ### #[DeferToolset] needs laravel/ai 1.1
 
 ```text

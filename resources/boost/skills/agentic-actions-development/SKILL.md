@@ -60,6 +60,7 @@ Mistakes to avoid: calling `auth()` or `request()` inside `handle()` (it breaks 
 2. On the agent: `implements HasTools`, `use InteractsWithActions`, and `#[UseToolset('default')]` (from `AgenticActions\Ai\Concerns\InteractsWithActions` and `AgenticActions\Attributes\UseToolset`).
 3. Override `actionContext()` to return `ActionContext::agent(...)` built from the agent's own constructor state.
 4. When a model should not see ids, give the action an `agentSchema()` and a `fromAgent()` that turns the model's words into the canonical input.
+5. When an agent's toolsets hold more than `agents.max_tools` (20) actions between them, name the toolsets it needs only sometimes in `#[DeferToolset('reports')]` (`AgenticActions\Attributes\DeferToolset`) instead of `#[UseToolset]`: the model finds their actions through tool search (https://agentic-actions.com/copilot#many-actions).
 
 ```php
 #[UseToolset('default')]

@@ -35,7 +35,7 @@ final class ServiceProviderTest extends TestCase
         $this->assertSame('actions', config('agentic-actions.routes.path'));
         $this->assertSame('actions.', config('agentic-actions.routes.name'));
         $this->assertNull(config('agentic-actions.tenant.model'));
-        $this->assertSame(20, config('agentic-actions.agents.max_tools_per_toolset'));
+        $this->assertSame(20, config('agentic-actions.agents.max_tools'));
         $this->assertSame('actions.exposure.json', config('agentic-actions.snapshot'));
     }
 

@@ -116,6 +116,10 @@ return [
     | parameter and the tenant model's foreign key are always forbidden too.
     | Id-shaped keys (id, *_id, uuid) are allowed, under the checks in
     | actions:check. Add them here to forbid ids outright.
+    | "max_tools" is the most action tools one agent loads, which the model
+    | reads on every step: actions:check warns above it, and
+    | assertAgentTools() fails. The toolsets of #[DeferToolset], which the
+    | model finds through tool search, do not count.
     | "max_message_length" is the longest chat message ChatRequest reads,
     | in characters. Destructive and External actions reach an agent only
     | when #[Expose(agents: [...])] names its toolset, and run after the
@@ -126,7 +130,7 @@ return [
     'agents' => [
         'forbidden_keys' => ['*password*', '*secret*', '*token*', 'api_key'],
         'forbidden_output_keys' => [],
-        'max_tools_per_toolset' => 20,
+        'max_tools' => 20,
         'max_message_length' => 4000,
     ],
 
