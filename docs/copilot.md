@@ -686,8 +686,8 @@ use AgenticActions\Attributes\UseToolset;
 final class BlogAssistant implements Agent, Conversational, HasTools
 ```
 
-- `InteractsWithActions` puts the actions of those toolsets in one laravel/ai tool-search group (`Laravel\Ai\Providers\Tools\ToolSearch`), sent before the actions it loads. A provider that searches tools keeps their definitions from the model until it searches for them: Anthropic, OpenAI and Azure OpenAI. Any other provider receives them as ordinary tools on every step, so deferring saves nothing there.
-- On OpenAI, deferring needs gpt-5.4 or later and response storage on (laravel/ai's `store` option): a request without them fails, so an agent on an older model, or with storage off, defers nothing.
+- `InteractsWithActions` puts the actions of those toolsets in one laravel/ai tool-search group (`Laravel\Ai\Providers\Tools\ToolSearch`), sent before the actions it loads. A provider that searches tools holds back part of each deferred tool until the model searches for it: Anthropic its whole definition, OpenAI and Azure OpenAI its input schema, while the model still reads its name and description. Any other provider receives them as ordinary tools on every step, so deferring saves nothing there.
+- On OpenAI, deferring needs gpt-5.4 or later and response storage on (laravel/ai's `store` option). On an older model, or with storage off, every request that carries the group fails, so do not put `#[DeferToolset]` on such an agent.
 - It needs laravel/ai 1.1. With 1.0, the `tools()` of `InteractsWithActions` sends the deferred toolsets as ordinary tools on every step, to every provider, and `actions:check` warns (the Tool search row). An agent whose own `tools()` builds the group (below) needs laravel/ai 1.1 too, or a provider that searches tools: with 1.0, every turn on any other provider fails.
 - The limit leaves deferred toolsets out. An action that a loaded toolset holds is loaded, even when a deferred toolset holds it too.
 - A deferred action is the same action tool, through the same pipeline: it waits for the person's confirmation or answer, and a reload brings back its card, form or table.

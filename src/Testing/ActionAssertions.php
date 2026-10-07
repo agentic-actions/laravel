@@ -24,7 +24,7 @@ trait ActionAssertions
 
     /**
      * Fail when one agent returns none of the action tools its toolsets give the person, or on duplicate tool names,
-     * forbidden keys or an oversized toolset.
+     * forbidden keys or more action tools loaded on every step than agents.max_tools.
      */
     public function assertAgentTools(Agent $agent): void
     {
