@@ -18,6 +18,8 @@ final class Expectations
     /**
      * Register the Pest expectations when Pest is loaded. Each test's application registers them again, under the
      * same names. toContainActionTool looks at the top level of the tools and inside a tool-search group.
+     *
+     * @upstream An action tool inside a tool-search group is found as one at the top level is.
      */
     public static function register(): void
     {
