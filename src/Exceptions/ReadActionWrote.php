@@ -6,7 +6,8 @@ use RuntimeException;
 
 /**
  * A Read action sent a statement that would write through Laravel's database connection, or one the Read guard could
- * not check, or queued an action that is not a Read. The statement never ran, and nothing was queued.
+ * not check, or queued an action that is not a Read; or its initialize() sent one that does more than add rows to the
+ * tables its $initializes lists. The statement never ran, and nothing was queued.
  *
  * @internal
  */
@@ -19,6 +20,20 @@ final class ReadActionWrote extends RuntimeException
     {
         parent::__construct('A Read action tried to write ['.($table ?? 'a statement').']. The statement did not run: give the action a writing effect'
             .($table === null ? '.' : ', or list the table in agentic-actions.reads.writable_tables.'));
+    }
+
+    /**
+     * A Read's initialize() sent a statement that does more than add rows to the tables its $initializes lists: one
+     * that changes rows of those tables ($named), or one that writes anywhere else.
+     */
+    public static function initializing(?string $table, bool $named): self
+    {
+        $exception = new self;
+        $exception->message = $named
+            ? "A Read action's initialize() tried to change rows of [{$table}]. The statement did not run: initialize() only adds rows, and an update, delete, replace or upsert belongs in a Write action."
+            : "A Read action's initialize() tried to write [".($table ?? 'a statement').']. The statement did not run: initialize() only adds rows to the tables its $initializes lists.';
+
+        return $exception;
     }
 
     /**

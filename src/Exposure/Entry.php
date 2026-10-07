@@ -31,6 +31,7 @@ final class Entry
      * @param  array<string, string>  $skipped  surface value => reason
      * @param  list<string>  $errors  "surface: reason" for surfaces named on purpose that the rules refuse
      * @param  bool  $asks  whether a model's incomplete call asks the person in a form ($askForMissing on a Read or Write action)
+     * @param  list<string>  $initializes  the tables initialize() may add rows to: $initializes on a Read that is not a dataset
      */
     public function __construct(
         public readonly string $class,
@@ -50,6 +51,7 @@ final class Entry
         public readonly array $errors,
         public readonly bool $followLink = false,
         public readonly bool $asks = false,
+        public readonly array $initializes = [],
     ) {}
 
     /**
@@ -120,6 +122,8 @@ final class Entry
             // Only a Read or Write action (or one with no effect) asks: a Destructive or External one never does, and
             // neither does a dataset, whose call is generated.
             asks: ! $dataset && (bool) ($defaults['askForMissing'] ?? false) && $effect?->isModelSafe() !== false,
+            // Only a Read runs initialize(), and a dataset never does: its call is generated.
+            initializes: $effect === Effect::Read && ! $dataset ? self::strings($defaults['initializes'] ?? []) : [],
         );
     }
 
@@ -160,6 +164,7 @@ final class Entry
             errors: [],
             followLink: false,
             asks: false,
+            initializes: [],
         );
     }
 
@@ -196,11 +201,13 @@ final class Entry
             followLink: (bool) ($row['follow_link'] ?? false),
             // As fromClass() reads it: whatever a row says, a Destructive or External action never asks.
             asks: (bool) ($row['ask_for_missing'] ?? false) && $effect?->isModelSafe() !== false,
+            initializes: self::strings($row['initializes'] ?? []),
         );
     }
 
     /**
-     * The manifest row.
+     * The manifest row. "initializes" is there only when it lists a table, so a manifest written before it existed
+     * still matches the actions on disk.
      *
      * @return array<string, mixed>
      */
@@ -224,13 +231,15 @@ final class Entry
             'errors' => $this->errors,
             'follow_link' => $this->followLink,
             'ask_for_missing' => $this->asks,
+            ...($this->initializes === [] ? [] : ['initializes' => $this->initializes]),
         ];
     }
 
     /**
-     * The snapshot row.
+     * The snapshot row. "initializes" is there only when it lists a table, so no other action's row changes, and
+     * adding one is a reviewed diff.
      *
-     * @return array{class: string, effect: string|null, web: bool, agents: list<string>, mcp: bool, tenant_scoped: bool}
+     * @return array{class: string, effect: string|null, web: bool, agents: list<string>, mcp: bool, tenant_scoped: bool, initializes?: list<string>}
      */
     public function toSnapshot(): array
     {
@@ -241,6 +250,7 @@ final class Entry
             'agents' => $this->toolsets,
             'mcp' => $this->allows(Surface::Mcp),
             'tenant_scoped' => $this->tenantScoped,
+            ...($this->initializes === [] ? [] : ['initializes' => $this->initializes]),
         ];
     }
 

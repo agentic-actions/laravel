@@ -326,3 +326,55 @@ it('still refuses what a bracketed CTE name sits beside, on every driver', funct
     'a qualified CTE name' => ['with [dbo].[recent] as (select 1) select 1', ['sqlite', 'pgsql', 'sqlsrv', 'mysql', 'mariadb', null]],
     'a bracket that never closes' => ['with [recent as (select 1) select 1', ['sqlite', 'pgsql', 'sqlsrv', 'mysql', 'mariadb', null]],
 ]);
+
+it('allows a statement that only adds rows to a table initialize() names', function (string $sql, ?string $driver) {
+    expect(SqlStatement::refusal($sql, ['cache'], $driver, ['share_links']))->toBeNull();
+})->with([
+    'an insert' => ['insert into "share_links" ("post_id", "token") values (?, ?)', 'pgsql'],
+    'an insert returning its id' => ['insert into "share_links" ("post_id") values (?) returning "id"', 'pgsql'],
+    'MySQL\'s insert ignore' => ['insert ignore into `share_links` (`post_id`) values (?)', 'mysql'],
+    'SQLite\'s insert or ignore' => ['insert or ignore into "share_links" ("post_id") values (?)', 'sqlite'],
+    'on conflict do nothing' => ['insert into "share_links" ("post_id") values (?) on conflict ("post_id") do nothing returning "id"', 'pgsql'],
+    'MySQL\'s insert ... set' => ['insert into `share_links` set `post_id` = ?', 'mysql'],
+    'an insert that reads another table' => ['insert into "share_links" ("post_id", "token") select "id", "title" from "posts"', 'pgsql'],
+    'an insert after a CTE that reads' => ['with recent as (select id from posts) insert into share_links (post_id) select id from recent', 'pgsql'],
+    'a bracketed name on SQL Server' => ['insert into [share_links] ([post_id]) values (?)', 'sqlsrv'],
+    'on a driver the reader does not know' => ['insert into "share_links" ("post_id") values (?)', null],
+    'any write to a writable table, as in handle()' => ['delete from "cache"', 'pgsql'],
+]);
+
+it('refuses every other statement while initialize() runs, and says what it would have done', function (string $sql, ?string $driver, string $message) {
+    expect(SqlStatement::refusal($sql, ['cache'], $driver, ['share_links'])?->getMessage())->toBe($message);
+})->with(function (): array {
+    $changes = "A Read action's initialize() tried to change rows of [share_links]. The statement did not run: initialize() only adds rows, and an update, delete, replace or upsert belongs in a Write action.";
+    $elsewhere = fn (string $table): string => "A Read action's initialize() tried to write [{$table}]. The statement did not run: initialize() only adds rows to the tables its \$initializes lists.";
+
+    return [
+        'an update' => ['update "share_links" set "token" = ?', 'pgsql', $changes],
+        'a delete' => ['delete from "share_links" where "post_id" = ?', 'pgsql', $changes],
+        'MySQL\'s on duplicate key update' => ['insert into `share_links` (`post_id`) values (?) on duplicate key update `token` = values(`token`)', 'mysql', $changes],
+        'on conflict do update' => ['insert into "share_links" ("post_id") values (?) on conflict ("post_id") do update set "token" = "excluded"."token"', 'pgsql', $changes],
+        'SQLite\'s insert or replace' => ['insert or replace into "share_links" ("post_id") values (?)', 'sqlite', $changes],
+        'SQLite\'s insert or rollback' => ['insert or rollback into "share_links" ("post_id") values (?)', 'sqlite', $changes],
+        'MySQL\'s replace' => ['replace into `share_links` (`post_id`) values (?)', 'mysql', $changes],
+        'a merge' => ['merge [share_links] using (values (?)) [s] ([post_id]) on [s].[post_id] = [share_links].[post_id] when not matched then insert ([post_id]) values ([s].[post_id]);', 'sqlsrv', $changes],
+        'an insert that locks what it reads' => ['insert into "share_links" ("post_id") select "id" from "posts" for update', 'pgsql', $changes],
+        'an insert after a CTE that deletes' => ['with gone as (delete from "share_links" returning *) insert into "share_links" select * from gone', 'pgsql', $changes],
+        'a truncate' => ['truncate table "share_links"', 'pgsql', $changes],
+        'a drop' => ['drop table "share_links"', 'pgsql', $changes],
+        'an insert into another table' => ['insert into "posts" ("title") values (?)', 'pgsql', $elsewhere('posts')],
+        'an insert into another schema\'s table of that name' => ['insert into "other"."share_links" ("post_id") values (?)', 'pgsql', $elsewhere('share_links')],
+        'an insert whose output goes into another table' => ['insert into [share_links] ([post_id]) output inserted.[id] into [posts] ([title]) values (?)', 'sqlsrv', $changes],
+        'a second statement after the insert' => ['insert into "share_links" ("post_id") values (?); delete from "posts"', 'pgsql', $changes],
+        'a second T-SQL statement after the insert' => ['insert into [share_links] ([post_id]) values (?) delete from [posts]', 'sqlsrv', $changes],
+        'a session change' => ['set autocommit = 0', 'mysql', $elsewhere('a statement')],
+    ];
+});
+
+it('reads the insert-only rule only while initialize() names tables', function () {
+    expect(SqlStatement::refusal('insert into "share_links" ("post_id") values (?)', ['cache'], 'pgsql')?->getMessage())
+        ->toBe('A Read action tried to write [share_links]. The statement did not run: give the action a writing effect, or list the table in agentic-actions.reads.writable_tables.')
+        ->and(SqlStatement::allowed('insert into "share_links" ("post_id") values (?)', [], 'pgsql', ['share_links']))->toBeTrue()
+        ->and(SqlStatement::refusal("insert into \"share_links\" (\"token\") values ('never closed", [], 'pgsql', ['share_links'])?->getMessage())
+        ->toStartWith('A Read action sent a statement the Read guard could not check');
+});

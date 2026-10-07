@@ -22,6 +22,16 @@ final class SqlStatement
     private const WRITES = ['insert', 'replace', 'update', 'delete', 'merge', 'truncate', 'upsert', 'create', 'alter', 'drop', 'rename'];
 
     /**
+     * The words an INSERT may not hold outside quotes while a Read's initialize() runs, since each changes rows the
+     * statement does not add, or undoes work it did not do: REPLACE (INSERT OR REPLACE), UPDATE (ON DUPLICATE KEY
+     * UPDATE, ON CONFLICT ... DO UPDATE, and a FOR UPDATE, refused to be safe), ROLLBACK (SQLite's INSERT OR ROLLBACK,
+     * which rolls back the open transaction), and every other writing verb.
+     *
+     * @var list<string>
+     */
+    private const CHANGES_ROWS = ['replace', 'update', 'rollback', 'delete', 'merge', 'truncate', 'upsert', 'create', 'alter', 'drop', 'rename'];
+
+    /**
      * Read-only pragmas, with or without a parenthesised argument.
      *
      * @var list<string>
@@ -122,32 +132,38 @@ final class SqlStatement
 
     /**
      * Whether the statement may run during a Read on a connection whose writable tables are given. The driver is the
-     * connection's getDriverName(); null, or a driver the reader does not know, reads it every way.
+     * connection's getDriverName(); null, or a driver the reader does not know, reads it every way. $insertable is
+     * not empty only while a Read's initialize() runs (see refusal()).
      *
      * @param  list<string>  $writable  lower-cased, prefixed table names
+     * @param  list<string>  $insertable  lower-cased, prefixed table names
      */
-    public static function allowed(string $sql, array $writable, ?string $driver = null): bool
+    public static function allowed(string $sql, array $writable, ?string $driver = null, array $insertable = []): bool
     {
-        return self::refusal($sql, $writable, $driver) === null;
+        return self::refusal($sql, $writable, $driver, $insertable) === null;
     }
 
     /**
      * Why the statement may not run during a Read, as the exception the guard throws, or null when it may run. A
      * reading that shows a write, a batch or a statement outside the allowed set wins; otherwise a reading the reader
      * could not finish (a quote or comment that never closes, an executable comment, or in SQL Server's reading a letter
-     * right after a number) refuses it as unchecked.
+     * right after a number) refuses it as unchecked. While a Read's initialize() runs, $insertable lists the tables its
+     * $initializes names, and an INSERT that only adds rows to them runs too (insertsOnly()).
      *
      * @param  list<string>  $writable  lower-cased, prefixed table names
+     * @param  list<string>  $insertable  lower-cased, prefixed table names
      */
-    public static function refusal(string $sql, array $writable, ?string $driver = null): ?ReadActionWrote
+    public static function refusal(string $sql, array $writable, ?string $driver = null, array $insertable = []): ?ReadActionWrote
     {
         $unreadable = false;
 
         foreach (self::readings($sql, $driver) as [$tokens, $sqlServer]) {
             if ($tokens === null) {
                 $unreadable = true;
-            } elseif (! self::statementAllowed($tokens, $writable, $sqlServer, $driver)) {
-                return new ReadActionWrote(self::writeTarget($sql));
+            } elseif (! self::statementAllowed($tokens, $writable, $sqlServer, $driver, $insertable)) {
+                return $insertable === []
+                    ? new ReadActionWrote(self::writeTarget($sql))
+                    : ReadActionWrote::initializing(self::writeTarget($sql), self::writesOnlyTo($sql, $insertable));
             }
         }
 
@@ -159,6 +175,34 @@ final class SqlStatement
      */
     public static function writeTarget(string $sql): ?string
     {
+        $tokens = self::writing($sql);
+        $target = $tokens === null ? null : (self::named(self::unwrapped($tokens))[0][0] ?? null);
+
+        return $target === null ? null : substr((string) strrchr('.'.$target, '.'), 1);
+    }
+
+    /**
+     * Whether every table a writing statement's verb names is one of these, so the statement was refused for what it
+     * does to them rather than for where it writes.
+     *
+     * @param  list<string>  $tables
+     */
+    private static function writesOnlyTo(string $sql, array $tables): bool
+    {
+        $tokens = self::writing($sql);
+        $named = $tokens === null ? null : self::named(self::unwrapped($tokens));
+
+        return $named !== null && array_diff($named[0], $tables) === [];
+    }
+
+    /**
+     * The main statement of a writing statement, read with dollar quotes and brackets, or null when it does not write
+     * or cannot be read that way: the message's reading, never the guard's.
+     *
+     * @return list<array{0: string, 1: string}>|null
+     */
+    private static function writing(string $sql): ?array
+    {
         $tokens = self::tokenize($sql, ['dollar' => true, 'bracket' => true]);
 
         if ($tokens === null) {
@@ -167,13 +211,7 @@ final class SqlStatement
 
         $tokens = self::main(self::withoutTrailingBatch($tokens) ?? $tokens);
 
-        if ($tokens === null || ! in_array(self::keyword($tokens), self::WRITES, true)) {
-            return null;
-        }
-
-        $target = self::named(self::unwrapped($tokens))[0][0] ?? null;
-
-        return $target === null ? null : substr((string) strrchr('.'.$target, '.'), 1);
+        return $tokens !== null && in_array(self::keyword($tokens), self::WRITES, true) ? $tokens : null;
     }
 
     /**
@@ -436,12 +474,13 @@ final class SqlStatement
      *
      * @param  list<array{0: string, 1: string}>  $tokens
      * @param  list<string>  $writable
+     * @param  list<string>  $insertable
      */
-    private static function statementAllowed(array $tokens, array $writable, bool $sqlServer, ?string $driver): bool
+    private static function statementAllowed(array $tokens, array $writable, bool $sqlServer, ?string $driver, array $insertable): bool
     {
         $tokens = self::withoutTrailingBatch($tokens);
 
-        if ($tokens === null || ! self::tokensAllowed($tokens, $writable)) {
+        if ($tokens === null || ! self::tokensAllowed($tokens, $writable, $insertable)) {
             return false;
         }
 
@@ -618,21 +657,23 @@ final class SqlStatement
      *
      * @param  list<array{0: string, 1: string}>  $tokens
      * @param  list<string>  $writable
+     * @param  list<string>  $insertable
      */
-    private static function tokensAllowed(array $tokens, array $writable): bool
+    private static function tokensAllowed(array $tokens, array $writable, array $insertable): bool
     {
         $keyword = self::keyword($tokens);
         $rest = array_slice(self::unwrapped($tokens), 1);
 
         return match (true) {
             $keyword === 'select' => ! self::contains($tokens, ['word', 'into']),
-            $keyword === 'with' => self::withAllowed($rest, $writable),
+            $keyword === 'with' => self::withAllowed($rest, $writable, $insertable),
             in_array($keyword, ['show', 'savepoint', 'release'], true) => true,
             $keyword === 'set' => self::setAllowed($rest),
-            $keyword === 'explain' => self::tokensAllowed(self::explained($rest), $writable),
-            $keyword === 'describe' || $keyword === 'desc' => self::describeAllowed($rest, $writable),
+            $keyword === 'explain' => self::tokensAllowed(self::explained($rest), $writable, $insertable),
+            $keyword === 'describe' || $keyword === 'desc' => self::describeAllowed($rest, $writable, $insertable),
             $keyword === 'pragma' => self::pragmaAllowed($rest),
-            in_array($keyword, self::WRITES, true) => self::writesOnly($tokens, $writable),
+            in_array($keyword, self::WRITES, true) => self::writesOnly($tokens, $writable)
+                || ($keyword === 'insert' && $insertable !== [] && self::insertsOnly($tokens, [...$writable, ...$insertable])),
             default => false,
         };
     }
@@ -651,13 +692,32 @@ final class SqlStatement
     }
 
     /**
+     * Whether an INSERT only adds rows, and only to these tables: no word that changes other rows (CHANGES_ROWS)
+     * stands outside quotes anywhere in it, and every table it writes is one of them.
+     *
+     * @param  list<array{0: string, 1: string}>  $tokens
+     * @param  list<string>  $tables
+     */
+    private static function insertsOnly(array $tokens, array $tables): bool
+    {
+        foreach (self::CHANGES_ROWS as $word) {
+            if (self::contains($tokens, ['word', $word])) {
+                return false;
+            }
+        }
+
+        return self::writesOnly($tokens, $tables);
+    }
+
+    /**
      * Whether a statement that starts with WITH may run: every CTE body is itself allowed, and the main statement is a
      * select or an allowed write.
      *
      * @param  list<array{0: string, 1: string}>  $tokens  the tokens after WITH
      * @param  list<string>  $writable
+     * @param  list<string>  $insertable
      */
-    private static function withAllowed(array $tokens, array $writable): bool
+    private static function withAllowed(array $tokens, array $writable, array $insertable): bool
     {
         $bodies = self::ctes($tokens);
 
@@ -668,14 +728,14 @@ final class SqlStatement
         [$ctes, $main] = $bodies;
 
         foreach ($ctes as $body) {
-            if (! self::tokensAllowed($body, $writable)) {
+            if (! self::tokensAllowed($body, $writable, $insertable)) {
                 return false;
             }
         }
 
         $keyword = self::keyword($main);
 
-        return ($keyword === 'select' || in_array($keyword, self::WRITES, true)) && self::tokensAllowed($main, $writable);
+        return ($keyword === 'select' || in_array($keyword, self::WRITES, true)) && self::tokensAllowed($main, $writable, $insertable);
     }
 
     /**
@@ -798,8 +858,9 @@ final class SqlStatement
      *
      * @param  list<array{0: string, 1: string}>  $tokens  the tokens after DESCRIBE or DESC
      * @param  list<string>  $writable
+     * @param  list<string>  $insertable
      */
-    private static function describeAllowed(array $tokens, array $writable): bool
+    private static function describeAllowed(array $tokens, array $writable, array $insertable): bool
     {
         $described = self::explained($tokens);
         $statements = ['select', 'with', 'explain', 'describe', 'desc', ...self::WRITES];
@@ -808,7 +869,7 @@ final class SqlStatement
             return true;
         }
 
-        return self::tokensAllowed($described, $writable);
+        return self::tokensAllowed($described, $writable, $insertable);
     }
 
     /**

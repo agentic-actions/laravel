@@ -560,8 +560,9 @@ final class Runner
     }
 
     /**
-     * Steps 8 and 9: the claim of a model-driven Destructive or External call, or of a form's answer; handle() and the
-     * projection, or the table's output for an action that shows one.
+     * Steps 8 and 9: the claim of a model-driven Destructive or External call, or of a form's answer; a Read's
+     * initialize(), when it lists tables in $initializes; handle() and the projection, or the table's output for an
+     * action that shows one.
      */
     private function finish(Entry $live, Action $action, ValidatedInput $input, ActionContext $context): Outcome
     {
@@ -589,6 +590,15 @@ final class Runner
         }
 
         try {
+            // A Read's missing rows: after every check and the claim, so no tool list, preview or refused call adds
+            // them. Entry keeps $initializes empty for anything but a Read that is not a dataset.
+            if ($live->initializes !== [] && method_exists($action, 'initialize')) {
+                app(ReadGuard::class)->initializing($live->initializes, fn (): mixed => app()->call([$action, 'initialize'], [
+                    ActionContext::class => $context,
+                    ValidatedInput::class => $input,
+                ]));
+            }
+
             $result = app()->call([$action, 'handle'], [
                 ActionContext::class => $context,
                 ValidatedInput::class => $input,
