@@ -184,11 +184,14 @@ abstract class TestCase extends OrchestraTestCase
 
     /**
      * Whether the installed laravel/ai is older than the given version, as Composer records it (the floor cell's is):
-     * an oracle that does not go through the package's own reading of laravel/ai.
+     * an oracle that does not go through the package's own reading of laravel/ai. A branch without a version alias,
+     * such as dev-main, counts as the newest.
      */
     protected function laravelAiBefore(string $version): bool
     {
-        return version_compare((string) InstalledVersions::getVersion('laravel/ai'), $version, '<');
+        $installed = (string) InstalledVersions::getVersion('laravel/ai');
+
+        return ! str_starts_with($installed, 'dev-') && version_compare($installed, $version, '<');
     }
 
     /**
