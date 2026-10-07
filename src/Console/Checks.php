@@ -144,6 +144,7 @@ final class Checks
 
         return [
             ...$this->snapshot($scan),
+            ...$this->renamed($scan),
             ...$this->exposure($scan),
             ...$this->discovery($scan),
             ...$this->authorization($subjects),
@@ -243,6 +244,47 @@ final class Checks
         }
 
         return [self::fail('Snapshot', "{$label} is stale: review the change, then run php artisan actions:check --update".self::changes($stored ?? [], $built))];
+    }
+
+    /**
+     * Names: an action without $name whose default name changed when a run of capitals became one word, while the
+     * committed snapshot still lists its class under the name 0.9.0-beta.3 and earlier derived, or there is none. A
+     * warning, since the Snapshot row already fails that run; it goes quiet once $name keeps a name or --update writes
+     * the new one.
+     *
+     * @return list<Finding>
+     */
+    private function renamed(Scan $scan): array
+    {
+        $stored = Snapshot::read();
+        $rows = is_array($stored['actions'] ?? null) ? $stored['actions'] : [];
+        $findings = [];
+
+        foreach ($scan->actions as $entry) {
+            $reflection = new ReflectionClass($entry->class);
+            $previous = self::previousName($reflection->getShortName());
+
+            if ($previous === $entry->name || ($reflection->getDefaultProperties()['name'] ?? '') !== '') {
+                continue;
+            }
+
+            if ($stored !== null && (! is_array($rows[$previous] ?? null) || ($rows[$previous]['class'] ?? null) !== $entry->class)) {
+                continue;
+            }
+
+            $findings[] = self::warn('Names', "{$entry->class}: its name is now [{$entry->name}], since a run of capitals is one word; 0.9.0-beta.3 and earlier named it [{$previous}]. What calls it by the old name, such as its route's name or URL, the TypeScript file, an agent, an MCP client or actions:run, needs the new one. Keep the old name with protected string \$name = '{$previous}'; or update those callers, then run php artisan actions:check --update.");
+        }
+
+        return $findings;
+    }
+
+    /**
+     * The name 0.9.0-beta.3 and earlier gave a class without $name: a hyphen before every capital after the first
+     * character, so ImportCSVFile was import-c-s-v-file.
+     */
+    private static function previousName(string $basename): string
+    {
+        return Str::kebab(Str::replaceEnd('Action', '', $basename) ?: $basename);
     }
 
     /**
