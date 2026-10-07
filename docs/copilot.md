@@ -396,6 +396,8 @@ final class DeletePost extends Action
 
 The agent above qualifies: it implements `Conversational` and uses laravel/ai's `RemembersConversations` trait, beside `InteractsWithActions`. Implementing the contract without the trait does not. The agent also needs a participant when its tools are built (`continue($id, as: $user)`, `continueLastConversation($user)` or `forUser($user)`), and laravel/ai's database conversation store, or a store of your own that implements `ResolvesPendingApprovals` and `VerifiesConversationOwnership`.
 
+Its `tools()` may return the action tools inside a laravel/ai tool-search group (`Laravel\Ai\Providers\Tools\ToolSearch`), as `return [new ToolSearch($this->actionTools())];` does. Their calls wait for the person and take the person's answer as any other call does, and a reload brings back their cards, forms and tables.
+
 An agent that does not store its conversations is never offered a Destructive or External action, and `actions:check` warns about it (the Approvals row).
 
 ### The route
