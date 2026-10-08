@@ -28,6 +28,8 @@ $fake = Actions::fake([
 - A closure receives the input and the context. What it returns is the result, and also the output when it is an array. A `Refusal` it throws refuses the call.
 - An action you did not list succeeds with no output, and `run()` returns null.
 
+With the package's [PHPStan extension](setup.md#phpstan), PHPStan reads `run()` as the type `handle()` returns, such as a `Post`. When the code under test uses that result, fake the action with a closure that returns that type, so the code gets what it gets outside a test.
+
 Then assert on the calls. Each assertion takes the action's class or its name:
 
 ```php

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **PHPStan reads `run()` as what `handle()` returns.** `run()` is declared `mixed`, so PHPStan checked nothing on `CreatePost::run(...)` below level 9 and failed every use of it from level 9. The package now ships `extension.neon`, a PHPStan 2 extension that types the call as the action's `handle()` return type (`null` for a `void` one), and keeps `mixed` for a `handle()` without one. phpstan/extension-installer loads it; without it, add `vendor/agentic-actions/laravel/extension.neon` to your `phpstan.neon`'s includes ([PHPStan](docs/setup.md#phpstan)).
+
 ## 0.9.0-beta.4 - 2026-10-07
 
 An `authorize()` may run before and after the input, a Read may add its own missing rows in `initialize()`, an agent may defer the toolsets it needs only sometimes, a confirmation can bind what its card cannot show, code an action calls can read `ActionContext::current()`, a measure's `where()` takes an operator, and a run of capitals stays one word in a derived name. A dataset whose declaration throws no longer takes an agent's or MCP client's other tools down, and an action whose `schema()` takes a file is no longer offered to agents.

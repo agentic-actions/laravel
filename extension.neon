@@ -1,0 +1,7 @@
+# PHPStan reads an action's run() as what its handle() returns. phpstan/extension-installer includes this file
+# itself; without it, add `- vendor/agentic-actions/laravel/extension.neon` to your phpstan.neon's includes.
+services:
+    -
+        class: AgenticActions\PHPStan\RunReturnType
+        tags:
+            - phpstan.broker.dynamicStaticMethodReturnTypeExtension

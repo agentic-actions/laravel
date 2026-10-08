@@ -87,6 +87,11 @@
             "providers": [
                 "AgenticActions\\AgenticActionsServiceProvider"
             ]
+        },
+        "phpstan": {
+            "includes": [
+                "extension.neon"
+            ]
         }
     },
     "config": {
