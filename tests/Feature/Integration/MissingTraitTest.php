@@ -25,7 +25,10 @@ use Tests\Fixtures\Discovery\MissingTraits\Support\Remembers;
 
 beforeEach(function () {
     $this->scratch = sys_get_temp_dir().'/agentic-actions-traits-'.getmypid();
-    $this->loader = array_values(ClassLoader::getRegisteredLoaders())[0];
+    // The loader that autoloads this suite: another one, such as PHPStan's once RunReturnTypeTest has loaded it, can
+    // be registered in front of it.
+    $this->loader = collect(ClassLoader::getRegisteredLoaders())
+        ->first(fn (ClassLoader $loader): bool => isset($loader->getPrefixesPsr4()['Tests\\']));
 
     File::deleteDirectory($this->scratch);
     File::ensureDirectoryExists($this->scratch.'/Scanned');
