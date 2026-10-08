@@ -15,6 +15,7 @@ Installing the package brings in one other package: laravel/mcp 1.x, which serve
 | `laravel/passport` 13.8+ | for OAuth | remote MCP clients that sign in with OAuth, such as Claude and ChatGPT connectors |
 | `inertiajs/inertia-laravel` 3.x | for Inertia | flash results on Inertia visits, and `#[WithPageContext]` |
 | `spatie/laravel-permission` 6 to 8 | no | the `SpatieTeams` tenancy bridge |
+| `phpstan/phpstan` 2.x, or Larastan 3 | no | [`run()` typed as what `handle()` returns](#phpstan) |
 
 The npm client, `@agentic-actions/client`, installs from the Composer package (`"file:vendor/agentic-actions/laravel/js"`), so the two versions always match. It is also on npm, where you install the same version as the Composer package. Run `composer install` before `npm install` or `npm ci`, since the link points into `vendor/`. Its root has no dependencies, and installed from `vendor/` it brings no packages of its own: each entry point uses your app's copy of what it needs:
 
@@ -73,6 +74,19 @@ The package never loads a migration from its own folder: a table exists only onc
 ## Laravel Boost
 
 The package ships a [Laravel Boost](https://github.com/laravel/boost) guideline and an `agentic-actions-development` skill, in `resources/boost/`. With Boost installed, `php artisan boost:install` lists `agentic-actions/laravel` among the packages that have guidelines and skills; pick it to add both for your coding agent. An app that already ran `boost:install` is offered them by `php artisan boost:update`.
+
+## PHPStan
+
+The package ships a PHPStan extension, in `extension.neon`, for PHPStan 2 and Larastan 3. With it, PHPStan reads `CreatePost::run(...)` as what `CreatePost::handle()` declares, a `Post`, since `run()` returns that value unchanged. Without it, the result is `mixed`: below level 9 nothing on it is checked, so a typo such as `$post->titel` passes, and from level 9 every use of it is an error.
+
+With [phpstan/extension-installer](https://github.com/phpstan/extension-installer), PHPStan loads the extension itself. Without it, add the file to your `phpstan.neon`:
+
+```neon
+includes:
+    - vendor/agentic-actions/laravel/extension.neon
+```
+
+A `handle()` that returns `void` makes `run()` return `null`. A class whose `handle()` declares no return type, or a call PHPStan cannot pin to one class, such as one on a `class-string<Action>`, stays `mixed`. Under `Actions::fake()`, `run()` returns what the fake gives instead ([faking actions](testing.md#faking-actions)).
 
 ## What each feature needs
 
