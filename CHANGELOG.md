@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.9.0-beta.5 - 2026-10-14
+
+PHPStan now reads an action's `run()` as what its `handle()` returns. On Postgres, a connection's `client()` relation works inside a query, and the consent route no longer answers a malformed `client_id` with a 500. A nullable choice lists `null` among its values in what an agent is offered, so a model can leave it empty.
 
 ### Upgrading
 
