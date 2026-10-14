@@ -187,6 +187,18 @@ it('lists null among a nullable choice\'s values at every depth, so a model may 
         ->and($written['query']->toArray()['properties']['grain']['enum'])->toBe(['day', 'week']);
 });
 
+it('lists null among a nullable choice\'s values inside an anyOf branch', function () {
+    $action = new class extends Action
+    {
+        public function schema(JsonSchema $schema): array
+        {
+            return ['either' => $schema->anyOf([$schema->string()->enum(['draft', 'published'])->nullable(), $schema->integer()])];
+        }
+    };
+
+    expect((new AdvertisedSchema)->node($action, ActionContext::agent(null))['properties']['either']['anyOf'][0]['enum'])->toBe(['draft', 'published', null]);
+})->skip(! schemaHasAnyOf(), 'The framework builds no anyOf type before Laravel 13.');
+
 it('does not list null for a field requiredForAgents() names, though schema() makes it nullable', function () {
     $action = new class extends Action
     {
