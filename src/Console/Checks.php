@@ -7,6 +7,7 @@ use AgenticActions\ActionContext;
 use AgenticActions\Ai\Concerns\InteractsWithActions;
 use AgenticActions\Ai\ConfirmingAgents;
 use AgenticActions\Attributes\Expose;
+use AgenticActions\Contracts\ProposesCalls;
 use AgenticActions\Contracts\ReadsTokenGrants;
 use AgenticActions\Datasets\Dataset;
 use AgenticActions\Discovery\ActionRegistry;
@@ -695,9 +696,10 @@ final class Checks
 
     /**
      * Approvals: an agent whose toolsets hold actions that wait on the person (a confirmation, or a form for the
-     * fields a call left out), but that does not store its conversations, so it is never offered the first kind and
-     * never asks for the second (safe at runtime: those calls are refused, so a warning); and a conversation store that
-     * cannot read which calls wait or whom a conversation belongs to, so no agent can wait on the person at all.
+     * fields a call left out), but that does not store its conversations, so it is never offered the first kind (unless
+     * it ProposesCalls) and never asks for the second (safe at runtime: those calls are refused, so a warning); and a
+     * conversation store that cannot read which calls wait or whom a conversation belongs to, so no agent can wait on
+     * the person at all.
      *
      * @param  list<Subject>  $subjects
      * @return list<Finding>
@@ -713,8 +715,19 @@ final class Checks
         foreach (array_keys($scan->agents) as $agent) {
             $held = array_filter($waiting, fn (array $subject): bool => array_intersect($subject['entry']->toolsets, $scan->toolsets($agent)) !== []);
 
-            if ($held !== [] && ! ConfirmingAgents::classSupports($agent)) {
-                $findings[] = self::warn('Approvals', "{$agent}: its toolsets hold [".self::names($held).'], which wait on the person (a confirmation, or a form for missing fields), but it does not store its conversations, so it is never offered the first kind and never asks for the second: those calls are refused instead. Implement Laravel\\Ai\\Contracts\\Conversational and use Laravel\\Ai\\Concerns\\RemembersConversations.');
+            if ($held === [] || ConfirmingAgents::classSupports($agent)) {
+                continue;
+            }
+
+            if (! is_subclass_of($agent, ProposesCalls::class)) {
+                $findings[] = self::warn('Approvals', "{$agent}: its toolsets hold [".self::names($held).'], which wait on the person (a confirmation, or a form for missing fields), but it does not store its conversations, so it is never offered the first kind and never asks for the second: those calls are refused instead. Implement Laravel\\Ai\\Contracts\\Conversational and use Laravel\\Ai\\Concerns\\RemembersConversations, or AgenticActions\\Contracts\\ProposesCalls to propose the first kind.');
+
+                continue;
+            }
+
+            // An agent that proposes the calls that wait for a confirmation still never asks for missing fields.
+            if (($asking = array_filter($held, fn (array $subject): bool => $subject['entry']->effect?->isModelSafe() !== false)) !== []) {
+                $findings[] = self::warn('Approvals', "{$agent}: its toolsets hold [".self::names($asking).'], which ask the person in a form for missing fields, but it does not store its conversations, so it never asks: an incomplete call is refused instead. It proposes the calls that wait for a confirmation (ProposesCalls). Implement Laravel\\Ai\\Contracts\\Conversational and use Laravel\\Ai\\Concerns\\RemembersConversations to ask.');
             }
         }
 

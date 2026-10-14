@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **`GovernsModelCalls`: the app's say over what a model may do alone.** Bind an implementation and the package asks it for every model-driven call (agent, MCP, a queued run a model started) and answers `ModelCallRule::run()`, `confirm($rule)` or `refuse($sentence)`, or null for its own rule. `confirm()` makes any call, a Write included, wait for a card on the agent door, with the rule as `rule` on the `data-approval` part (and in the claim's binding); where nobody can confirm (MCP, an agent that cannot pause) the call is refused. `refuse()` refuses with the app's sentence and keeps the action listed so the model can say why. `run()` lifts a Destructive or External call's card on the agent door only: MCP still never serves one, and a queued run still needs its card. A policy that throws is reported and refuses. The card of a confirmed Read or Write call says `approval.write` or `approval.read` unless the action has its own `approvalReason()` ([your app's rules](docs/copilot.md#your-apps-rules)).
+- **`ProposesCalls`: an agent that cannot pause proposes instead of being refused.** An agent that does not store its conversations and implements it is offered the actions that wait for a confirmation (Destructive, External, or confirmed by the app's rule). Each call passes admission, both authorize steps and validation as a card would, then the agent's `propose(Proposal $proposal)` receives what the card would show with the model's arguments, and the model reads that it was proposed (`model.proposed`, or the sentence `propose()` returns). Nothing runs. A refused call is still refused, and a call the app's rule runs still runs. `actions:check` no longer warns about such an agent for those actions ([agents that cannot pause](docs/copilot.md#agents-that-cannot-pause)).
+
 ## 0.9.0-beta.5 - 2026-10-14
 
 PHPStan now reads an action's `run()` as what its `handle()` returns. On Postgres, a connection's `client()` relation works inside a query, and the consent route no longer answers a malformed `client_id` with a 500. A nullable choice lists `null` among its values in what an agent is offered, so a model can leave it empty.

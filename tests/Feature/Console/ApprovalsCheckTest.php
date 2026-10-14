@@ -13,6 +13,7 @@ use Tests\Fixtures\Approvals\ConfirmedSend;
 use Tests\Fixtures\Approvals\ConfirmingAgent;
 use Tests\Fixtures\Approvals\ContractOnlyAgent;
 use Tests\Fixtures\Approvals\ForgetfulStore;
+use Tests\Fixtures\Approvals\ProposingAgent;
 use Tests\Fixtures\Approvals\StatelessAgent;
 use Tests\Fixtures\Approvals\StatelessSearchAgent;
 use Tests\Fixtures\Approvals\TraitOnlyAgent;
@@ -22,7 +23,7 @@ use Tests\Fixtures\Checks\AskWebOnly;
 /*
  * The Approvals row: an agent whose toolsets hold actions that wait on the person, a confirmed one or one whose
  * incomplete calls ask in a form (0.5), but that does not store its conversations (a warning: it is simply never
- * offered them), and a conversation store that cannot read pending calls or ownership (one failure).
+ * offered them, unless it proposes the confirmed ones), and a conversation store that cannot read pending calls or ownership (one failure).
  */
 
 beforeEach(function () {
@@ -58,7 +59,7 @@ function approvalsFindings(array $classes): array
  */
 function neverOffered(string $agent, string $names): string
 {
-    return "{$agent}: its toolsets hold [{$names}], which wait on the person (a confirmation, or a form for missing fields), but it does not store its conversations, so it is never offered the first kind and never asks for the second: those calls are refused instead. Implement Laravel\\Ai\\Contracts\\Conversational and use Laravel\\Ai\\Concerns\\RemembersConversations.";
+    return "{$agent}: its toolsets hold [{$names}], which wait on the person (a confirmation, or a form for missing fields), but it does not store its conversations, so it is never offered the first kind and never asks for the second: those calls are refused instead. Implement Laravel\\Ai\\Contracts\\Conversational and use Laravel\\Ai\\Concerns\\RemembersConversations, or AgenticActions\\Contracts\\ProposesCalls to propose the first kind.";
 }
 
 /**
@@ -86,6 +87,17 @@ it('warns about an asking action with no confirmed action beside it', function (
 
 it('passes an agent that stores its conversations', function () {
     expect(approvalsFindings([ConfirmedDelete::class, ConfirmedSend::class, AskDraft::class, ConfirmingAgent::class]))->toBe([]);
+});
+
+it('passes an agent that proposes the calls that wait for a confirmation', function () {
+    expect(approvalsFindings([ConfirmedDelete::class, ConfirmedSend::class, ProposingAgent::class]))->toBe([]);
+});
+
+it('still warns about a proposing agent for the actions that ask, which it never asks for', function () {
+    expect(approvalsFindings([ConfirmedDelete::class, AskDraft::class, ProposingAgent::class]))->toBe([[
+        'warn',
+        ProposingAgent::class.': its toolsets hold [ask-draft], which ask the person in a form for missing fields, but it does not store its conversations, so it never asks: an incomplete call is refused instead. It proposes the calls that wait for a confirmation (ProposesCalls). Implement Laravel\\Ai\\Contracts\\Conversational and use Laravel\\Ai\\Concerns\\RemembersConversations to ask.',
+    ]]);
 });
 
 it('fails once when the bound store cannot read pending calls or ownership, whatever the agents', function (array $classes, array $findings) {

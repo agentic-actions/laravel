@@ -4,8 +4,10 @@ namespace AgenticActions\Ai;
 
 use AgenticActions\ActionContext;
 use AgenticActions\Approvals\ApprovalTicket;
+use AgenticActions\Contracts\ProposesCalls;
 use AgenticActions\Discovery\Catalog;
 use AgenticActions\Exposure\Entry;
+use AgenticActions\Pipeline\ModelCallRules;
 use Laravel\Ai\Contracts\Agent;
 use Laravel\Ai\Contracts\Tool;
 use LogicException;
@@ -18,10 +20,12 @@ use LogicException;
 final class ToolFactory
 {
     /**
-     * The action tools for these toolsets, built now, for this context. Destructive and External actions are offered
-     * only when the agent can pause for a person (ConfirmingAgents); without an agent they are never offered. An asking
-     * action's tool gets the agent too, so it can pause for the person's answer; without one its call is refused as
-     * before. So does the tool of an action that shows a table, so the table is kept with the agent's conversation.
+     * The action tools for these toolsets, built now, for this context. Destructive and External actions, and those the
+     * app's GovernsModelCalls rule confirms, are offered only when the agent can pause for a person (ConfirmingAgents),
+     * or when it cannot and ProposesCalls instead, so each such call becomes a proposal; without an agent they are never
+     * offered. An asking action's tool gets the agent too, so it can pause for the person's answer; without one its call
+     * is refused as before. So does the tool of an action that shows a table, so the table is kept with the agent's
+     * conversation.
      *
      * @param  list<string>  $toolsets
      * @return list<ActionTool>
@@ -34,13 +38,16 @@ final class ToolFactory
             throw new LogicException('laravel/ai is not installed: composer require laravel/ai.');
         }
 
-        // The catalog's ticket names no call: it lets admission list the gated actions for an agent that can pause.
+        // The catalog's ticket names no call: it lets admission list the gated actions for an agent that can pause, or
+        // that proposes them instead.
         $pausing = $agent !== null && ConfirmingAgents::supports($agent) ? $agent : null;
-        $listing = $pausing !== null ? $context->withApproval(new ApprovalTicket(null, null)) : $context;
+        $proposing = $pausing === null && $agent instanceof ProposesCalls ? $agent : null;
+        $listing = $pausing !== null || $proposing !== null ? $context->withApproval(new ApprovalTicket(null, null)) : $context;
 
-        return array_map(
-            fn (Entry $entry): ActionTool => new ActionTool($entry, $context, $toolsets, $entry->effect?->isModelSafe() === false || $entry->asks || $entry->shows() ? $pausing : null),
-            app(Catalog::class)->forAgents($listing, $toolsets),
-        );
+        return array_map(function (Entry $entry) use ($context, $toolsets, $pausing, $proposing): ActionTool {
+            $gated = ModelCallRules::needsPerson($entry, ModelCallRules::rule($entry, $context), true);
+
+            return new ActionTool($entry, $context, $toolsets, $gated || $entry->asks || $entry->shows() ? $pausing : null, $gated ? $proposing : null);
+        }, app(Catalog::class)->forAgents($listing, $toolsets));
     }
 }

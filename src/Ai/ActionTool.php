@@ -8,9 +8,11 @@ use AgenticActions\Approvals\ApprovalCard;
 use AgenticActions\Approvals\ApprovalClaims;
 use AgenticActions\Approvals\ApprovalTicket;
 use AgenticActions\Contracts\DescribesActivity;
+use AgenticActions\Contracts\ProposesCalls;
 use AgenticActions\Elicitation\Form;
 use AgenticActions\Exposure\Entry;
 use AgenticActions\Outcome;
+use AgenticActions\Pipeline\ModelCallRules;
 use AgenticActions\Runner;
 use AgenticActions\Schema\AdvertisedSchema;
 use AgenticActions\Streaming\ActionsProtocol;
@@ -31,9 +33,10 @@ use Throwable;
 
 /**
  * One discovered action as a laravel/ai tool, built per turn for one actor. It never throws: every outcome becomes an
- * authored sentence. The action alone decides whether a call waits for a person: a Destructive or External call always
- * waits for a confirmation, a call to a Read or Write action with $askForMissing waits for the person's answer when
- * it leaves fields out, and any other call never waits.
+ * authored sentence. A Destructive or External call waits for a confirmation, as does any call the app's
+ * GovernsModelCalls rule confirms (its run rule lifts a Destructive or External one's); a call to a Read or Write action
+ * with $askForMissing waits for the person's answer when it leaves fields out; any other call never waits. On an agent
+ * that cannot pause but ProposesCalls, a call that would wait for a confirmation is proposed instead, and nothing runs.
  *
  * @internal
  */
@@ -48,12 +51,15 @@ final class ActionTool implements Approvable, DescribesActivity, Tool
      * @param  Agent|null  $agent  the agent the tool was built for; set only for a Destructive or External action, an
      *                             asking one or one that shows a table, on an agent that ConfirmingAgents::supports().
      *                             Its conversation is read when a call runs.
+     * @param  ProposesCalls|null  $proposer  the agent the tool was built for, when it cannot pause but proposes the
+     *                                        calls that wait for a confirmation; set only for such an action
      */
     public function __construct(
         private readonly Entry $entry,
         private readonly ActionContext $context,
         private readonly array $toolsets,
         private readonly ?Agent $agent = null,
+        private readonly ?ProposesCalls $proposer = null,
     ) {}
 
     /**
@@ -178,6 +184,10 @@ final class ActionTool implements Approvable, DescribesActivity, Tool
                 return (string) trans('agentic-actions::model.not_confirmed', [], $this->context->locale);
             }
 
+            if ($this->proposer !== null && $answer === null && ($proposed = $this->proposed($request)) !== null) {
+                return $proposed;
+            }
+
             $named = $answer !== null || ($known && app(PendingCards::class)->has($toolCallId));
             $arguments = $answer === null ? $request->all() : $answer['form']->merge($request->all(), $answer['values']);
 
@@ -230,11 +240,12 @@ final class ActionTool implements Approvable, DescribesActivity, Tool
     }
 
     /**
-     * Whether the effect needs a person's confirmation.
+     * Whether a call needs a person's confirmation: a Destructive or External effect, or the app's GovernsModelCalls
+     * rule for this context (which may also lift it).
      */
     private function gated(): bool
     {
-        return $this->entry->effect?->isModelSafe() === false;
+        return ModelCallRules::needsPerson($this->entry, ModelCallRules::rule($this->entry, $this->context), true);
     }
 
     /**
@@ -249,14 +260,43 @@ final class ActionTool implements Approvable, DescribesActivity, Tool
 
     /**
      * The context carrying a ticket for this call, and the answered form, when the tool can pause: a Destructive,
-     * External or asking tool built with its agent. A form always rides a ticket, so it runs only on its claim; any
-     * other call, such as a table's, carries none.
+     * External or asking tool built with its agent, or a gated tool built for an agent that proposes (whose ticket names
+     * no conversation, so the call hears its real refusal and never passes step 8). A form always rides a ticket, so it
+     * runs only on its claim; any other call, such as a table's, carries none.
      */
     private function ticketed(?string $toolCallId, ?Form $form = null): ActionContext
     {
-        return $form === null && ($this->agent === null || (! $this->gated() && ! $this->entry->asks))
+        return $form === null && (($this->agent === null && $this->proposer === null) || (! $this->gated() && ! $this->entry->asks))
             ? $this->context
             : $this->context->withApproval(new ApprovalTicket(ConfirmingAgents::conversation($this->agent), $toolCallId, $form));
+    }
+
+    /**
+     * For a tool built for an agent that ProposesCalls: the call handed to propose() and the sentence the model reads,
+     * when it would wait for a confirmation and pass every step up to the card. Null when it would not (it runs at once,
+     * or handle() then gives the model the real refusal). The ticket names no call, so nothing can run on it.
+     */
+    private function proposed(Request $request): ?string
+    {
+        if ($this->proposer === null) {
+            return null;
+        }
+
+        $toolCallId = $request->toolCallId();
+        $toolCallId = $toolCallId === null || blank($toolCallId) ? null : $toolCallId;
+        $card = app(Runner::class)->preview($this->entry, $request->all(), $this->context->withApproval(new ApprovalTicket(null, $toolCallId)), $this->toolsets);
+
+        if (! $card instanceof ApprovalCard) {
+            return null;
+        }
+
+        $sentence = $this->proposer->propose(new Proposal(
+            $card->entry->name, $card->entry->effect, $request->all(), $card->title, $card->summary, $card->rule, $this->context, $toolCallId,
+        ));
+
+        Activity::record($request, ok: false);
+
+        return $sentence ?? (string) trans('agentic-actions::model.proposed', [], $this->context->locale);
     }
 
     /**
