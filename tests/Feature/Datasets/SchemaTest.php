@@ -61,9 +61,9 @@ it('offers agents a call made only of the declared measures, dimensions, grains 
         ->and($node['required'])->toBe(['measures'])
         ->and($properties['measures']['items']['enum'])->toBe(['posts', 'authors', 'published', 'published_share', 'posts_per_published'])
         ->and($properties['by']['items']['enum'])->toBe(['team', 'status'])
-        ->and($properties['grain']['enum'])->toBe(['day', 'week', 'month', 'quarter', 'year'])
+        ->and($properties['grain']['enum'])->toBe(['day', 'week', 'month', 'quarter', 'year', null])
         ->and($properties['filters']['items']['properties']['dimension']['enum'])->toBe(['team', 'status'])
-        ->and($properties['sort']['enum'])->toBe(['created', 'team', 'status', 'posts', 'authors', 'published', 'published_share', 'posts_per_published'])
+        ->and($properties['sort']['enum'])->toBe(['created', 'team', 'status', 'posts', 'authors', 'published', 'published_share', 'posts_per_published', null])
         ->and($properties['measures']['description'])->toContain('posts: Posts, The number of posts; authors: Authors;')
         ->and($properties['by']['description'])->toContain('team: Team, The team the post belongs to; status: Status.');
 });
