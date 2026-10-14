@@ -3,6 +3,7 @@
 use AgenticActions\Discovery\ActionRegistry;
 use AgenticActions\Exceptions\MisconfiguredExposure;
 use AgenticActions\Support\PackageStatus;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Exceptions;
 use Tests\Fixtures\Mcp\Extra\McpNoDescription;
 use Tests\Fixtures\Mcp\Extra\McpSecret;
@@ -89,8 +90,9 @@ it('sends no output schema, and hints from the live effect', function () {
         expect($tool)->not->toHaveKey('outputSchema');
     }
 
-    expect($tools['mcp-read-posts']['annotations'])->toBe(['readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false])
-        ->and($tools['mcp-create-post']['annotations'])->toBe(['readOnlyHint' => false, 'destructiveHint' => true, 'idempotentHint' => false, 'openWorldHint' => false])
+    // The hints are the package's; the annotations may also repeat the tool's title, which MCP allows there.
+    expect(Arr::except($tools['mcp-read-posts']['annotations'], 'title'))->toBe(['readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false])
+        ->and(Arr::except($tools['mcp-create-post']['annotations'], 'title'))->toBe(['readOnlyHint' => false, 'destructiveHint' => true, 'idempotentHint' => false, 'openWorldHint' => false])
         ->and($tools['mcp-create-post']['title'])->toBe('Mcp Create Post')
         ->and($tools['mcp-create-post']['description'])->toBe('Create a post for the signed-in person.');
 });
