@@ -138,6 +138,13 @@ it('moves the connection when the person approves the client for another URL', f
     $this->flow->token()->assertStatus(400)->assertJsonPath('error', 'invalid_grant');
 })->group('database');
 
+it('relates a connection to its Passport client inside a query, on every database', function () {
+    $this->flow->connect($this->alice, 'http://localhost/mcp/t/acme');
+
+    expect(McpConnection::for($this->alice)->whereHas('client')->sole()->client_id)->toBe($this->flow->client)
+        ->and(Passport::client()->newQuery()->whereIn('id', McpConnection::query()->select('client_id'))->pluck('id')->all())->toBe([$this->flow->client]);
+})->group('database');
+
 it('grants nothing to a connected client\'s token holding only mcp:use or *, and keeps only read and write of the rest', function () {
     Passport::tokensCan([...Passport::$scopes, 'tenant:7' => 'The seventh tenant']);
     $this->flow->connect($this->alice, 'http://localhost/mcp/t/acme');

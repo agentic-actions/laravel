@@ -9,6 +9,7 @@ use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
+use Laravel\Passport\ClientRepository;
 use Laravel\Passport\Passport;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -65,7 +66,7 @@ final class BindConsent
         if ($path === null) {
             $request->session()->forget(self::SESSION);
 
-            return McpConnection::for($person)->where('client_id', $client)->exists() ? self::refuse() : $next($request);
+            return self::connected($person, $client) ? self::refuse() : $next($request);
         }
 
         $scopes = array_filter(explode(' ', is_string($scope = $request->query('scope')) ? $scope : ''));
@@ -73,7 +74,7 @@ final class BindConsent
 
         abort_if($request->query('code_challenge_method') !== 'S256' || $scopes === [] || array_diff($scopes, [...McpMount::scopes($tenanted), 'mcp:use']) !== [], 400);
 
-        $model = Passport::client()->newQuery()->find($client);
+        $model = app(ClientRepository::class)->find($client);
         $tenant = $tenanted ? McpMount::tenant($path[1]) : null;
 
         if ($model === null || array_diff((array) $model->getAttribute('grant_types'), ['authorization_code', 'refresh_token']) !== []
@@ -102,7 +103,7 @@ final class BindConsent
         $token = $request->input('auth_token');
 
         if (! is_array($entry) || ! is_string($token) || ! hash_equals((string) $entry['auth_token'], $token) || $request->session()->get('authToken') !== $token || $entry['client_id'] !== $client || $entry['user'] !== self::key($person)) {
-            return is_array($entry) || McpConnection::for($person)->where('client_id', $client)->exists() ? self::refuse() : $next($request);
+            return is_array($entry) || self::connected($person, $client) ? self::refuse() : $next($request);
         }
 
         try {
@@ -122,6 +123,15 @@ final class BindConsent
         } catch (QueryException) {
             self::refuse();
         }
+    }
+
+    /**
+     * Whether the person connected the client. The id goes to the connections table only once Passport finds the
+     * client, so an id no client can have reaches no column of Passport's key type.
+     */
+    private static function connected(Model $person, string $client): bool
+    {
+        return app(ClientRepository::class)->find($client) !== null && McpConnection::for($person)->where('client_id', $client)->exists();
     }
 
     /**

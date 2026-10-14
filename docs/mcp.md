@@ -559,6 +559,8 @@ Route::middleware('auth')->group(function () {
 });
 ```
 
+`client()` and `tenant()` are relations like any other, inside a query too: `McpConnection::for($user)->whereHas('client')` leaves out a connection whose client was deleted. `client_id` has the type of Passport's client key, a uuid by default.
+
 In `resources/views/settings/connections.blade.php`, one row per connection, each with its own Disconnect form:
 
 ```blade

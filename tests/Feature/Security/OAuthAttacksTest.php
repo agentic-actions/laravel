@@ -251,6 +251,15 @@ it('answers malformed parameters without a 500', function (array $extra, int $st
     'client_id as a list' => [['client_id' => ['x']], 400],
 ]);
 
+it('answers a client_id no client can have without a 500, on every database', function () {
+    $this->flow->connect($this->alice, 'http://localhost/mcp/t/acme');
+    $this->flow->client = 'not-a-client';
+
+    $this->flow->authorize($this->alice, 'http://localhost/mcp/t/acme')->assertForbidden();
+    $this->flow->authorize($this->alice, null)->assertUnauthorized()->assertJsonPath('error', 'invalid_client');
+    $this->flow->approve()->assertForbidden();
+})->group('database');
+
 /*
  * The review after the build: each attack the 0.7 security review ran, kept as a test.
  */

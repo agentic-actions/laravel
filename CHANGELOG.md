@@ -2,9 +2,26 @@
 
 ## Unreleased
 
+### Upgrading
+
+- **On Postgres, give `agentic_mcp_connections.client_id` the type of Passport's client key.** The published migration made it a string, which Postgres refuses to compare with Passport's uuid client ids, so a query that compares the two columns failed there (see Fixed). A new install gets the right type. An app that already ran the migration on Postgres adds a migration of its own, on Passport's connection:
+
+    ```php
+    Schema::table('agentic_mcp_connections', function (Blueprint $table) {
+        $table->uuid('client_id')->using('client_id::uuid')->change();
+    });
+    ```
+
+    With `Passport::$clientUuids` off, use `$table->unsignedBigInteger('client_id')->using('client_id::bigint')->change()` instead. MySQL, MariaDB and SQLite compare the two types already and need nothing.
+
 ### Added
 
 - **PHPStan reads `run()` as what `handle()` returns.** `run()` is declared `mixed`, so PHPStan checked nothing on `CreatePost::run(...)` below level 9 and failed every use of it from level 9. The package now ships `extension.neon`, a PHPStan 2 extension that types the call as the action's `handle()` return type (`null` for a `void` one), and keeps `mixed` for a `handle()` without one. phpstan/extension-installer loads it; without it, add `vendor/agentic-actions/laravel/extension.neon` to your `phpstan.neon`'s includes ([PHPStan](docs/setup.md#phpstan)).
+
+### Fixed
+
+- **A connection's `client()` relation works inside a query on Postgres.** `whereHas('client')`, `has('client')`, a join on the two columns or a subquery such as `whereIn('id', McpConnection::query()->select('client_id'))` failed with "operator does not exist: character varying = uuid", while eager loading worked; MySQL, MariaDB and SQLite never showed it. The `agentic_mcp_connections` migration now gives `client_id` the type of Passport's client key: a uuid (Passport's default), an unsigned big integer for incrementing ids, a string for any other key. See Upgrading for an existing install.
+- **The consent route answers a `client_id` no client can have without a 500 on Postgres.** An authorization request for a package URL whose `client_id` is not a uuid, such as `?client_id=abc`, failed the query that loads the client and answered 500. The package now finds the client through Passport's client repository, which turns such an id away, and asks the connections table only about a client Passport finds.
 
 ## 0.9.0-beta.4 - 2026-10-07
 
