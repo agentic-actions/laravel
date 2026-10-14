@@ -9,7 +9,7 @@ A four-minute walkthrough on YouTube: Claude adds a task to the demo over MCP, t
 [![The walkthrough video's thumbnail: "ONE CLASS, EVERY AI AGENT" beside the presenter, and a Claude prompt asking to use create-task from a Laravel app. It opens the video on YouTube.](https://i.ytimg.com/vi/M0ApSIw9fJM/maxresdefault.jpg)](https://youtu.be/M0ApSIw9fJM)
 
 <!-- #region getting-started -->
-> **Beta.** 0.9.0-beta.5 is the current release. The API can still change before 1.0: [the changelog](https://github.com/agentic-actions/laravel/blob/main/CHANGELOG.md) lists every change and how to upgrade.
+> **Beta.** 0.9.0-beta.6 is the current release. The API can still change before 1.0: [the changelog](https://github.com/agentic-actions/laravel/blob/main/CHANGELOG.md) lists every change and how to upgrade.
 
 **Try it first** at [demo.agentic-actions.com](https://demo.agentic-actions.com): a team task board built with the package, where you get a private sandbox for 24 hours with no sign-up. Its forms, its copilot and MCP clients all call the same actions. The source is [agentic-actions/demo](https://github.com/agentic-actions/demo).
 
