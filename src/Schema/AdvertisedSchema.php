@@ -6,6 +6,8 @@ use AgenticActions\Action;
 use AgenticActions\ActionContext;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
+use Illuminate\JsonSchema\Types\AnyOfType;
+use Illuminate\JsonSchema\Types\ArrayType;
 use Illuminate\JsonSchema\Types\ObjectType;
 use Illuminate\JsonSchema\Types\Type;
 
@@ -18,9 +20,11 @@ final class AdvertisedSchema
 {
     /**
      * What an agent is offered: agentSchema() when overridden, else schema(), with the fields requiredForAgents() names
-     * required and not nullable, minus the context's fixed keys.
+     * required and not nullable, minus the context's fixed keys. A nullable choice, at any depth, lists null among its
+     * values, so a model may leave it empty instead of picking one (strict tool schemas hold a model to the enum).
      *
      * @upstream A named field's copy has its nullable flag cleared through a bound closure.
+     * @upstream A nullable choice's copy has null added to its enum through a bound closure.
      *
      * @return array<string, Type>
      */
@@ -38,7 +42,59 @@ final class AdvertisedSchema
             })->call(clone $type);
         }
 
-        return array_diff_key($types, $context->fixed);
+        return array_map(self::admitNull(...), array_diff_key($types, $context->fixed));
+    }
+
+    /**
+     * The type with null among the values of every nullable choice in it, at any depth (object properties, list items
+     * and anyOf branches). A changed type is a copy, so schema() stays as the action wrote it; an unchanged one is the
+     * same instance. Public only so the walk, bound to the type, can recurse.
+     *
+     * @internal
+     */
+    public static function admitNull(mixed $type): mixed
+    {
+        if (! $type instanceof Type) {
+            return $type;
+        }
+
+        // The properties are protected, and the framework gives no reader for them, so the walk runs bound to the type.
+        return (function (): Type {
+            $copy = null;
+            $copied = function () use (&$copy): Type {
+                return $copy ??= clone $this;
+            };
+
+            if ($this->nullable === true && is_array($this->enum) && ! in_array(null, $this->enum, true)) {
+                $copied()->enum = [...$this->enum, null];
+            }
+
+            if ($this instanceof ObjectType && ($walked = array_map(AdvertisedSchema::admitNull(...), $this->properties)) !== $this->properties) {
+                $target = $copied();
+
+                if ($target instanceof ObjectType) {
+                    $target->properties = $walked;
+                }
+            }
+
+            if ($this instanceof AnyOfType && ($walked = array_map(AdvertisedSchema::admitNull(...), $this->schemas)) !== $this->schemas) {
+                $target = $copied();
+
+                if ($target instanceof AnyOfType) {
+                    $target->schemas = $walked;
+                }
+            }
+
+            if ($this instanceof ArrayType && $this->items !== null && ($walked = AdvertisedSchema::admitNull($this->items)) !== $this->items) {
+                $target = $copied();
+
+                if ($target instanceof ArrayType) {
+                    $target->items = $walked;
+                }
+            }
+
+            return $copy ?? $this;
+        })->call($type);
     }
 
     /**

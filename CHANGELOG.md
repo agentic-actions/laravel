@@ -22,6 +22,7 @@
 
 - **A connection's `client()` relation works inside a query on Postgres.** `whereHas('client')`, `has('client')`, a join on the two columns or a subquery such as `whereIn('id', McpConnection::query()->select('client_id'))` failed with "operator does not exist: character varying = uuid", while eager loading worked; MySQL, MariaDB and SQLite never showed it. The `agentic_mcp_connections` migration now gives `client_id` the type of Passport's client key: a uuid (Passport's default), an unsigned big integer for incrementing ids, a string for any other key. See Upgrading for an existing install.
 - **The consent route answers a `client_id` no client can have without a 500 on Postgres.** An authorization request for a package URL whose `client_id` is not a uuid, such as `?client_id=abc`, failed the query that loads the client and answered 500. The package now finds the client through Passport's client repository, which turns such an id away, and asks the connections table only about a client Passport finds.
+- **A nullable choice lists `null` among its values in what an agent is offered**, at any depth (object properties, list items, anyOf branches): a strict tool schema held a model to the enum, so it had to pick a value for a choice it meant to leave empty. `schema()` itself, and so the route, the CLI and TypeScript, is unchanged, and a choice that already lists `null` keeps one. An app that added `null` to a nullable enum by hand can drop it.
 
 ## 0.9.0-beta.4 - 2026-10-07
 

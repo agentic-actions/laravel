@@ -154,3 +154,52 @@ it('keeps nothing for an object node without properties', function () {
         ->and($schema->prune(['meta' => ['a' => 1]], ['type' => 'object', 'properties' => ['meta' => ['type' => 'object']]]))
         ->toBe(['meta' => []]);
 });
+
+it('lists null among a nullable choice\'s values at every depth, so a model may leave it empty', function () {
+    $action = new class extends Action
+    {
+        public function schema(JsonSchema $schema): array
+        {
+            return [
+                'status' => $schema->string()->enum(['draft', 'published'])->nullable(),
+                'kind' => $schema->string()->enum(['a', 'b'])->required(),
+                'already' => $schema->string()->enum(['x', null])->nullable(),
+                'query' => $schema->object([
+                    'grain' => $schema->string()->enum(['day', 'week'])->nullable(),
+                    'by' => $schema->array()->items($schema->string()->enum(['course', 'group'])->nullable())->nullable(),
+                ]),
+            ];
+        }
+    };
+
+    $node = (new AdvertisedSchema)->node($action, ActionContext::agent(null));
+
+    expect($node['properties']['status']['enum'])->toBe(['draft', 'published', null])
+        ->and($node['properties']['kind']['enum'])->toBe(['a', 'b'])
+        ->and($node['properties']['already']['enum'])->toBe(['x', null])
+        ->and($node['properties']['query']['properties']['grain']['enum'])->toBe(['day', 'week', null])
+        ->and($node['properties']['query']['properties']['by']['items']['enum'])->toBe(['course', 'group', null]);
+
+    // schema() itself stays as the action wrote it: the route, the CLI and TypeScript read it.
+    $written = $action->schema(new JsonSchemaTypeFactory);
+
+    expect($written['status']->toArray()['enum'])->toBe(['draft', 'published'])
+        ->and($written['query']->toArray()['properties']['grain']['enum'])->toBe(['day', 'week']);
+});
+
+it('does not list null for a field requiredForAgents() names, though schema() makes it nullable', function () {
+    $action = new class extends Action
+    {
+        public function schema(JsonSchema $schema): array
+        {
+            return ['level' => $schema->string()->enum(['low', 'high'])->nullable()];
+        }
+
+        public function requiredForAgents(): array
+        {
+            return ['level'];
+        }
+    };
+
+    expect((new AdvertisedSchema)->node($action, ActionContext::agent(null))['properties']['level']['enum'])->toBe(['low', 'high']);
+});
