@@ -18,6 +18,7 @@ use AgenticActions\Pipeline\AuthorizeTiming;
 use AgenticActions\Pipeline\Door;
 use AgenticActions\Pipeline\ExceptionMapper;
 use AgenticActions\Pipeline\Halt;
+use AgenticActions\Pipeline\ModelCallRules;
 use AgenticActions\Pipeline\ModelDriven;
 use AgenticActions\Pipeline\OutcomeKind;
 use AgenticActions\Pipeline\RunningContexts;
@@ -255,7 +256,7 @@ final class Runner
             $stop = $this->scoped($context, function () use ($live, $context, $door, $toolsets): ?Outcome {
                 $action = $live->action();
 
-                return $this->admission($live, $action, $context, $door, $toolsets)
+                return $this->admission($live, $action, $context, $door, $toolsets, listing: true)
                     ?? $this->guarded($live, fn (): ?Outcome => $this->authorizeEarly($live, $action, $context));
             });
         } catch (Throwable $exception) {
@@ -288,13 +289,19 @@ final class Runner
         $context = self::onDoor($context, $door);
 
         try {
-            if (($live = $this->live($entry)) === null || ($live->effect?->isModelSafe() !== false && ! $live->asks)) {
+            if (($live = $this->live($entry)) === null) {
                 return null;
             }
 
             $context = $context->forAction($live->name);
+            $rule = ModelCallRules::rule($live, $context);
+            $needs = ModelCallRules::needsPerson($live, $rule, $door === Door::Agent);
 
-            return $this->scoped($context, fn (): ApprovalCard|Form|null => app(ReadGuard::class)->run(function () use ($live, $arguments, $context, $toolsets, $door): ApprovalCard|Form|null {
+            if (! $needs && ! $live->asks) {
+                return null;
+            }
+
+            return $this->scoped($context, fn (): ApprovalCard|Form|null => app(ReadGuard::class)->run(function () use ($live, $arguments, $context, $toolsets, $door, $needs, $rule): ApprovalCard|Form|null {
                 $action = $live->action();
 
                 if ($this->admission($live, $action, $context, $door, $toolsets) !== null) {
@@ -315,13 +322,13 @@ final class Runner
                     return $this->reported($input);
                 }
 
-                if ($live->effect?->isModelSafe() !== false) {
+                if (! $needs) {
                     return null;
                 }
 
                 return ($late = $this->authorizeLate($live, $action, $input, $context)) !== null
                     ? $this->reported($late)
-                    : ApprovalCard::build($live, $action, $context, $input);
+                    : ApprovalCard::build($live, $action, $context, $input, $rule?->confirms() === true ? $rule->sentence : null);
             }));
         } catch (Throwable $exception) {
             report($exception);
@@ -382,17 +389,21 @@ final class Runner
             return $stop;
         }
 
-        // A Destructive or External call a model drives: every step before step 8 runs inside the Read guard, whatever
+        // A call a model drives that waits for a person (a Destructive or External one, or one the app's
+        // GovernsModelCalls asks a confirmation for): every step before step 8 runs inside the Read guard, whatever
         // reads.guard says; step 8 and handle() run outside it. Every other call keeps guarded() unchanged.
-        if ($live->effect?->isModelSafe() === false && ModelDriven::detect($context)) {
+        $gated = ModelDriven::detect($context)
+            && ModelCallRules::needsPerson($live, ModelCallRules::rule($live, $context), $door === Door::Agent);
+
+        if ($gated) {
             $prepared = app(ReadGuard::class)->run(fn (): Outcome|ValidatedInput => $this->prepared($live, $action, $input, $context, $door));
 
-            return $prepared instanceof Outcome ? $prepared : $this->finish($live, $action, $prepared, $context);
+            return $prepared instanceof Outcome ? $prepared : $this->finish($live, $action, $prepared, $context, $gated);
         }
 
         return $this->guarded($live, fn (): Outcome => ($prepared = $this->prepared($live, $action, $input, $context, $door)) instanceof Outcome
             ? $prepared
-            : $this->finish($live, $action, $prepared, $context));
+            : $this->finish($live, $action, $prepared, $context, $gated));
     }
 
     /**
@@ -479,7 +490,7 @@ final class Runner
      *
      * @throws MissingContext when a tenant-scoped action runs without a tenant
      */
-    private function admission(Entry $live, Action $action, ActionContext $context, Door $door, array $toolsets): ?Outcome
+    private function admission(Entry $live, Action $action, ActionContext $context, Door $door, array $toolsets, bool $listing = false): ?Outcome
     {
         $notFound = Outcome::notFound($live, $context);
 
@@ -505,14 +516,29 @@ final class Runner
             return $notFound;
         }
 
-        // A Destructive or External call passes only on the agent door, for a person, with a ticket (an agent that can
-        // pause). Step 8 then needs its claim. Every other door, MCP included, refuses it as before.
-        $confirmable = $door === Door::Agent && $context->approval !== null && $context->actor !== null
-            && $live->effect?->isModelSafe() === false;
+        // A call that waits for a person (a Destructive or External one, or one the app's GovernsModelCalls asks a
+        // confirmation for) passes only on the agent door, for a person, with a ticket (an agent that can pause). Step 8
+        // then needs its claim. Every other door, MCP included, refuses it as before. The app's run rule lifts the wait
+        // on the agent door only. The app's refusal, and its confirmation where none can be given for a Read or Write
+        // action, keep the action listed and refuse the call with a sentence, after the checks below.
+        $refusal = null;
 
-        if (ModelDriven::detect($context) && ! $confirmable
-            && ($live->effect?->isModelSafe() !== true || ($context->actor === null && ! $live->guests))) {
-            return $notFound;
+        if (ModelDriven::detect($context)) {
+            if ($context->actor === null && ! $live->guests) {
+                return $notFound;
+            }
+
+            $rule = ModelCallRules::rule($live, $context);
+            $needs = ModelCallRules::needsPerson($live, $rule, $door === Door::Agent);
+            $confirmable = $door === Door::Agent && $context->approval !== null && $context->actor !== null && $needs;
+
+            if ($rule?->refuses() === true) {
+                $refusal = Outcome::refusedBy($live, $context, Refusal::make((string) $rule->sentence)->status(403));
+            } elseif ($needs && ! $confirmable && $rule?->confirms() === true && $live->effect?->isModelSafe() === true) {
+                $refusal = Outcome::refusedBy($live, $context, Refusal::make('agentic-actions::model.confirm_unavailable')->status(403));
+            } elseif (! $confirmable && ($live->effect === null || $needs)) {
+                return $notFound;
+            }
         }
 
         if (! $this->tokens->allows($context, $live) || $action->shouldRegister($context) !== true) {
@@ -525,7 +551,7 @@ final class Runner
 
         if ($context->tenant !== null) {
             if ($context->actor === null) {
-                return $context->isSystem() ? null : $notFound;
+                return $context->isSystem() ? ($listing ? null : $refusal) : $notFound;
             }
 
             if (! Tenants::member($context->actor, $context->tenant, $live->effect)) {
@@ -533,7 +559,7 @@ final class Runner
             }
         }
 
-        return null;
+        return $listing ? null : $refusal;
     }
 
     /**
@@ -564,7 +590,7 @@ final class Runner
      * initialize(), when it lists tables in $initializes; handle() and the projection, or the table's output for an
      * action that shows one.
      */
-    private function finish(Entry $live, Action $action, ValidatedInput $input, ActionContext $context): Outcome
+    private function finish(Entry $live, Action $action, ValidatedInput $input, ActionContext $context, ?bool $gated = null): Outcome
     {
         // Step 8: a Destructive or External call a model drives runs only on its card's claim, as in 0.4, whatever its
         // ticket carries; a Read or Write call carrying a form's answer runs only on that form's claim, or over MCP on
@@ -572,7 +598,7 @@ final class Runner
         // before handle(), which never sees the ticket.
         $ticket = $context->approval;
         $form = $ticket?->form;
-        $gated = $live->effect?->isModelSafe() === false && ModelDriven::detect($context);
+        $gated ??= $live->effect?->isModelSafe() === false && ModelDriven::detect($context);
 
         if ($gated || $form !== null) {
             $won = $gated
@@ -622,10 +648,20 @@ final class Runner
     private function rebuilt(Entry $live, Action $action, ActionContext $context, ValidatedInput $input): ?ApprovalCard
     {
         $card = $context->approval?->names() === true
-            ? rescue(fn (): ApprovalCard => app(ReadGuard::class)->run(fn (): ApprovalCard => ApprovalCard::build($live, $action, $context, $input)))
+            ? rescue(fn (): ApprovalCard => app(ReadGuard::class)->run(fn (): ApprovalCard => ApprovalCard::build($live, $action, $context, $input, self::cardRule($live, $context))))
             : null;
 
         return $card instanceof ApprovalCard ? $card : null;
+    }
+
+    /**
+     * The app's rule sentence a card shows beside the action's own, or null.
+     */
+    private static function cardRule(Entry $live, ActionContext $context): ?string
+    {
+        $rule = ModelCallRules::rule($live, $context);
+
+        return $rule?->confirms() === true ? $rule->sentence : null;
     }
 
     /**

@@ -43,6 +43,7 @@ final class ApprovalCard
         public readonly string $title,
         public readonly array $summary,
         public readonly string $fingerprint,
+        public readonly ?string $rule = null,
     ) {}
 
     /**
@@ -52,7 +53,7 @@ final class ApprovalCard
      * @throws LogicException when approvalSummary() returns more than MAX_ROWS rows or a value that is not a string or
      *                        number, or approvalBinding() a value that is not plain data
      */
-    public static function build(Entry $live, Action $action, ActionContext $context, ValidatedInput $input): self
+    public static function build(Entry $live, Action $action, ActionContext $context, ValidatedInput $input, ?string $rule = null): self
     {
         $rows = $action->approvalSummary($context, $input);
 
@@ -85,7 +86,7 @@ final class ApprovalCard
 
         $fingerprint = ApprovalClaims::fingerprint($input).($bound === [] ? '' : ':'.ApprovalClaims::fingerprint($bound));
 
-        return new self($live, $context, self::text($title), $summary, $fingerprint);
+        return new self($live, $context, self::text($title), $summary, $fingerprint, $rule === null ? null : self::text($rule));
     }
 
     /**
@@ -128,7 +129,7 @@ final class ApprovalCard
     /**
      * The card as the data-approval part for this call.
      *
-     * @return array{type: 'data-approval', id: string, data: array{action: string, effect: string, label: string, title: string, summary: list<array{label: string, value: string}>, confirm: string, decline: string}}
+     * @return array{type: 'data-approval', id: string, data: array{action: string, effect: string, label: string, title: string, summary: list<array{label: string, value: string}>, confirm: string, decline: string, rule?: string}}
      */
     public function part(string $toolCallId): array
     {
@@ -145,6 +146,7 @@ final class ApprovalCard
                 'summary' => $this->summary,
                 'confirm' => (string) trans('agentic-actions::approval.confirm', [], $locale),
                 'decline' => (string) trans('agentic-actions::approval.decline', [], $locale),
+                ...($this->rule === null ? [] : ['rule' => $this->rule]),
             ],
         ];
     }
@@ -179,7 +181,7 @@ final class ApprovalCard
     {
         return implode("\n", [
             $this->entry->name, $this->context->actorKey(), $this->context->tenantKey(), $conversationId, $toolCallId, $this->fingerprint,
-            json_encode([$this->title, $this->summary], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
+            json_encode($this->rule === null ? [$this->title, $this->summary] : [$this->title, $this->summary, $this->rule], JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
         ]);
     }
 

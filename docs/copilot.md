@@ -398,7 +398,7 @@ The agent above qualifies: it implements `Conversational` and uses laravel/ai's 
 
 Its `tools()` may return the action tools inside a laravel/ai tool-search group (`Laravel\Ai\Providers\Tools\ToolSearch`), as `return [new ToolSearch($this->actionTools())];` does, and so does an agent that carries `#[DeferToolset]` ([many actions](#many-actions)). Their calls wait for the person and take the person's answer as any other call does, and a reload brings back their cards, forms and tables.
 
-An agent that does not store its conversations is never offered a Destructive or External action, and `actions:check` warns about it (the Approvals row).
+An agent that does not store its conversations is never offered a Destructive or External action, and `actions:check` warns about it (the Approvals row), unless it [proposes those calls instead](#agents-that-cannot-pause).
 
 ### The route
 
@@ -462,6 +462,76 @@ const approval = approvalCard(messages.at(-1));
 - Confirmations, and [forms](asking.md), are kept in the app's default cache store, which every server must share: database, redis, memcached or dynamodb. Outside local development, `actions:check` warns about any other driver (the Cache store row).
 - Several calls paused in one step each get a card. The page shows one at a time, and the answers go out together once each has one.
 - A `prompt()`, `queue()` or `broadcast()` turn pauses the same way, with no card in its response. A reload shows the card. A queued turn keeps the limits of the token that queued it ([security](security.md#queued-runs-and-the-change-feed)).
+
+### Your app's rules
+
+The effect decides by default. To let each tenant choose what a model may do alone, bind `AgenticActions\Contracts\GovernsModelCalls`:
+
+```php
+use AgenticActions\ActionContext;
+use AgenticActions\Contracts\GovernsModelCalls;
+use AgenticActions\Effect;
+use AgenticActions\ModelCallRule;
+
+final class TeamAutonomy implements GovernsModelCalls
+{
+    public function rule(string $action, ?Effect $effect, ActionContext $context): ?ModelCallRule
+    {
+        return match ($context->team()->settings['ai'][$action] ?? null) {
+            'ask' => ModelCallRule::confirm(__('Your team asks before this.')),
+            'never' => ModelCallRule::refuse(__('Your team does not let the AI do this. Do it on the page.')),
+            'run' => ModelCallRule::run(),
+            default => null,
+        };
+    }
+}
+
+// AppServiceProvider::register()
+$this->app->scoped(GovernsModelCalls::class, TeamAutonomy::class);
+```
+
+- It is asked for model-driven calls only (`$context->surface` is `Agent`, `Mcp` or `Queue`), never for a person on a page, at admission, when the agent's tools are listed and when a card is built. It runs inside the tenant scope with writes refused, often: read only and cache.
+- `confirm($rule)` makes any call wait for a card on the agent door, a Write included. The card shows the action's `approvalReason()` (or the package's line for the effect, `approval.write` for a Write) and the rule as `rule` on the `data-approval` part. Where nobody can confirm, over MCP or for an agent that cannot pause, the call is refused with `model.confirm_unavailable`.
+- `refuse($sentence)` refuses the call with your sentence, which the model reads, and keeps the action listed so it can say why. `ActionRefused` fires as for any refusal.
+- `run()` lifts the card of a Destructive or External call on the agent door. MCP still never serves one, and a queued run still needs its card. Offer it only behind a setting the right person turns on.
+- Null keeps the package's rule. A policy that throws is reported, and the call is refused.
+
+### Agents that cannot pause
+
+An agent nobody chats with, such as one a scheduled job prompts, cannot wait for a person's Confirm. To have it record such calls for a person to review later instead of being refused, implement `AgenticActions\Contracts\ProposesCalls` on the agent:
+
+```php
+use AgenticActions\Ai\Proposal;
+use AgenticActions\Contracts\ProposesCalls;
+
+#[UseToolset('editorial')]
+final class NightlyEditor implements Agent, HasTools, ProposesCalls
+{
+    use InteractsWithActions;
+    use Promptable;
+
+    public function propose(Proposal $proposal): ?string
+    {
+        PendingChange::create([
+            'team_id' => $proposal->context->tenant?->getKey(),
+            'action' => $proposal->action,
+            'arguments' => $proposal->arguments,
+            'title' => $proposal->title,
+            'summary' => $proposal->summary,
+        ]);
+
+        return null; // the package's sentence: proposed, nothing ran
+    }
+
+    // instructions(), actionContext() ...
+}
+```
+
+- The agent is offered every action that waits for a confirmation: Destructive and External ones, and those your [rules](#your-apps-rules) confirm. Each call goes through admission, both `authorize()` steps and validation, as a card would, and then `propose()` gets what the card would show (`title`, `summary`, `rule`), the action's name and effect, the model's `arguments`, the context and the tool-call id. Nothing runs.
+- Return the sentence the model reads, or null for the package's (`model.proposed`). A `propose()` that throws is reported, and the model reads that the call failed.
+- A call your rule runs runs, a call it refuses is refused with your sentence, and a call that fails a step before the card is refused as before. Read and Write calls with no rule run as usual.
+- Run an approved proposal later as the person who approves it, for example `Actions::attempt($change->action, $change->arguments, ActionContext::http($approver, $team))`: the pipeline checks it again, for that person. `arguments` are the model's, so for an action with an `agentSchema()` they have its shape, not the canonical input `attempt()` takes.
+- An agent that stores its conversations and can pause gets cards instead, whatever it implements. `actions:check` accepts a proposing agent without the Approvals warning, though it still warns about the actions that ask for missing fields, which it never asks for.
 
 ## Asking the person
 
