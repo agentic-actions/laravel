@@ -6,7 +6,6 @@ use AgenticActions\Action;
 use AgenticActions\ActionContext;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
-use Illuminate\JsonSchema\Types\AnyOfType;
 use Illuminate\JsonSchema\Types\ArrayType;
 use Illuminate\JsonSchema\Types\ObjectType;
 use Illuminate\JsonSchema\Types\Type;
@@ -77,10 +76,11 @@ final class AdvertisedSchema
                 }
             }
 
-            if ($this instanceof AnyOfType && ($walked = array_map(AdvertisedSchema::admitNull(...), $this->schemas)) !== $this->schemas) {
+            // anyOf's branches. Its type comes with Laravel 13, so the walk names only its property.
+            if (property_exists($this, 'schemas') && is_array($this->schemas) && ($walked = array_map(AdvertisedSchema::admitNull(...), $this->schemas)) !== $this->schemas) {
                 $target = $copied();
 
-                if ($target instanceof AnyOfType) {
+                if (property_exists($target, 'schemas')) {
                     $target->schemas = $walked;
                 }
             }
