@@ -166,7 +166,8 @@ const noCard: WaitingApproval | null = approvalCard(undefined);
 
 expectTrue<Equal<ReturnType<typeof approvalCard>, WaitingApproval | null>>();
 expectTrue<Equal<WaitingApproval, ApprovalCardData & { id: string }>>();
-expectTrue<Equal<ApprovalCardData['effect'], 'destructive' | 'external'>>();
+expectTrue<Equal<ApprovalCardData['effect'], 'read' | 'write' | 'destructive' | 'external'>>();
+expectTrue<Equal<ApprovalCardData['rule'], string | undefined>>();
 expectTrue<Equal<ApprovalCardData['summary'], { label: string; value: string }[]>>();
 
 if (waitingCard !== null) {
@@ -174,8 +175,10 @@ if (waitingCard !== null) {
     const title: string = waitingCard.title;
 }
 
-// @ts-expect-error a card is for a Destructive or External call only
+// A Write call's card, when the app's rule confirms it; never an effect the server does not send.
 const writeCard: ApprovalCardData['effect'] = 'write';
+// @ts-expect-error an effect the server never sends
+const deleteCard: ApprovalCardData['effect'] = 'delete';
 
 // @ts-expect-error a status the server never sends
 const approvedStatus: ActivityStatus = 'approved';

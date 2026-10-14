@@ -23,13 +23,16 @@ export type ActivityRow = { id: string } & Omit<ActionRowData, 'touches'>;
 /** The card a person confirms, as the server built it: the data of a data-approval part. */
 export type ApprovalCardData = {
     action: string;
-    effect: 'destructive' | 'external';
+    /** Destructive and External calls always ask; a Read or Write one asks when the app's rule confirms it. */
+    effect: 'read' | 'write' | 'destructive' | 'external';
     /** "Waiting for your confirmation", in the person's language. */
     label: string;
     title: string;
     summary: { label: string; value: string }[];
     confirm: string;
     decline: string;
+    /** The app's rule that asked for this confirmation, when one did (GovernsModelCalls). */
+    rule?: string;
 };
 
 /** A card the person has not answered yet; id is what useChat's addToolApprovalResponse() takes. */
