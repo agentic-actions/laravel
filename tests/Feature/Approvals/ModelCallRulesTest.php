@@ -14,6 +14,7 @@ use AgenticActions\ModelCallRule;
 use AgenticActions\Pipeline\Door;
 use AgenticActions\Pipeline\OutcomeKind;
 use AgenticActions\Runner;
+use AgenticActions\Surface;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Exceptions;
 use Laravel\Ai\Approvals\Approval;
@@ -167,8 +168,11 @@ it('keeps a Destructive call off MCP and a queued run even when the app says run
     Sanctum::actingAs($this->user, ['actions:read', 'actions:write', 'actions:destructive']);
 
     $mcp = app(Runner::class)->run(ClassExposure::of(ConfirmedDelete::class), ['post' => $this->post->id], ActionContext::mcp($this->user, null), Door::Mcp);
+    $queued = app(Runner::class)->run(ClassExposure::of(ConfirmedDelete::class), ['post' => $this->post->id], ActionContext::queued(Surface::Agent, $this->user, null, 'en', [], null, null), Door::InProcess);
 
-    expect($mcp->kind())->toBe(OutcomeKind::NotFound)->and(ConfirmedDelete::$handled)->toBeNull();
+    expect($mcp->kind())->toBe(OutcomeKind::NotFound)
+        ->and($queued->kind())->toBe(OutcomeKind::NotFound)
+        ->and(ConfirmedDelete::$handled)->toBeNull();
 });
 
 it('refuses, and reports, when the policy throws', function () {
