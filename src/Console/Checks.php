@@ -44,6 +44,7 @@ use AgenticActions\Views\ShowsTable;
 use AgenticActions\Views\Table;
 use Carbon\CarbonInterval;
 use Illuminate\Auth\Middleware\Authenticate;
+use Illuminate\Auth\Middleware\AuthenticateWithBasicAuth;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Contracts\Foundation\CachesRoutes;
 use Illuminate\Database\Connection;
@@ -54,6 +55,7 @@ use Illuminate\Routing\Attributes\Controllers\Authorize;
 use Illuminate\Routing\Attributes\Controllers\Middleware;
 use Illuminate\Routing\Route;
 use Illuminate\Routing\Router;
+use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Exists;
@@ -70,6 +72,7 @@ use Laravel\Passport\Passport;
 use Laravel\Sanctum\HasApiTokens;
 use Laravel\Sanctum\Http\Middleware\CheckAbilities;
 use Laravel\Sanctum\Http\Middleware\CheckForAnyAbility;
+use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
 use Laravel\Sanctum\Sanctum;
 use ReflectionAttribute;
 use ReflectionClass;
@@ -162,6 +165,8 @@ final class Checks
             ...$this->approvals($scan, $subjects),
             ...$this->pageContext($scan),
             ...$this->routes($scan, $routes),
+            ...$this->sessionReads($routes),
+            ...$this->sharedNames($routes),
             ...$this->rulesSkipped($subjects),
             ...$this->modelInput($subjects, $routes),
             ...$this->modelOutput($subjects),
@@ -762,7 +767,8 @@ final class Checks
     }
 
     /**
-     * Routes: a cached route set older than the actions, and an action with a generated route and a hand-written one.
+     * Routes: cached routes whose actions no longer open the web, an action that changed after the cache was written
+     * and has no cached route, and an action with a generated route and a hand-written one.
      *
      * @param  list<Route>  $routes
      * @return list<Finding>
@@ -785,11 +791,15 @@ final class Checks
                 }
             }
 
-            if ($generated !== []) {
-                foreach ($entries as $class => $entry) {
-                    if ($entry->allows(Surface::Http) && ! isset($served[$class])) {
-                        $findings[] = self::fail('Routes', "{$class} opens on the web but has no cached generated route: run php artisan route:cache again.");
-                    }
+            // A mount's filters may leave an action out, so only one whose file changed since the cache was written
+            // can be missing from a stale cache.
+            $cachedAt = is_file($path = $this->app->getCachedRoutesPath()) ? filemtime($path) : false;
+
+            foreach ($generated === [] || $cachedAt === false ? [] : $entries as $class => $entry) {
+                $file = (new ReflectionClass($class))->getFileName();
+
+                if ($entry->allows(Surface::Http) && ! isset($served[$class]) && $file !== false && filemtime($file) > $cachedAt) {
+                    $findings[] = self::fail('Routes', "{$class} opens on the web and changed after the routes were cached, and no cached route serves it: run php artisan route:cache again.");
                 }
             }
         }
@@ -800,6 +810,98 @@ final class Checks
 
             if ($handWritten !== [] && count($handWritten) < count($own)) {
                 $findings[] = self::fail('Routes', "{$class} has a generated route and a hand-written one [".implode(', ', array_map(self::routeName(...), $handWritten)).']: keep one.');
+            }
+        }
+
+        return $findings;
+    }
+
+    /**
+     * Routes: a generated route that answers GET in a group that starts a session or authenticates with a session
+     * guard. A GET skips the CSRF check, and a browser sends a SameSite=Lax cookie on a top-level GET from another
+     * site, so such a route would run a Read (and its initialize()) for any page that links to it.
+     *
+     * @param  list<Route>  $routes
+     * @return list<Finding>
+     */
+    private function sessionReads(array $routes): array
+    {
+        $findings = [];
+
+        foreach (self::generated($routes) as $route) {
+            if (in_array('GET', $route->methods(), true) && ($why = $this->session($route)) !== null) {
+                $findings[] = self::fail('Routes', 'The generated route ['.self::routeName($route)."] answers GET, and {$why}: a GET skips the CSRF check, and a link on another site sends the session cookie. Mount reads: 'get' only in a token group, such as Route::middleware('auth:sanctum') in routes/api.php.");
+            }
+        }
+
+        return $findings;
+    }
+
+    /**
+     * Why a route's middleware gives it a credential a browser sends by itself: StartSession, Sanctum's stateful
+     * middleware, HTTP basic auth, or an auth middleware naming a session guard. Null when none does.
+     */
+    private function session(Route $route): ?string
+    {
+        try {
+            $middleware = array_filter($this->router->gatherRouteMiddleware($route), is_string(...));
+        } catch (Throwable) {
+            return null;
+        }
+
+        foreach ($middleware as $item) {
+            [$class, $parameters] = array_pad(explode(':', $item, 2), 2, '');
+
+            if (is_a($class, StartSession::class, true)) {
+                return 'its group starts a session';
+            }
+
+            if (is_a($class, EnsureFrontendRequestsAreStateful::class, true)) {
+                return 'its group can start a Sanctum session';
+            }
+
+            if (is_a($class, AuthenticateWithBasicAuth::class, true)) {
+                return 'it authenticates with HTTP basic auth, which a browser sends again by itself';
+            }
+
+            if (is_a($class, Authenticate::class, true)) {
+                foreach ($parameters === '' ? [(string) config('auth.defaults.guard')] : explode(',', $parameters) as $guard) {
+                    if (config("auth.guards.{$guard}.driver") === 'session') {
+                        return "it authenticates with the session guard [{$guard}]";
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Routes: two routes under one name, where one is a route the package registers (an action's, the change feed's or
+     * the tables' refresh). route:cache refuses the pair, and route() reaches only one of them.
+     *
+     * @param  list<Route>  $routes
+     * @return list<Finding>
+     */
+    private function sharedNames(array $routes): array
+    {
+        $byName = [];
+
+        foreach ($routes as $route) {
+            if (($name = $route->getName()) !== null && $name !== '') {
+                $byName[$name][] = $route;
+            }
+        }
+
+        $findings = [];
+
+        foreach ($byName as $name => $named) {
+            $ours = array_filter($named, fn (Route $route): bool => $route->getAction(ActionRequest::GENERATED) === true
+                || in_array(ltrim((string) $route->getControllerClass(), '\\'), [ChangesController::class, RefreshView::class], true));
+
+            if (count($named) > 1 && $ours !== []) {
+                $uris = implode(', ', array_map(fn (Route $route): string => implode('|', $route->methods()).' '.$route->uri(), $named));
+                $findings[] = self::fail('Routes', "The routes [{$uris}] share the name [{$name}], which route:cache refuses. Give each Actions::routes() group its own name prefix, such as ->name('api.v1.').");
             }
         }
 

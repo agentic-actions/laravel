@@ -3,6 +3,7 @@
 namespace AgenticActions\TypeScript;
 
 use AgenticActions\Action;
+use AgenticActions\Effect;
 use AgenticActions\Exposure\ClassExposure;
 use AgenticActions\Exposure\Entry;
 use AgenticActions\Schema\SchemaReader;
@@ -182,8 +183,11 @@ final class Emitter
         $signature = ($parameters === [] ? '()' : "(params: {$prefix}Params)")
             .": ActionDefinition<{$prefix}Input, {$prefix}Output> =>";
 
+        // A Read's route that answers GET (reads: 'get') is called over GET, so its answer can be revalidated.
+        $method = $entry->effect === Effect::Read && in_array('GET', $route->methods(), true) ? 'get' : 'post';
+
         $call = 'action({ name: '.self::quote($entry->name)
-            .", method: 'post', url: "
+            .", method: '{$method}', url: "
             .($parameters === [] ? self::quote($path) : 'uri('.self::quote($path).', params)')
             .', touches: ['.implode(', ', array_map(self::quote(...), $entry->touches)).'] });';
 

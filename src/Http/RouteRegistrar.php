@@ -4,22 +4,25 @@ namespace AgenticActions\Http;
 
 use AgenticActions\Action;
 use AgenticActions\Discovery\ActionRegistry;
+use AgenticActions\Effect;
 use AgenticActions\Exceptions\MisconfiguredExposure;
 use AgenticActions\Exposure\ClassExposure;
 use AgenticActions\Exposure\Entry;
 use AgenticActions\Feed\ChangesController;
 use AgenticActions\Surface;
 use AgenticActions\Views\RefreshView;
+use Closure;
 use Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests;
 use Illuminate\Routing\Route as RoutingRoute;
 use Illuminate\Support\Facades\Route;
+use InvalidArgumentException;
 use Throwable;
 
 /**
- * Registers one POST route per web-exposed action inside whatever group calls it, the change feed's route when
- * feed.enabled is on, and the tables' refresh route. The app decides where routes live and which middleware guards
- * them; the package decides only which exist. Every call still re-reads the class, so a route that outlives its
- * #[Expose] answers not found.
+ * Registers one POST route per web-exposed action inside whatever group calls it (GET, HEAD and POST for a Read on a
+ * mount with reads: 'get'), the change feed's route when feed.enabled is on, and the tables' refresh route. The app
+ * decides where routes live and which middleware guards them; the package decides only which exist. Every call still
+ * re-reads the class, so a route that outlives its #[Expose] answers not found.
  *
  * @internal
  */
@@ -29,12 +32,20 @@ final class RouteRegistrar
      * Register the generated routes in the current group.
      *
      * @param  bool|null  $tenant  true: tenant-scoped actions only; false: the others; null: all
+     * @param  'post'|'get'  $reads  'get' also answers GET and HEAD on a Read's route
+     * @param  (Closure(Entry): bool)|null  $only  mount only the actions it returns true for
+     * @param  (Closure(Entry): bool)|null  $except  leave out the actions it returns true for
      *
      * @throws MisconfiguredExposure for a hand-written twin registered earlier, or an action named like the feed route
      *                               or the refresh route
+     * @throws InvalidArgumentException for a $reads other than 'post' or 'get'
      */
-    public function register(?bool $tenant = null): void
+    public function register(?bool $tenant = null, string $reads = 'post', ?Closure $only = null, ?Closure $except = null): void
     {
+        if (! in_array($reads, ['post', 'get'], true)) {
+            throw new InvalidArgumentException("Actions::routes() takes reads: 'post' or 'get', not [{$reads}].");
+        }
+
         if (! config('agentic-actions.surfaces.web')) {
             return;   // checked again by the Runner on every call
         }
@@ -43,11 +54,11 @@ final class RouteRegistrar
 
         Route::prefix((string) config('agentic-actions.routes.path'))
             ->name((string) config('agentic-actions.routes.name'))
-            ->group(function () use ($tenant, $handWritten): void {
+            ->group(function () use ($tenant, $reads, $only, $except, $handWritten): void {
                 foreach (app(ActionRegistry::class)->on(Surface::Http) as $candidate) {
                     $entry = $this->live($candidate);
 
-                    if ($entry === null || ! $entry->allows(Surface::Http) || ($tenant !== null && $entry->tenantScoped !== $tenant)) {
+                    if ($entry === null || ! self::mounts($entry, $tenant, $only, $except)) {
                         continue;
                     }
 
@@ -59,7 +70,10 @@ final class RouteRegistrar
 
                     $this->refuseHandWrittenTwin($entry, $handWritten);
 
-                    $route = Route::post($entry->segment(), $entry->class)
+                    // A GET skips the CSRF check, so it is opt-in per mount and only ever for a Read; the route keeps POST.
+                    $methods = $reads === 'get' && $entry->effect === Effect::Read ? ['GET', 'POST'] : ['POST'];
+
+                    $route = Route::match($methods, $entry->segment(), $entry->class)
                         ->middleware(HandlePrecognitiveRequests::class)
                         ->name($entry->segment());
 
@@ -73,6 +87,20 @@ final class RouteRegistrar
                 $refresh = Route::post(RefreshView::SEGMENT.'/{view}', RefreshView::class)->name(RefreshView::SEGMENT);
                 $refresh->setAction([...$refresh->getAction(), RefreshView::TENANT => $tenant]);
             });
+    }
+
+    /**
+     * Whether a mount serves the action: open on the web, of the tenant split asked for, and kept by the filters.
+     *
+     * @param  (Closure(Entry): bool)|null  $only
+     * @param  (Closure(Entry): bool)|null  $except
+     */
+    public static function mounts(Entry $entry, ?bool $tenant, ?Closure $only, ?Closure $except): bool
+    {
+        return $entry->allows(Surface::Http)
+            && ($tenant === null || $entry->tenantScoped === $tenant)
+            && ($only === null || $only($entry) === true)
+            && ($except === null || $except($entry) !== true);
     }
 
     /**

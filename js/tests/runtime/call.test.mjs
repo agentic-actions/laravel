@@ -94,21 +94,85 @@ describe('callAction() requests', () => {
         assert.equal(await requests[0].text(), '{"title":"Hi"}');
     });
 
-    test('refuses a GET or HEAD definition before calling fetch: the input travels as the body, which neither carries', async () => {
+    test('refuses a HEAD definition before calling fetch: its answer has no body to resolve', async () => {
         const { fetch, calls } = stubFetch();
 
-        for (const method of ['get', 'GET', 'head']) {
+        for (const method of ['head', 'HEAD']) {
             await assert.rejects(callAction(action({ name: 'read-note', method, url: '/read', touches: [] }), {}, { fetch }), {
-                message: `callAction() cannot call [read-note] over ${method.toUpperCase()}: it sends the input as the request body, which a ${method.toUpperCase()} request cannot carry.`,
+                message: 'callAction() cannot call [read-note] over HEAD: a HEAD answer has no body to resolve.',
             });
         }
 
-        // The runtime's own fetch never sees it either, so the error is this one, not the platform's.
-        await assert.rejects(callAction(action({ name: 'read-note', method: 'get', url: 'http://127.0.0.1:1/read', touches: [] }), {}), {
-            message: 'callAction() cannot call [read-note] over GET: it sends the input as the request body, which a GET request cannot carry.',
+        assert.equal(calls.length, 0);
+    });
+});
+
+describe('callAction() over GET', () => {
+    const listNotes = action({ name: 'list-notes', method: 'get', url: '/api/actions/list-notes', touches: [] });
+
+    test('sends the input as the query string in bracket form, with no body, Idempotency-Key or XSRF header', async () => {
+        page();
+        const { fetch, calls } = stubFetch(200, '{"posts":[]}');
+
+        const output = await callAction(
+            listNotes,
+            { page: 2, q: 'a b&c', tags: ['x', 'y'], author: { name: 'Ann' }, drafts: true, archived: false, since: new Date('2026-01-02T03:04:05Z'), cursor: null, skip: undefined },
+            { fetch },
+        );
+
+        const [call] = calls;
+
+        assert.deepEqual(output, { posts: [] });
+        assert.equal(call.init.method, 'GET');
+        assert.equal(call.init.body, undefined);
+        assert.equal('body' in call.init, false);
+        assert.equal(call.init.headers['Idempotency-Key'], undefined);
+        assert.equal(call.init.headers['X-XSRF-TOKEN'], undefined);
+        assert.equal(call.init.headers['Content-Type'], undefined);
+        assert.equal(call.init.headers.Accept, 'application/json');
+
+        const url = new URL(call.url, 'https://app.test');
+
+        assert.equal(url.pathname, '/api/actions/list-notes');
+        assert.deepEqual([...url.searchParams], [
+            ['page', '2'],
+            ['q', 'a b&c'],
+            ['tags[0]', 'x'],
+            ['tags[1]', 'y'],
+            ['author[name]', 'Ann'],
+            ['drafts', '1'],
+            ['archived', '0'],
+            ['since', '2026-01-02T03:04:05.000Z'],
+            ['cursor', ''],
+        ]);
+    });
+
+    test('leaves the URL as it is for an empty input, and appends after a query or before a hash the URL has', async () => {
+        const { fetch, calls } = stubFetch(200, '{}');
+
+        await callAction(listNotes, {}, { fetch });
+        await callAction(listNotes, { tags: [] }, { fetch });
+        await callAction(action({ name: 'x', method: 'get', url: '/x?locale=ar#top', touches: [] }), { page: 1 }, { fetch });
+
+        assert.deepEqual(calls.map((call) => call.url), ['/api/actions/list-notes', '/api/actions/list-notes', '/x?locale=ar&page=1#top']);
+    });
+
+    test('refuses a file before calling fetch, since a query string carries text only', async () => {
+        const { fetch, calls } = stubFetch();
+
+        await assert.rejects(callAction(listNotes, { attachment: new Blob(['x']) }, { fetch }), {
+            message: 'callAction() cannot send a file to [list-notes] over GET: a query string carries text only.',
         });
 
         assert.equal(calls.length, 0);
+    });
+
+    test('passes the caller\'s headers, such as a token, and resolves errors as a POST does', async () => {
+        const { fetch, calls } = stubFetch(404, '{"message":"Not found."}');
+
+        await assert.rejects(callAction(listNotes, {}, { fetch, headers: { Authorization: 'Bearer t' } }), ActionRefusedError);
+
+        assert.equal(calls[0].init.headers.Authorization, 'Bearer t');
     });
 });
 

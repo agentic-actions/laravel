@@ -60,13 +60,17 @@ final class ActionsManager
     private array $refusals = [];
 
     /**
-     * Register one POST route per web-exposed action inside the caller's route group.
+     * Register one POST route per web-exposed action inside the caller's route group. With reads: 'get', a Read's
+     * route also answers GET and HEAD, with an ETag: mount it only in a token group, never one with a session.
      *
      * @param  bool|null  $tenant  true: tenant-scoped actions only; false: the others; null: all
+     * @param  'post'|'get'  $reads  'get' also answers GET and HEAD on a Read's route
+     * @param  (Closure(Entry): bool)|null  $only  mount only the actions it returns true for
+     * @param  (Closure(Entry): bool)|null  $except  leave out the actions it returns true for
      */
-    public function routes(?bool $tenant = null): void
+    public function routes(?bool $tenant = null, string $reads = 'post', ?Closure $only = null, ?Closure $except = null): void
     {
-        app(RouteRegistrar::class)->register($tenant);
+        app(RouteRegistrar::class)->register($tenant, $reads, $only, $except);
     }
 
     /**

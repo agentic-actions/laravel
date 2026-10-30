@@ -46,7 +46,7 @@ export const createPost = (): ActionDefinition<CreatePostInput, CreatePostOutput
 - The export is the action's name in camel case (`createPost`), and its types take the name in studly case: `CreatePostInput` from `schema()` and `CreatePostOutput` from `outputSchema()`. A field the schema does not require is optional. An empty input or output is `Record<string, never>`.
 - The doc comments are the action's and the fields' descriptions.
 - `touches` is the action's `$touches`.
-- Every definition uses POST, and the file exports only routes that accept POST and whose controller is an action.
+- A definition uses POST, or GET for a Read whose route answers GET ([reads over GET](concepts.md#reads-over-get)). The file exports only routes that accept POST and whose controller is an action.
 - The import gains `uri` once any route has parameters, as in [routes with parameters](#routes-with-parameters).
 
 ### Routes with parameters
@@ -105,6 +105,8 @@ try {
 - `X-XSRF-TOKEN` from the `XSRF-TOKEN` cookie, when the URL has the page's own origin or `credentials` is `'include'`;
 - the input as JSON. When the input holds a `File` or `Blob`, at any depth, the call goes as `multipart/form-data` instead, with nested keys in PHP's bracket form (`tags[0]`, `author[name]`), booleans as `1` and `0`, `null` as an empty string and a `Date` as its ISO string. [File uploads](recipes.md#file-uploads) shows an action that takes one.
 
+A definition with the method GET sends no body, no `Idempotency-Key` and no `X-XSRF-TOKEN`: its input goes in the query string, in the same bracket form, appended after any query the URL already has. An `undefined` value, an empty list and an empty object send nothing, `null` sends an empty value (which Laravel's `ConvertEmptyStringsToNull` reads as null), and a `File` or `Blob` throws an `Error` before anything is sent. [Reads over GET](concepts.md#reads-over-get) says how the server reads it. A browser's `fetch` revalidates the answer with its ETag on its own and resolves the cached body.
+
 | Option | What it does |
 |---|---|
 | `idempotencyKey` | The key to send. Pass the same one when you retry a call yourself, so an action that reads it with `requireIdempotencyKey()` sees the retry as the same call. The package itself does not replay or drop a repeated key ([Idempotency-Key](../README.md#idempotency-key)). |
@@ -113,7 +115,7 @@ try {
 | `signal` | An `AbortSignal`, to cancel the request. |
 | `fetch` | The `fetch` to use, for tests and runtimes without a global one. |
 
-A definition with the method GET or HEAD throws an `Error` before anything is sent, since the input travels as the body. A network failure or an abort rejects with `fetch`'s own error.
+A definition with the method HEAD throws an `Error` before anything is sent, since its answer has no body to resolve. A network failure or an abort rejects with `fetch`'s own error.
 
 ### Errors
 
@@ -148,7 +150,7 @@ const post = await callAction(createPostWithToken, { title: 'Hello', body: 'My f
 });
 ```
 
-`method` is `'post'`, `'put'`, `'patch'` or `'delete'`; TypeScript refuses `'get'`. A definition is also a plain `{ url, method }` pair, so Inertia's `<Form action>`, `useForm` and `useHttp` accept it as it is.
+`method` is `'get'`, `'post'`, `'put'`, `'patch'` or `'delete'`; TypeScript refuses `'head'`. A definition is also a plain `{ url, method }` pair, so Inertia's `<Form action>`, `useForm` and `useHttp` accept it as it is.
 
 `uri(template, params)` fills `{name}` and `{name?}` segments, URL-encoding each value. It throws when a required parameter is missing, or when a value is `.` or `..`, which would move the call to another route. An absent optional segment is dropped with its slash. `newKey()` returns a v4 UUID, for an idempotency key you keep across retries, and `xsrfToken()` returns the `XSRF-TOKEN` cookie's value, or `''` where there is none.
 

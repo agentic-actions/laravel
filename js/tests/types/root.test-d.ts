@@ -36,6 +36,7 @@ import {
     type ElicitationParams,
     type ElicitResult,
     type MessageSegment,
+    type Method,
     type SyncRequest,
     type TouchedHandler,
     type ViewData,
@@ -59,11 +60,11 @@ expectTrue<Equal<typeof createNote.touches, readonly string[]>>();
 // @ts-expect-error a method outside Inertia's five
 action({ name: 'x', method: 'head', url: '/', touches: [] });
 
-// @ts-expect-error a GET: callAction() sends the input as the body, which a GET cannot carry
-action({ name: 'x', method: 'get', url: '/', touches: [] });
+// A GET: callAction() sends the input as the query string.
+const listNotes = action<{ page?: number }, { posts: NoteOutput[] }>({ name: 'list-notes', method: 'get', url: '/api/actions/list-notes', touches: [] });
 
-// @ts-expect-error nor does callAction() take a GET definition written by hand
-void callAction({ name: 'x', method: 'get', url: '/', touches: [] }, {});
+expectTrue<Equal<typeof listNotes.method, Method>>();
+void callAction(listNotes, { page: 2 });
 
 // @ts-expect-error touches are required
 action({ name: 'x', method: 'post', url: '/' });

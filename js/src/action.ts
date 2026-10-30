@@ -1,5 +1,8 @@
-/** The methods a definition may name. No GET: callAction() sends the input as the body. Generated definitions use POST. */
-export type Method = 'post' | 'put' | 'patch' | 'delete';
+/**
+ * The methods a definition may name: Inertia's five. callAction() sends a GET's input as the query string and every other
+ * method's as the body. Generated definitions use POST, or GET for a Read on a mount with reads: 'get'.
+ */
+export type Method = 'get' | 'post' | 'put' | 'patch' | 'delete';
 
 /** A typed action: structurally a UrlMethodPair, so Inertia's <Form action>, useForm and useHttp accept it. */
 export type ActionDefinition<I = unknown, O = unknown> = {
