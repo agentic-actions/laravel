@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.9.0-beta.7 - 2026-10-31
+
+A token API can now serve its Read actions over `GET`, with an `ETag` and 304s (`Actions::routes(reads: 'get')`), keep a mount to some actions (`only` and `except`), and give actions REST-style routes such as `GET posts/{post}` that run the same pipeline (`#[Rest]` and `Actions::rest()`), with `Actions::restRoutes()` describing them for an OpenAPI document. A generated route never answers `GET` to a browser session: a link on another site gets 405. Nothing changes for an app that does not opt in.
 
 ### Added
 
