@@ -15,6 +15,12 @@
 
 - **A Read's answer to GET or HEAD on a route you wrote yourself is conditional too**: it gains the `ETag`, `Cache-Control: private, no-cache` and `Vary` headers above, and answers 304 to a matching `If-None-Match`.
 
+### Fixed
+
+- REST bindings preserve identity mappings and read overlapping mappings from the original path values; query and body input cannot replace those fixed keys.
+- The GET session check also rejects mounts using Sanctum's stateful frontend middleware.
+- Cached-route checks permit actions intentionally omitted by filters or REST-only registration while still rejecting cached routes whose actions no longer expose the web.
+
 ## 0.9.0-beta.6 - 2026-10-14
 
 An app can now decide, per action and per context, what a model may do alone: run a call without a card, ask for a confirmation even on a Write, or refuse it with the app's own sentence (`GovernsModelCalls`). An agent that cannot pause, such as one a scheduled job prompts, can record the calls that wait for a confirmation as proposals for a person to review, instead of having them refused (`ProposesCalls`).

@@ -125,11 +125,12 @@ final class ActionContext
         $tenant = null;
 
         // A #[Rest] route's path parameter fills the input key its bind map names, such as {post} for post_id.
-        foreach ($route instanceof Route ? (RestRegistrar::of($route)['bind'] ?? []) : [] as $parameter => $key) {
-            if (array_key_exists($parameter, $fixed)) {
-                $fixed[$key] = $fixed[$parameter];
-                unset($fixed[$parameter]);
-            }
+        $bindings = $route instanceof Route ? (RestRegistrar::of($route)['bind'] ?? []) : [];
+        $parameters = $fixed;
+        $fixed = [];
+
+        foreach ($parameters as $parameter => $value) {
+            $fixed[$bindings[$parameter] ?? $parameter] = $value;
         }
         $routeTenant = null;
 

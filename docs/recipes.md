@@ -574,6 +574,8 @@ That gives `GET /api/v1/posts`, `POST /api/v1/posts`, `GET|PATCH|DELETE /api/v1/
 
 **Path parameters are input.** `{post}` fills the input key `post`, or the key `bind` names (`['post' => 'post_id']`), and is validated with the rest of the input, so `/posts/abc` against an integer key is a 422. The path wins: a request that also sends that key in the query or the body is refused with 422 on the key, and nothing runs. A tenant-scoped action finds its row with `$context->find(Post::class, $input->integer('post'))`, so another tenant's id is a 404, like an id that does not exist.
 
+Bindings read the original path values: an identity binding such as `['post' => 'post']` preserves the value, and mappings may exchange two parameter names without overwriting either source. The resulting input keys remain fixed and cannot also be sent in the query or body.
+
 **The methods follow the effect.** `actions:check`'s REST row fails a `GET` on anything but a Read, a `DELETE` on anything but a Destructive action, a `POST`, `PUT` or `PATCH` on a Read, and two web-open actions on one method and path (`posts/{post}` and `posts/{id}` count as one path). It also fails a path parameter `schema()` does not declare, a `bind` entry for a parameter the path lacks, `created` on anything but a `POST`, and a `location` without `created` or naming a key neither the output nor the path holds. `Actions::rest()` itself refuses a method other than `GET`, `POST`, `PUT`, `PATCH` and `DELETE`, and two routes on one method and path in one group.
 
 **The statuses are REST's:**
