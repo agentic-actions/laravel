@@ -69,6 +69,14 @@ describe("reads: 'get' and sessions", function () {
         ]);
     });
 
+    it('fails a GET Read behind HTTP basic auth, which a browser sends again on a link from another site', function () {
+        $this->mountRoutes(fn () => Route::middleware('auth.basic')->group(fn () => Actions::routes(reads: 'get')));
+
+        expect(array_map(fn (array $finding): string => str($finding[1])->before(': a GET')->toString(), routesRow()))->toBe([
+            'The generated route [actions.list-notes] answers GET, and it authenticates with HTTP basic auth, which a browser sends again by itself',
+        ]);
+    });
+
     it('passes a GET Read on a token group, and every POST-only mount whatever its middleware', function () {
         $this->mountRoutes(function (): void {
             Route::middleware(['web', 'auth'])->group(fn () => Actions::routes());
@@ -217,3 +225,35 @@ it('accepts cached mounts that intentionally omit exposed actions', function (st
         $this->app->instance('routes.cached', false);
     }
 })->with(['only', 'except', 'rest']);
+
+it('fails an action that opens the web, changed after route:cache, and has no cached route, while one a filter left out passes', function () {
+    $cache = sys_get_temp_dir().'/agentic-actions-routes-'.bin2hex(random_bytes(4)).'.php';
+    file_put_contents($cache, '<?php');
+    $_SERVER['APP_ROUTES_CACHE'] = $_ENV['APP_ROUTES_CACHE'] = $cache;
+    $this->app->instance('routes.cached', true);
+
+    try {
+        $this->mountRoutes(fn () => Route::middleware('auth:sanctum')->group(fn () => Actions::routes(
+            only: fn ($entry): bool => $entry->class === ListNotes::class,
+        )));
+
+        // Cached after every action file last changed: CreateNote was left out on purpose.
+        touch($cache, time() + 60);
+        clearstatcache();
+        $later = routesRow();
+
+        // Cached before CreateNote's file last changed: the cache may predate its #[Expose].
+        touch($cache, 1);
+        clearstatcache();
+        $earlier = routesRow();
+    } finally {
+        $this->app->instance('routes.cached', false);
+        unset($_SERVER['APP_ROUTES_CACHE'], $_ENV['APP_ROUTES_CACHE']);
+        @unlink($cache);
+    }
+
+    expect($later)->toBe([])
+        ->and($earlier)->toBe([
+            ['fail', CreateNote::class.' opens on the web and changed after the routes were cached, and no cached route serves it: run php artisan route:cache again.'],
+        ]);
+});

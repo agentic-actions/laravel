@@ -19,6 +19,7 @@ use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Routing\Route;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Validator as LaravelValidator;
 use LogicException;
@@ -75,6 +76,12 @@ final class ActionRequest extends FormRequest
         // runs anything but a Read.
         if ($this->isMethodSafe() && $this->entry()->effect !== Effect::Read) {
             throw new MethodNotAllowedHttpException([], Response::$statusTexts[405]);
+        }
+
+        // A link on another site sends a SameSite=Lax session cookie, so a generated route answers a reading method to
+        // a token only: a session, or a guard that keeps one, calls it over POST.
+        if ($this->isMethodSafe() && $this->door() === Door::GeneratedRoute && $this->sessionHeld()) {
+            throw new MethodNotAllowedHttpException(['POST'], Response::$statusTexts[405]);
         }
 
         $resolve = fn (): mixed => app(Runner::class)->scoped($this->context(), function (): null {
@@ -231,6 +238,15 @@ final class ActionRequest extends FormRequest
     public function context(): ActionContext
     {
         return $this->actionContext ??= ActionContext::fromRequest($this);
+    }
+
+    /**
+     * Whether the request carries a session, or the guard that authenticated it keeps one (HTTP basic auth on the web
+     * guard included).
+     */
+    private function sessionHeld(): bool
+    {
+        return $this->hasSession() || config('auth.guards.'.Auth::getDefaultDriver().'.driver') === 'session';
     }
 
     /**
