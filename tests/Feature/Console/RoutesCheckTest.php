@@ -1,17 +1,29 @@
 <?php
 
+use AgenticActions\Action;
+use AgenticActions\ActionContext;
+use AgenticActions\Attributes\Expose;
 use AgenticActions\Console\Checks;
 use AgenticActions\Console\Finding;
+use AgenticActions\Effect;
 use AgenticActions\Facades\Actions;
 use Illuminate\Routing\RouteCollection;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Route;
 use Tests\Fixtures\Actions\CreateNote;
 use Tests\Fixtures\Actions\ListNotes;
+use Tests\Fixtures\Checks\RestReadOnPost;
+use Tests\Fixtures\Checks\RestWrongMethods;
+use Tests\Fixtures\Http\CreatePost;
+use Tests\Fixtures\Http\DeletePost;
+use Tests\Fixtures\Http\ListPosts;
+use Tests\Fixtures\Http\PublishPost;
+use Tests\Fixtures\Http\ShowPost;
+use Tests\Fixtures\Http\UpdatePost;
 
 /*
  * The Routes row on what Actions::routes() mounts: a GET Read in a group with a session, and two mounts under one
- * name. Each test starts from an empty route collection.
+ * name; and the REST row on each #[Rest] route. Each test starts from an empty route collection.
  */
 
 beforeEach(function () {
@@ -106,13 +118,100 @@ describe('shared names', function () {
     });
 });
 
+describe('REST', function () {
+    /**
+     * The REST row's messages for these classes.
+     *
+     * @param  list<class-string>  $classes
+     * @return list<string>
+     */
+    function restRow(array $classes): array
+    {
+        config(['agentic-actions.discovery.classes' => $classes]);
+        test()->refreshActions();
+
+        return array_values(array_map(
+            fn (Finding $finding): string => $finding->level.' '.$finding->message,
+            array_filter(app(Checks::class)->run(), fn (Finding $finding): bool => $finding->row === 'REST'),
+        ));
+    }
+
+    it('fails each method its effect may not use, and every parameter, bind, created and location that cannot work', function () {
+        $wrong = RestWrongMethods::class;
+
+        expect(restRow([RestWrongMethods::class, RestReadOnPost::class]))->toBe([
+            'fail '.RestReadOnPost::class.': #[Rest] needs the web open, and it is closed (no #[Expose]). Add #[Expose(web: true)].',
+            'fail '.RestReadOnPost::class.": #[Rest('POST', 'posts')] is not for a Read: use GET.",
+            "fail {$wrong}: #[Rest('GET', 'posts/{post}')] is for a Read, and the action is write: use POST, PUT or PATCH.",
+            "fail {$wrong}: #[Rest('DELETE', 'posts/{post}/draft')] is for a Destructive action, and the action is write.",
+            "fail {$wrong}: #[Rest('PATCH', 'posts/{post}/{section}')] fills the input key [section] from {section}, which schema() does not declare.",
+            "fail {$wrong}: #[Rest('PATCH', 'posts/{post}/{section}')] binds {chapter}, which its path does not hold.",
+            "fail {$wrong}: #[Rest('PATCH', 'posts/{post}/{section}')] sets created, which only a POST answers.",
+            "fail {$wrong}: #[Rest('POST', 'posts')]'s location names {slug}, which neither outputSchema() nor the path holds.",
+            "fail {$wrong}: #[Rest('PUT', 'posts/{post}/title')] sets a location without created: true, so no answer carries it.",
+        ]);
+    });
+
+    it('fails two web-open actions on one method and path', function () {
+        expect(restRow([ListPosts::class, RestAccountPosts::class]))->toBe([
+            'fail '.RestAccountPosts::class.": #[Rest('GET', 'posts')] takes the method and path of ".ListPosts::class."'s route, so one mount cannot serve both.",
+        ]);
+    });
+
+    it('passes the REST fixtures, whose routes the feature tests serve', function () {
+        expect(restRow([
+            ListPosts::class, CreatePost::class, ShowPost::class,
+            UpdatePost::class, DeletePost::class, PublishPost::class,
+        ]))->toBe([]);
+    });
+
+    it('lets a tenant-scoped and an account-level action share a method and path, which two mounts serve', function () {
+        $this->useTeamTenancy();
+
+        expect(restRow([ListPosts::class, RestAccountPosts::class]))->toBe([]);
+    });
+});
+
+/**
+ * GET posts, outside any tenant.
+ */
+#[Expose(web: true)]
+#[AgenticActions\Attributes\Rest('GET', 'posts')]
+final class RestAccountPosts extends Action
+{
+    protected string $description = 'List my posts.';
+
+    protected ?Effect $effect = Effect::Read;
+
+    protected bool $tenantScoped = false;
+
+    /**
+     * Any signed-in author.
+     */
+    public function authorize(ActionContext $context): bool
+    {
+        return $context->actor !== null;
+    }
+
+    /**
+     * Nothing.
+     *
+     * @return array<string, mixed>
+     */
+    public function handle(): array
+    {
+        return [];
+    }
+}
+
 it('accepts cached mounts that intentionally omit exposed actions', function (string $mount) {
-    config(['agentic-actions.discovery.classes' => [CreateNote::class, ListNotes::class]]);
+    config(['agentic-actions.discovery.classes' => [CreateNote::class, ListNotes::class, ListPosts::class]]);
     $this->refreshActions();
     $this->mountRoutes(fn () => Route::middleware('auth:sanctum')->group(function () use ($mount): void {
         match ($mount) {
             'only' => Actions::routes(only: fn ($entry): bool => $entry->class === ListNotes::class),
             'except' => Actions::routes(except: fn ($entry): bool => $entry->class === CreateNote::class),
+            'rest' => Actions::rest(),
         };
     }));
     foreach (Route::getRoutes()->getRoutes() as $route) {
@@ -125,7 +224,7 @@ it('accepts cached mounts that intentionally omit exposed actions', function (st
     } finally {
         $this->app->instance('routes.cached', false);
     }
-})->with(['only', 'except']);
+})->with(['only', 'except', 'rest']);
 
 it('fails an action that opens the web, changed after route:cache, and has no cached route, while one a filter left out passes', function () {
     $cache = sys_get_temp_dir().'/agentic-actions-routes-'.bin2hex(random_bytes(4)).'.php';

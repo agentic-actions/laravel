@@ -3,6 +3,7 @@
 namespace AgenticActions;
 
 use AgenticActions\Approvals\ApprovalTicket;
+use AgenticActions\Http\RestRegistrar;
 use AgenticActions\Pipeline\ModelDriven;
 use AgenticActions\Pipeline\RunningContexts;
 use AgenticActions\Tenancy\Tenants;
@@ -109,7 +110,8 @@ final class ActionContext
 
     /**
      * The HTTP edge: the request's user, the guard that authenticated it, the tenant route parameter, the locale after
-     * the app's middleware, the Idempotency-Key header and the route's parameters as fixed input.
+     * the app's middleware, the Idempotency-Key header and the route's parameters as fixed input (under the input key a
+     * #[Rest] route binds each to).
      *
      * @throws NotFoundHttpException when the tenant parameter resolves to nothing
      */
@@ -121,6 +123,15 @@ final class ActionContext
         /** @var array<string, mixed> $fixed */
         $fixed = $bound ? $route->originalParameters() : [];
         $tenant = null;
+
+        // A #[Rest] route's path parameter fills the input key its bind map names, such as {post} for post_id.
+        $bindings = $route instanceof Route ? (RestRegistrar::of($route)['bind'] ?? []) : [];
+        $parameters = $fixed;
+        $fixed = [];
+
+        foreach ($parameters as $parameter => $value) {
+            $fixed[$bindings[$parameter] ?? $parameter] = $value;
+        }
         $routeTenant = null;
 
         if (($model = config('agentic-actions.tenant.model')) !== null) {

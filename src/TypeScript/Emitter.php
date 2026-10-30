@@ -6,6 +6,7 @@ use AgenticActions\Action;
 use AgenticActions\Effect;
 use AgenticActions\Exposure\ClassExposure;
 use AgenticActions\Exposure\Entry;
+use AgenticActions\Http\RestRegistrar;
 use AgenticActions\Schema\SchemaReader;
 use AgenticActions\Support\Packages;
 use AgenticActions\Support\Paths;
@@ -165,6 +166,10 @@ final class Emitter
         $action = $entry->action();
         $parameters = $route->parameterNames();
         $path = '/'.ltrim($route->uri(), '/');
+        $rest = RestRegistrar::of($route);
+
+        // The input keys the path fills: a #[Rest] route's bind map names some under another key.
+        $filled = array_map(fn (string $name): string => $rest['bind'][$name] ?? $name, $parameters);
 
         $lines = [];
 
@@ -177,14 +182,18 @@ final class Emitter
             $lines[] = "export type {$prefix}Params = { ".implode('; ', $fields).' };';
         }
 
-        $lines[] = "export type {$prefix}Input = ".$writer->object($this->reader->input($action), $parameters).';';
+        $lines[] = "export type {$prefix}Input = ".$writer->object($this->reader->input($action), $filled).';';
         $lines[] = "export type {$prefix}Output = ".$writer->object($this->reader->output($action)).';';
 
         $signature = ($parameters === [] ? '()' : "(params: {$prefix}Params)")
             .": ActionDefinition<{$prefix}Input, {$prefix}Output> =>";
 
         // A Read's route that answers GET (reads: 'get') is called over GET, so its answer can be revalidated.
-        $method = $entry->effect === Effect::Read && in_array('GET', $route->methods(), true) ? 'get' : 'post';
+        $method = match (true) {
+            $rest !== null => strtolower(array_values(array_diff($route->methods(), ['HEAD']))[0] ?? 'post'),
+            $entry->effect === Effect::Read && in_array('GET', $route->methods(), true) => 'get',
+            default => 'post',
+        };
 
         $call = 'action({ name: '.self::quote($entry->name)
             .", method: '{$method}', url: "
