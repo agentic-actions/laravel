@@ -172,6 +172,18 @@ describe('the pipeline', function () {
             ->and(Post::query()->find($id))->toBeNull();
     });
 
+    it('answers a Precognition request with a draft\'s validation only, as the generated route does', function () {
+        mountRestApi();
+        Sanctum::actingAs($this->user, ['*']);
+
+        $this->postJson('/api/v1/posts', ['title' => str_repeat('x', 41), 'body' => 'x'], ['Precognition' => 'true'])
+            ->assertUnprocessable()->assertJsonValidationErrors(['title']);
+        $this->postJson('/api/v1/posts', ['title' => 'Draft', 'body' => 'x'], ['Precognition' => 'true'])
+            ->assertNoContent()->assertHeader('Precognition', 'true');
+
+        expect(Post::query()->where('title', 'Draft')->exists())->toBeFalse();
+    });
+
     it('answers the generated route\'s refusals: 401, 404 for a missing row, 422 for invalid input, 405 for another method', function () {
         mountRestApi();
 

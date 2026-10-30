@@ -522,7 +522,7 @@ Your reader replaces the default one, so keep the session and Sanctum branches i
 
 ## A public REST API from your actions
 
-The generated routes name the action (`POST /api/actions/publish-post`). A public API usually names the resource instead. `#[Rest]` gives an action a route of that shape, and `Actions::rest()` registers those routes inside your own group. Each one is a generated route, so it runs the same pipeline as `/actions/publish-post`: exposure, the token's ability, the tenant and membership, both `authorize()` steps, validation, rate limits from your group's middleware, the events and the output schema.
+The generated routes name the action (`POST /api/actions/publish-post`). A public API usually names the resource instead. `#[Rest]` gives an action a route of that shape, and `Actions::rest()` registers those routes inside your own group. Each one is a generated route, so it runs the same pipeline as `/actions/publish-post`: exposure, the token's ability, the tenant and membership, both `authorize()` steps, validation, rate limits from your group's middleware, the events and the output schema. A `Precognition: true` request validates a draft without running it, as on a generated route. As there, a `GET` route answers 405 to a request that carries a session, so mount `Actions::rest()` in a token group.
 
 ```php
 use AgenticActions\Attributes\Expose;

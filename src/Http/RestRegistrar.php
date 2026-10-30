@@ -12,6 +12,7 @@ use AgenticActions\Exposure\Entry;
 use AgenticActions\Schema\SchemaReader;
 use AgenticActions\Surface;
 use Closure;
+use Illuminate\Foundation\Http\Middleware\HandlePrecognitiveRequests;
 use Illuminate\Routing\Route as RoutingRoute;
 use Illuminate\Support\Facades\Route;
 use ReflectionClass;
@@ -20,7 +21,8 @@ use Throwable;
 /**
  * Registers the #[Rest] routes of the web-exposed actions inside whatever group calls it, named {group name}rest.{action}
  * (rest.{action}.2 and on for an alias). Each one is a generated route, so it runs the pipeline the generated route
- * runs, re-reading the class on every call; the route action carries what the responder and the context read.
+ * runs, Precognition included, re-reading the class on every call; the route action carries what the responder and
+ * the context read.
  *
  * @internal
  */
@@ -75,6 +77,7 @@ final class RestRegistrar
                 $taken[$label] = $entry->class;
 
                 $route = Route::match([$verb], $rest->uri(), $entry->class)
+                    ->middleware(HandlePrecognitiveRequests::class)
                     ->name('rest.'.$entry->segment().($index === 0 ? '' : '.'.($index + 1)));
 
                 $route->setAction([...$route->getAction(), ActionRequest::GENERATED => true, self::KEY => [
