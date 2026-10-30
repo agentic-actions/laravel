@@ -44,6 +44,7 @@ use AgenticActions\Views\ShowsTable;
 use AgenticActions\Views\Table;
 use Carbon\CarbonInterval;
 use Illuminate\Auth\Middleware\Authenticate;
+use Illuminate\Auth\Middleware\AuthenticateWithBasicAuth;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Contracts\Foundation\CachesRoutes;
 use Illuminate\Database\Connection;
@@ -766,8 +767,8 @@ final class Checks
     }
 
     /**
-     * Routes: cached routes whose actions no longer open the web, and an action with a generated route and a
-     * hand-written one. Missing routes may be intentional: mounts can filter actions.
+     * Routes: cached routes whose actions no longer open the web, an action that changed after the cache was written
+     * and has no cached route, and an action with a generated route and a hand-written one.
      *
      * @param  list<Route>  $routes
      * @return list<Finding>
@@ -779,14 +780,28 @@ final class Checks
         $findings = [];
 
         if ($this->app instanceof CachesRoutes && $this->app->routesAreCached()) {
+            $served = [];
+
             foreach ($generated as $route) {
                 $class = (string) $route->getControllerClass();
+                $served[$class] = true;
 
                 if (! ($entries[$class] ?? null)?->allows(Surface::Http)) {
                     $findings[] = self::fail('Routes', 'The cached route ['.self::routeName($route)."] serves {$class}, which the actions on disk no longer open on the web: run php artisan route:cache again.");
                 }
             }
 
+            // A mount's filters may leave an action out, so only one whose file changed since the cache was written
+            // can be missing from a stale cache.
+            $cachedAt = is_file($path = $this->app->getCachedRoutesPath()) ? filemtime($path) : false;
+
+            foreach ($generated === [] || $cachedAt === false ? [] : $entries as $class => $entry) {
+                $file = (new ReflectionClass($class))->getFileName();
+
+                if ($entry->allows(Surface::Http) && ! isset($served[$class]) && $file !== false && filemtime($file) > $cachedAt) {
+                    $findings[] = self::fail('Routes', "{$class} opens on the web and changed after the routes were cached, and no cached route serves it: run php artisan route:cache again.");
+                }
+            }
         }
 
         foreach ($entries as $class => $entry) {
@@ -823,8 +838,8 @@ final class Checks
     }
 
     /**
-     * Why a route's middleware gives it a session: StartSession, or an auth middleware naming a session guard. Null
-     * when neither does.
+     * Why a route's middleware gives it a credential a browser sends by itself: StartSession, Sanctum's stateful
+     * middleware, HTTP basic auth, or an auth middleware naming a session guard. Null when none does.
      */
     private function session(Route $route): ?string
     {
@@ -843,6 +858,10 @@ final class Checks
 
             if (is_a($class, EnsureFrontendRequestsAreStateful::class, true)) {
                 return 'its group can start a Sanctum session';
+            }
+
+            if (is_a($class, AuthenticateWithBasicAuth::class, true)) {
+                return 'it authenticates with HTTP basic auth, which a browser sends again by itself';
             }
 
             if (is_a($class, Authenticate::class, true)) {

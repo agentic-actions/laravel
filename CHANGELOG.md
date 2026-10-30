@@ -4,7 +4,7 @@
 
 ### Added
 
-- **Reads over GET, on the mounts that ask for it.** `Actions::routes(reads: 'get')` lets each Read's route answer `GET` and `HEAD` as well as `POST`, at the same URL, with the query string as the input; every other effect stays `POST` only, and a `GET` to it answers 405. The defaults are unchanged: every generated route is still `POST` only. Mount it in a token group only: `actions:check` fails a `GET` route whose group starts a session or authenticates with a session guard, since `GET` skips the CSRF check and a link on another site sends a `SameSite=Lax` cookie ([reads over GET](docs/concepts.md#reads-over-get)).
+- **Reads over GET, on the mounts that ask for it.** `Actions::routes(reads: 'get')` lets each Read's route answer `GET` and `HEAD` as well as `POST`, at the same URL, with the query string as the input; every other effect stays `POST` only, and a `GET` to it answers 405. The defaults are unchanged: every generated route is still `POST` only. It is for a token group: since `GET` skips the CSRF check and a link on another site sends a `SameSite=Lax` cookie, a generated route answers `GET` and `HEAD` with 405 to a request that carries a session or whose guard keeps one, and `actions:check` fails a `GET` route whose group starts a session (Sanctum's stateful middleware included) or authenticates with a session guard or HTTP basic auth ([reads over GET](docs/concepts.md#reads-over-get)).
 - **Conditional answers for a Read over GET.** The answer to `GET` and `HEAD` carries a weak `ETag` over its body, `Cache-Control: private, no-cache` (or `private, max-age=…` with the new `routes.max_age`) and `Vary: Authorization, Accept-Language`, and is a 304 without a body when `If-None-Match` names the tag. The tag is built after every check, so a refused caller gets their refusal. A `POST` answers as before.
 - **`only` and `except` on `Actions::routes()`.** Each receives the action's exposure entry and keeps (`only`) or drops (`except`) the action on that mount, such as a token API that serves Reads only. A filter only narrows what `#[Expose]` opens ([which actions a mount serves](docs/concepts.md#which-actions-a-mount-serves)).
 - **`actions:check` fails two routes that share a name when one of them is the package's**, such as two `Actions::routes()` groups without their own name prefix, which `route:cache` refuses.
@@ -13,11 +13,7 @@
 ### Changed
 
 - **A Read's answer to GET or HEAD on a route you wrote yourself is conditional too**: it gains the `ETag`, `Cache-Control: private, no-cache` and `Vary` headers above, and answers 304 to a matching `If-None-Match`.
-
-### Fixed
-
-- The GET session check also rejects mounts using Sanctum's stateful frontend middleware.
-- Cached-route checks permit actions intentionally omitted by filters while still rejecting cached routes whose actions no longer expose the web.
+- **`actions:check` no longer fails every web-exposed action without a cached route**, since a mount's `only` or `except` may leave one out: with routes cached, it fails one only when the action's file changed after the cache was written.
 
 ## 0.9.0-beta.6 - 2026-10-14
 
