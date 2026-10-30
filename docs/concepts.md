@@ -689,7 +689,7 @@ Each Read's route then answers `GET`, `HEAD` and `POST` at the same URL (`GET /a
 - `Vary: Authorization, Accept-Language`;
 - 304 without a body when the request's `If-None-Match` names the tag. The action still runs: the tag is the body's, so a 304 saves the transfer, not the query.
 
-A `POST` to the same route answers as before, with no tag. Laravel's CSRF check lets `GET` through, and a browser sends a `SameSite=Lax` session cookie on a link from another site, so `reads: 'get'` belongs only in a token group: `actions:check` fails a `GET` route whose group starts a session or authenticates with a session guard, such as the `web` group or a bare `auth` on the default `web` guard. A browser prefetch, a link preview or a crawler that follows a URL gets a 401 there, since it sends no token. A Read that adds rows in [`initialize()`](#a-read-that-creates-its-own-state) adds them on `GET` as on `POST`.
+A `POST` to the same route answers as before, with no tag. Laravel's CSRF check lets `GET` through, and a browser sends a `SameSite=Lax` session cookie on a link from another site, so `reads: 'get'` belongs only in a token group: `actions:check` fails a `GET` route whose group starts a session or authenticates with a session guard, including the `web` group, a bare `auth` on the default `web` guard, or Sanctum’s `EnsureFrontendRequestsAreStateful` middleware (enabled by `statefulApi()`). Keep that middleware off token-only GET groups. A browser prefetch, a link preview or a crawler that follows a URL gets a 401 there, since it sends no token. A Read that adds rows in [`initialize()`](#a-read-that-creates-its-own-state) adds them on `GET` as on `POST`.
 
 A query string carries text, so some input reads differently than in a JSON body:
 
@@ -719,7 +719,7 @@ Route::middleware('auth:sanctum')
     ));
 ```
 
-A filter only narrows: an action still needs `#[Expose]` to open the web, and the tenant split still applies. It runs when the routes register, so `route:cache` keeps its result, and the call itself is checked as on any generated route. An action no mount serves shows `open, no route yet` in `actions:list`.
+A filter only narrows: an action still needs `#[Expose]` to open the web, and the tenant split still applies. It runs when the routes register, so `route:cache` keeps its result, and the call itself is checked as on any generated route. An action no mount serves shows `open, no route yet` in `actions:list`. `actions:check` permits these omissions even with routes cached; it still fails a cached route whose action no longer opens the web.
 
 ### A tenant-scoped action
 

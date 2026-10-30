@@ -97,3 +97,24 @@ describe('shared names', function () {
         ]);
     });
 });
+
+it('accepts cached mounts that intentionally omit exposed actions', function (string $mount) {
+    config(['agentic-actions.discovery.classes' => [CreateNote::class, ListNotes::class]]);
+    $this->refreshActions();
+    $this->mountRoutes(fn () => Route::middleware('auth:sanctum')->group(function () use ($mount): void {
+        match ($mount) {
+            'only' => Actions::routes(only: fn ($entry): bool => $entry->class === ListNotes::class),
+            'except' => Actions::routes(except: fn ($entry): bool => $entry->class === CreateNote::class),
+        };
+    }));
+    foreach (Route::getRoutes()->getRoutes() as $route) {
+        $route->prepareForSerialization();
+    }
+    app('router')->setCompiledRoutes(Route::getRoutes()->compile());
+    $this->app->instance('routes.cached', true);
+    try {
+        expect(routesRow())->toBe([]);
+    } finally {
+        $this->app->instance('routes.cached', false);
+    }
+})->with(['only', 'except']);

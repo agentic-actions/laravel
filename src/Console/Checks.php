@@ -71,6 +71,7 @@ use Laravel\Passport\Passport;
 use Laravel\Sanctum\HasApiTokens;
 use Laravel\Sanctum\Http\Middleware\CheckAbilities;
 use Laravel\Sanctum\Http\Middleware\CheckForAnyAbility;
+use Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful;
 use Laravel\Sanctum\Sanctum;
 use ReflectionAttribute;
 use ReflectionClass;
@@ -765,7 +766,8 @@ final class Checks
     }
 
     /**
-     * Routes: a cached route set older than the actions, and an action with a generated route and a hand-written one.
+     * Routes: cached routes whose actions no longer open the web, and an action with a generated route and a
+     * hand-written one. Missing routes may be intentional: mounts can filter actions.
      *
      * @param  list<Route>  $routes
      * @return list<Finding>
@@ -777,24 +779,14 @@ final class Checks
         $findings = [];
 
         if ($this->app instanceof CachesRoutes && $this->app->routesAreCached()) {
-            $served = [];
-
             foreach ($generated as $route) {
                 $class = (string) $route->getControllerClass();
-                $served[$class] = true;
 
                 if (! ($entries[$class] ?? null)?->allows(Surface::Http)) {
                     $findings[] = self::fail('Routes', 'The cached route ['.self::routeName($route)."] serves {$class}, which the actions on disk no longer open on the web: run php artisan route:cache again.");
                 }
             }
 
-            if ($generated !== []) {
-                foreach ($entries as $class => $entry) {
-                    if ($entry->allows(Surface::Http) && ! isset($served[$class])) {
-                        $findings[] = self::fail('Routes', "{$class} opens on the web but has no cached generated route: run php artisan route:cache again.");
-                    }
-                }
-            }
         }
 
         foreach ($entries as $class => $entry) {
@@ -847,6 +839,10 @@ final class Checks
 
             if (is_a($class, StartSession::class, true)) {
                 return 'its group starts a session';
+            }
+
+            if (is_a($class, EnsureFrontendRequestsAreStateful::class, true)) {
+                return 'its group can start a Sanctum session';
             }
 
             if (is_a($class, Authenticate::class, true)) {

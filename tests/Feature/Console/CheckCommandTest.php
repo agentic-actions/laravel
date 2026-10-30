@@ -521,7 +521,6 @@ describe('route rows', function () {
         expect($this->app->routesAreCached())->toBeFalse()
             ->and($findings)->toBe([
                 ['fail', 'Routes', 'The cached route [plain-note] serves '.PlainNote::class.', which the actions on disk no longer open on the web: run php artisan route:cache again.'],
-                ['fail', 'Routes', ListNotes::class.' opens on the web but has no cached generated route: run php artisan route:cache again.'],
             ]);
     });
 
