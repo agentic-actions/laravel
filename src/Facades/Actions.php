@@ -6,7 +6,7 @@ use AgenticActions\ActionsManager;
 use Illuminate\Support\Facades\Facade;
 
 /**
- * @method static void routes(?bool $tenant = null)
+ * @method static void routes(?bool $tenant = null, string $reads = 'post', \Closure|null $only = null, \Closure|null $except = null)
  * @method static list<\AgenticActions\Ai\ActionTool> tools(\AgenticActions\ActionContext $context, list<string> $toolsets, \Laravel\Ai\Contracts\Agent|null $agent = null)
  * @method static \AgenticActions\Streaming\ConversationSlot conversation(\Laravel\Ai\Contracts\Agent|string $agent, \Illuminate\Database\Eloquent\Model $participant, \Illuminate\Database\Eloquent\Model|null $tenant = null)
  * @method static \AgenticActions\Outcome attempt(string $action, array<string, mixed> $input, \AgenticActions\ActionContext $context)

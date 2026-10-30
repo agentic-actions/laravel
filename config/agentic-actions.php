@@ -43,12 +43,16 @@ return [
     |
     | Actions::routes() registers POST {group prefix}/{path}/{action} named
     | {group name prefix}{name}{action} inside whatever group calls it.
+    | With reads: 'get', a Read also answers GET with a weak ETag and
+    | "Cache-Control: private, no-cache"; "max_age" (seconds) lets the
+    | caller reuse an answer that long without asking again.
     |
     */
 
     'routes' => [
         'path' => 'actions',
         'name' => 'actions.',
+        'max_age' => 0,
     ],
 
     /*

@@ -668,7 +668,58 @@ Route::middleware('auth:sanctum')
 Route::middleware('auth:sanctum')->name('api.')->group(fn () => Actions::routes(tenant: false));
 ```
 
-A token bound with `tenant:{key}` then reaches only its own team's `api/teams/{team}` routes: never another team's, and never the account-level group. Give each `Actions::routes()` group its own name prefix, as these do. Every group gains the change feed's route, named `_changes` within the group, so two groups under one name prefix share a route name, which `route:cache` refuses. `actions:check` fails a tenant-scoped action whose generated route has no `{team}`.
+A token bound with `tenant:{key}` then reaches only its own team's `api/teams/{team}` routes: never another team's, and never the account-level group. Give each `Actions::routes()` group its own name prefix, as these do. Every group gains the change feed's route, named `_changes` within the group, so two groups under one name prefix share a route name, which `route:cache` refuses. `actions:check` fails a tenant-scoped action whose generated route has no `{team}`, and every pair of routes that share a name when one of them is the package's.
+
+### Reads over GET
+
+A token mount can let its Read actions answer `GET` too, so a client, a proxy or a browser can revalidate an answer instead of downloading it again:
+
+```php
+// routes/api.php
+Route::middleware('auth:sanctum')
+    ->prefix('v1')
+    ->name('api.v1.')
+    ->group(fn () => Actions::routes(reads: 'get'));
+```
+
+Each Read's route then answers `GET`, `HEAD` and `POST` at the same URL (`GET /api/v1/actions/list-posts?status=draft`); every other effect stays `POST` only, and a `GET` to it answers 405. The query string is the input, and runs through the same pipeline a body does: exposure, the token's ability, membership, both `authorize()` steps, coercion and validation. The answer to `GET` and `HEAD` carries:
+
+- a weak `ETag` over the body, built once every check has passed, so a caller the checks refuse gets their refusal, never a 304;
+- `Cache-Control: private, no-cache`, so no shared cache keeps it and every use is revalidated; set `routes.max_age` (seconds) to let the caller reuse an answer that long without asking (`private, max-age=60`);
+- `Vary: Authorization, Accept-Language`;
+- 304 without a body when the request's `If-None-Match` names the tag. The action still runs: the tag is the body's, so a 304 saves the transfer, not the query.
+
+A `POST` to the same route answers as before, with no tag. Laravel's CSRF check lets `GET` through, and a browser sends a `SameSite=Lax` session cookie on a link from another site, so `reads: 'get'` belongs only in a token group: `actions:check` fails a `GET` route whose group starts a session or authenticates with a session guard, such as the `web` group or a bare `auth` on the default `web` guard. A browser prefetch, a link preview or a crawler that follows a URL gets a 401 there, since it sends no token. A Read that adds rows in [`initialize()`](#a-read-that-creates-its-own-state) adds them on `GET` as on `POST`.
+
+A query string carries text, so some input reads differently than in a JSON body:
+
+- `?ids[0]=1&ids[1]=2` is a list and `?author[name]=Ann` an object, in PHP's bracket form; an empty list or object cannot be sent;
+- `?drafts=1` and `?drafts=0` are booleans, and numbers are coerced from text, as on a form;
+- `?title=` arrives as `null` under Laravel's `ConvertEmptyStringsToNull` middleware, which the `api` group runs by default, and as `''` without it, so a field cannot tell an empty string from null;
+- a file cannot be sent.
+
+The npm client sends a definition with `method: 'get'` this way ([callAction()](client.md#callaction)), and `actions:typescript` exports a Read whose chosen route answers `GET` with that method.
+
+### Which actions a mount serves
+
+`only` and `except` keep a mount to some of the actions it would otherwise serve. Each receives the action's exposure entry and returns `true` to keep it (`only`) or to leave it out (`except`); anything but `true` counts as no. The entry's `class`, `name`, `effect`, `tenantScoped` and `touches` are the properties a filter may read:
+
+```php
+use AgenticActions\Effect;
+use AgenticActions\Exposure\Entry;
+
+// A read-only API, without the reports.
+Route::middleware('auth:sanctum')
+    ->prefix('v1')
+    ->name('api.v1.')
+    ->group(fn () => Actions::routes(
+        reads: 'get',
+        only: fn (Entry $action): bool => $action->effect === Effect::Read,
+        except: fn (Entry $action): bool => str_starts_with($action->name, 'report-'),
+    ));
+```
+
+A filter only narrows: an action still needs `#[Expose]` to open the web, and the tenant split still applies. It runs when the routes register, so `route:cache` keeps its result, and the call itself is checked as on any generated route. An action no mount serves shows `open, no route yet` in `actions:list`.
 
 ### A tenant-scoped action
 
@@ -780,7 +831,7 @@ When an agent streams its turn through `ActionsProtocol`, each call of an action
 
 | Method | Use |
 |---|---|
-| `routes(?bool $tenant = null)` | One POST route per web-exposed action inside the calling route group: `true` mounts the tenant-scoped actions, `false` the others, null all. See [Setup](setup.md). |
+| `routes(?bool $tenant = null, string $reads = 'post', ?Closure $only = null, ?Closure $except = null)` | One POST route per web-exposed action inside the calling route group: `true` mounts the tenant-scoped actions, `false` the others, null all. `reads: 'get'` lets each Read answer GET too ([reads over GET](#reads-over-get)), and `only` and `except` filter the actions ([which actions a mount serves](#which-actions-a-mount-serves)). See [Setup](setup.md). |
 | `attempt($action, $input, $context)` | Runs the pipeline in-process and returns an [`Outcome`](#the-pipeline). |
 | `tools(ActionContext $context, array $toolsets, ?Agent $agent = null)` | The action tools of these toolsets for an agent that does not use `InteractsWithActions` (below). |
 | `conversation($agent, $participant, $tenant = null)` | The conversation a person continues with an agent in a tenant. See [the copilot](copilot.md#one-conversation-per-tenant). |

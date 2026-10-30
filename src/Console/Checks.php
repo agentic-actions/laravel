@@ -54,6 +54,7 @@ use Illuminate\Routing\Attributes\Controllers\Authorize;
 use Illuminate\Routing\Attributes\Controllers\Middleware;
 use Illuminate\Routing\Route;
 use Illuminate\Routing\Router;
+use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Exists;
@@ -162,6 +163,8 @@ final class Checks
             ...$this->approvals($scan, $subjects),
             ...$this->pageContext($scan),
             ...$this->routes($scan, $routes),
+            ...$this->sessionReads($routes),
+            ...$this->sharedNames($routes),
             ...$this->rulesSkipped($subjects),
             ...$this->modelInput($subjects, $routes),
             ...$this->modelOutput($subjects),
@@ -800,6 +803,90 @@ final class Checks
 
             if ($handWritten !== [] && count($handWritten) < count($own)) {
                 $findings[] = self::fail('Routes', "{$class} has a generated route and a hand-written one [".implode(', ', array_map(self::routeName(...), $handWritten)).']: keep one.');
+            }
+        }
+
+        return $findings;
+    }
+
+    /**
+     * Routes: a generated route that answers GET in a group that starts a session or authenticates with a session
+     * guard. A GET skips the CSRF check, and a browser sends a SameSite=Lax cookie on a top-level GET from another
+     * site, so such a route would run a Read (and its initialize()) for any page that links to it.
+     *
+     * @param  list<Route>  $routes
+     * @return list<Finding>
+     */
+    private function sessionReads(array $routes): array
+    {
+        $findings = [];
+
+        foreach (self::generated($routes) as $route) {
+            if (in_array('GET', $route->methods(), true) && ($why = $this->session($route)) !== null) {
+                $findings[] = self::fail('Routes', 'The generated route ['.self::routeName($route)."] answers GET, and {$why}: a GET skips the CSRF check, and a link on another site sends the session cookie. Mount reads: 'get' only in a token group, such as Route::middleware('auth:sanctum') in routes/api.php.");
+            }
+        }
+
+        return $findings;
+    }
+
+    /**
+     * Why a route's middleware gives it a session: StartSession, or an auth middleware naming a session guard. Null
+     * when neither does.
+     */
+    private function session(Route $route): ?string
+    {
+        try {
+            $middleware = array_filter($this->router->gatherRouteMiddleware($route), is_string(...));
+        } catch (Throwable) {
+            return null;
+        }
+
+        foreach ($middleware as $item) {
+            [$class, $parameters] = array_pad(explode(':', $item, 2), 2, '');
+
+            if (is_a($class, StartSession::class, true)) {
+                return 'its group starts a session';
+            }
+
+            if (is_a($class, Authenticate::class, true)) {
+                foreach ($parameters === '' ? [(string) config('auth.defaults.guard')] : explode(',', $parameters) as $guard) {
+                    if (config("auth.guards.{$guard}.driver") === 'session') {
+                        return "it authenticates with the session guard [{$guard}]";
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Routes: two routes under one name, where one is a route the package registers (an action's, the change feed's or
+     * the tables' refresh). route:cache refuses the pair, and route() reaches only one of them.
+     *
+     * @param  list<Route>  $routes
+     * @return list<Finding>
+     */
+    private function sharedNames(array $routes): array
+    {
+        $byName = [];
+
+        foreach ($routes as $route) {
+            if (($name = $route->getName()) !== null && $name !== '') {
+                $byName[$name][] = $route;
+            }
+        }
+
+        $findings = [];
+
+        foreach ($byName as $name => $named) {
+            $ours = array_filter($named, fn (Route $route): bool => $route->getAction(ActionRequest::GENERATED) === true
+                || in_array(ltrim((string) $route->getControllerClass(), '\\'), [ChangesController::class, RefreshView::class], true));
+
+            if (count($named) > 1 && $ours !== []) {
+                $uris = implode(', ', array_map(fn (Route $route): string => implode('|', $route->methods()).' '.$route->uri(), $named));
+                $findings[] = self::fail('Routes', "The routes [{$uris}] share the name [{$name}], which route:cache refuses. Give each Actions::routes() group its own name prefix, such as ->name('api.v1.').");
             }
         }
 

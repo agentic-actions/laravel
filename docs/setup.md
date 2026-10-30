@@ -97,7 +97,7 @@ A `handle()` that returns `void` makes `run()` return `null`. A class whose `han
 | Packages | none |
 | Tables | none of the package's |
 | Routes | `Route::middleware('auth')->group(fn () => Actions::routes());` in `routes/web.php`. Each group also gains the change feed's `POST …/actions/_changes` |
-| Config and env | `discovery.paths` (default `app`); `routes.path` (default `actions`) and `routes.name` (default `actions.`), which make each route `POST {group prefix}/{routes.path}/{action}`, named `{group name}{routes.name}{action}`, such as `api.actions.create-post`; `AGENTIC_ACTIONS_WEB=false` turns the surface off |
+| Config and env | `discovery.paths` (default `app`); `routes.path` (default `actions`) and `routes.name` (default `actions.`), which make each route `POST {group prefix}/{routes.path}/{action}`, named `{group name}{routes.name}{action}`, such as `api.actions.create-post`; `routes.max_age` (default 0), how long a caller may reuse a Read's answer to GET; `AGENTIC_ACTIONS_WEB=false` turns the surface off |
 | Install flag | `--web` |
 
 ### Token clients over HTTP
@@ -106,7 +106,7 @@ A `handle()` that returns `void` makes `run()` return `null`. A class whose `han
 |---|---|
 | Packages | `laravel/sanctum`, through `php artisan install:api` |
 | Tables | `personal_access_tokens`, from Sanctum's migration, which `install:api` publishes |
-| Routes | `Route::middleware('auth:sanctum')->name('api.')->group(fn () => Actions::routes());` in `routes/api.php` |
+| Routes | `Route::middleware('auth:sanctum')->name('api.')->group(fn () => Actions::routes());` in `routes/api.php`; `Actions::routes(reads: 'get')` lets its Reads answer GET with an ETag ([reads over GET](concepts.md#reads-over-get)) |
 | Config and env | `abilities.*`; the `HasApiTokens` trait on your `User` model |
 | Install flag | none: run `php artisan install:api` (`--mcp` runs it too) |
 

@@ -33,7 +33,7 @@ it('keeps a partial group\'s other defaults, and a null the app sets', function 
         ->and(config('agentic-actions.agents.forbidden_output_keys'))->toBe([])
         ->and(config('agentic-actions.agents.max_tools'))->toBe(20)
         ->and(config('agentic-actions.agents.max_message_length'))->toBe(4000)
-        ->and(config('agentic-actions.routes'))->toBe(['path' => 'actions', 'name' => 'actions.'])
+        ->and(config('agentic-actions.routes'))->toBe(['path' => 'actions', 'name' => 'actions.', 'max_age' => 0])
         ->and(config('agentic-actions.reads.guard'))->toBeTrue()
         ->and(config('agentic-actions.mcp'))->toBe([
             'path' => null,

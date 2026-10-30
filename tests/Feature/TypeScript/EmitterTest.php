@@ -1,5 +1,6 @@
 <?php
 
+use AgenticActions\Facades\Actions;
 use AgenticActions\TypeScript\Emitter;
 use Illuminate\Routing\RouteCollection;
 use Illuminate\Support\Facades\File;
@@ -160,6 +161,26 @@ it('takes the first generated route when none is in the web group', function () 
     expect(app(Emitter::class)->render())
         ->toContain("url: '/internal/create-note'")
         ->not->toContain('/api/create-note');
+});
+
+it('calls a Read over GET where its route answers GET, and keeps POST where the web mount names it', function () {
+    $this->mountRoutes(fn () => Route::middleware(['api', 'auth:sanctum'])->prefix('api/v1')->name('api.v1.')
+        ->group(fn () => Actions::routes(reads: 'get')));
+
+    expect(app(Emitter::class)->render())
+        ->toContain("action({ name: 'list-notes', method: 'get', url: '/api/v1/actions/list-notes', touches: [] });")
+        ->toContain("action({ name: 'create-note', method: 'post', url: '/api/v1/actions/create-note', touches: [] });");
+
+    Route::setRoutes(new RouteCollection);
+
+    $this->mountRoutes(function (): void {
+        Route::middleware(['api', 'auth:sanctum'])->prefix('api/v1')->name('api.v1.')->group(fn () => Actions::routes(reads: 'get'));
+        Route::middleware(['web', 'auth'])->group(fn () => Actions::routes());
+    });
+
+    expect(app(Emitter::class)->render())
+        ->toContain("action({ name: 'list-notes', method: 'post', url: '/actions/list-notes', touches: [] });")
+        ->not->toContain('/api/v1/');
 });
 
 it('exports named hand-written routes as extras, by route name', function () {

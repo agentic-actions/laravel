@@ -86,14 +86,21 @@ final class Responder implements RendersOutcomes
     }
 
     /**
-     * A success: the projected output as JSON (always for a Read), else a flash and a 303 redirect.
+     * A success: the projected output as JSON (always for a Read, conditional on GET and HEAD), else a flash and a 303
+     * redirect.
      */
     private function completed(ActionRequest $request, Outcome $outcome): Response
     {
         $entry = $outcome->entry();
         $output = $outcome->output() ?? [];
 
-        if ($entry->effect === Effect::Read || self::wantsJson($request)) {
+        if ($entry->effect === Effect::Read) {
+            $response = response()->json($output ?: new stdClass, 200);
+
+            return $request->isMethodCacheable() ? self::conditional($request, $response) : $response;
+        }
+
+        if (self::wantsJson($request)) {
             return response()->json($output ?: new stdClass, 200);
         }
 
@@ -110,6 +117,25 @@ final class Responder implements RendersOutcomes
         $to = $this->action($request, $entry)->redirectTo($outcome->result(), $outcome->context());
 
         return redirect($to ?? url()->previous(), 303);
+    }
+
+    /**
+     * A Read's answer to GET or HEAD: a weak ETag over the body, kept private to the caller and revalidated on every
+     * use unless routes.max_age allows a while, varying with the token and the language; 304 without the body when the
+     * caller's If-None-Match names it. Built from the projected output, so only after every check has passed.
+     */
+    private static function conditional(Request $request, Response $response): Response
+    {
+        $response->setEtag(hash('xxh128', (string) $response->getContent()), true);
+
+        $maxAge = max(0, (int) config('agentic-actions.routes.max_age', 0));
+        $response->headers->set('Cache-Control', $maxAge > 0 ? "private, max-age={$maxAge}" : 'private, no-cache');
+        // One header line: middleware that appends to Vary, such as Precognition's, reads only the first.
+        $response->headers->set('Vary', implode(', ', array_unique([...$response->getVary(), 'Authorization', 'Accept-Language'])));
+
+        $response->isNotModified($request);
+
+        return $response;
     }
 
     /**

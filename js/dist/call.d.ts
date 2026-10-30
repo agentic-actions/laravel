@@ -1,6 +1,6 @@
 import { type ActionDefinition } from './action.js';
 export type CallOptions = {
-    /** Reused by a caller that retries; a fresh newKey() otherwise. */
+    /** Reused by a caller that retries; a fresh newKey() otherwise. Never sent on a GET, which writes nothing. */
     idempotencyKey?: string;
     headers?: Record<string, string>;
     /** Default 'same-origin'. 'include' is the Sanctum SPA on another origin. */
@@ -10,7 +10,8 @@ export type CallOptions = {
     fetch?: typeof fetch;
 };
 /**
- * Call an action and resolve its output. Always sends Accept: application/json. Never retries on its own.
+ * Call an action and resolve its output. Always sends Accept: application/json. Never retries on its own. A GET sends the
+ * input as the query string, without an Idempotency-Key or X-XSRF-TOKEN; every other method sends it as the body.
  *
  * @throws ActionValidationError | ActionRefusedError | ActionFailedError, or fetch's own network error
  */

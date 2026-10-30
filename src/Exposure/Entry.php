@@ -17,6 +17,9 @@ use ReflectionClass;
 /**
  * Static facts about one action: what the manifest stores and what ClassExposure re-reads.
  *
+ * A route filter (Actions::routes(only: ..., except: ...)) receives one, and may read its $class, $name, $effect,
+ * $tenantScoped and $touches: those properties keep their meaning across releases. Everything else stays internal.
+ *
  * @internal
  */
 final class Entry
