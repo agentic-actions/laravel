@@ -9,6 +9,7 @@ use AgenticActions\Exposure\Entry;
 use AgenticActions\Outcome;
 use AgenticActions\Pipeline\OutcomeKind;
 use AgenticActions\Refusal;
+use AgenticActions\Schema\SchemaReader;
 use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Foundation\Exceptions\Handler;
 use Illuminate\Http\Request;
@@ -100,6 +101,10 @@ final class Responder implements RendersOutcomes
             return $request->isMethodCacheable() ? self::conditional($request, $response) : $response;
         }
 
+        if (($rest = RestRegistrar::of($route = $request->route() instanceof Route ? $request->route() : null)) !== null && $route !== null) {
+            return self::rest($request, $route, $rest, $outcome);
+        }
+
         if (self::wantsJson($request)) {
             return response()->json($output ?: new stdClass, 200);
         }
@@ -117,6 +122,59 @@ final class Responder implements RendersOutcomes
         $to = $this->action($request, $entry)->redirectTo($outcome->result(), $outcome->context());
 
         return redirect($to ?? url()->previous(), 303);
+    }
+
+    /**
+     * A #[Rest] route's success, always JSON: 201 with its Location for a create, 204 for an action that declares no
+     * output, else 200.
+     *
+     * @param  array{bind: array<string, string>, created: bool, location: string|null, path: string}  $rest
+     */
+    private static function rest(Request $request, Route $route, array $rest, Outcome $outcome): Response
+    {
+        $output = $outcome->output() ?? [];
+        $status = RestRegistrar::status($outcome->entry(), $rest, app(SchemaReader::class)->output($outcome->entry()->action()));
+
+        if ($status === 204) {
+            return response()->noContent();
+        }
+
+        $response = response()->json($output ?: new stdClass, $status);
+
+        if ($status === 201 && $rest['location'] !== null && ($location = self::location($route, $rest, $output)) !== null) {
+            $response->headers->set('Location', $location);
+        }
+
+        return $response;
+    }
+
+    /**
+     * The Location of a create: the route's group prefix, then $location with each {key} filled from the output's
+     * top-level values or, first, the route's parameters, URL-encoded. Null when a key has no value.
+     *
+     * @param  array{location: string|null, path: string}  $rest
+     * @param  array<string, mixed>  $output
+     */
+    private static function location(Route $route, array $rest, array $output): ?string
+    {
+        $uri = $route->uri();
+        $prefix = rtrim(substr($uri, 0, strlen($uri) - strlen($rest['path'])), '/');
+        $values = [...$output, ...$route->originalParameters()];
+        $missing = false;
+
+        $path = preg_replace_callback('/\{(\w+)\}/', function (array $match) use ($values, &$missing): string {
+            $value = $values[$match[1]] ?? null;
+
+            if (! is_int($value) && ! is_string($value) || $value === '') {
+                $missing = true;
+
+                return '';
+            }
+
+            return rawurlencode((string) $value);
+        }, $prefix.'/'.ltrim((string) $rest['location'], '/'));
+
+        return $missing || $path === null ? null : url($path);
     }
 
     /**

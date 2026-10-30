@@ -21,6 +21,7 @@ use AgenticActions\Exceptions\UnsupportedSchema;
 use AgenticActions\Exposure\Entry;
 use AgenticActions\Feed\ChangesController;
 use AgenticActions\Http\ActionRequest;
+use AgenticActions\Http\RestRegistrar;
 use AgenticActions\Mcp\McpMount;
 use AgenticActions\MissingContext;
 use AgenticActions\OAuth\Discovery;
@@ -165,6 +166,7 @@ final class Checks
             ...$this->routes($scan, $routes),
             ...$this->sessionReads($routes),
             ...$this->sharedNames($routes),
+            ...$this->rest($subjects),
             ...$this->rulesSkipped($subjects),
             ...$this->modelInput($subjects, $routes),
             ...$this->modelOutput($subjects),
@@ -887,6 +889,95 @@ final class Checks
             if (count($named) > 1 && $ours !== []) {
                 $uris = implode(', ', array_map(fn (Route $route): string => implode('|', $route->methods()).' '.$route->uri(), $named));
                 $findings[] = self::fail('Routes', "The routes [{$uris}] share the name [{$name}], which route:cache refuses. Give each Actions::routes() group its own name prefix, such as ->name('api.v1.').");
+            }
+        }
+
+        return $findings;
+    }
+
+    /**
+     * REST: each #[Rest] route against the action. GET for a Read only, DELETE for a Destructive action only, POST, PUT
+     * and PATCH for anything but a Read; the web open; every path parameter an input key of schema(), and every bind
+     * entry a path parameter; created on POST only, a location only with it, naming output keys or path parameters;
+     * no two routes on one method and path among the actions one mount serves (tenant-scoped or not).
+     *
+     * @param  list<Subject>  $subjects
+     * @return list<Finding>
+     */
+    private function rest(array $subjects): array
+    {
+        $tenant = (string) config('agentic-actions.tenant.parameter');
+        $findings = [];
+        $taken = [];
+
+        foreach ($subjects as $subject) {
+            $entry = $subject['entry'];
+            $declared = RestRegistrar::declared($entry->class);
+
+            if ($declared === []) {
+                continue;
+            }
+
+            if (! $entry->allows(Surface::Http)) {
+                $findings[] = self::fail('REST', "{$entry->class}: #[Rest] needs the web open, and it is closed (".($entry->skipped['http'] ?? 'see actions:list').'). Add #[Expose(web: true)].');
+            }
+
+            $input = array_keys((array) ($this->reader->input($subject['action'])['properties'] ?? []));
+            $output = array_keys((array) ($this->reader->output($subject['action'])['properties'] ?? []));
+
+            foreach ($declared as $rest) {
+                $verb = $rest->verb();
+                $label = "#[Rest('{$verb}', '{$rest->uri()}')]";
+                $effect = $entry->effect;
+
+                $wrong = match (true) {
+                    ! in_array($verb, RestRegistrar::METHODS, true) => 'takes GET, POST, PUT, PATCH or DELETE',
+                    $effect === null => null,
+                    $verb === 'GET' && $effect !== Effect::Read => "is for a Read, and the action is {$effect->value}: use POST, PUT or PATCH",
+                    $verb === 'DELETE' && $effect !== Effect::Destructive => "is for a Destructive action, and the action is {$effect->value}",
+                    in_array($verb, ['POST', 'PUT', 'PATCH'], true) && $effect === Effect::Read => 'is not for a Read: use GET',
+                    default => null,
+                };
+
+                if ($wrong !== null) {
+                    $findings[] = self::fail('REST', "{$entry->class}: {$label} {$wrong}.");
+                }
+
+                foreach ($rest->keys() as $parameter => $key) {
+                    if ($parameter !== $tenant && ! in_array($key, $input, true)) {
+                        $findings[] = self::fail('REST', "{$entry->class}: {$label} fills the input key [{$key}] from {{$parameter}}, which schema() does not declare.");
+                    }
+                }
+
+                foreach (array_diff(array_keys($rest->bind), $rest->parameters()) as $parameter) {
+                    $findings[] = self::fail('REST', "{$entry->class}: {$label} binds {{$parameter}}, which its path does not hold.");
+                }
+
+                if ($rest->created && $verb !== 'POST') {
+                    $findings[] = self::fail('REST', "{$entry->class}: {$label} sets created, which only a POST answers.");
+                }
+
+                if ($rest->location !== null && ! $rest->created) {
+                    $findings[] = self::fail('REST', "{$entry->class}: {$label} sets a location without created: true, so no answer carries it.");
+                }
+
+                preg_match_all('/\{(\w+)\}/', (string) $rest->location, $placeholders);
+
+                foreach (array_diff($placeholders[1], $output, $rest->parameters(), [$tenant]) as $key) {
+                    $findings[] = self::fail('REST', "{$entry->class}: {$label}'s location names {{$key}}, which neither outputSchema() nor the path holds.");
+                }
+
+                $bucket = ($entry->tenantScoped ? 'tenant' : 'account')." {$verb} ".preg_replace('/\{\w+\??\}/', '{}', $rest->uri());
+
+                if (! $entry->allows(Surface::Http)) {
+                    continue;   // no mount serves it
+                }
+
+                if (isset($taken[$bucket])) {
+                    $findings[] = self::fail('REST', "{$entry->class}: {$label} takes the method and path of {$taken[$bucket]}'s route, so one mount cannot serve both.");
+                } else {
+                    $taken[$bucket] = $entry->class;
+                }
             }
         }
 

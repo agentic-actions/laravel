@@ -4,13 +4,15 @@ namespace AgenticActions\TypeScript;
 
 use AgenticActions\Action;
 use AgenticActions\Http\ActionRequest;
+use AgenticActions\Http\RestRegistrar;
 use Illuminate\Routing\Route;
 use Illuminate\Routing\Router;
 use ReflectionClass;
 
 /**
  * Chooses which route names each action in TypeScript. Several generated mounts of one action are one
- * action: the web mount names it, so the file never points a browser at a token-only URL.
+ * action: the web mount names it, so the file never points a browser at a token-only URL. A #[Rest] route is an
+ * extra, exported by its route name.
  *
  * @internal
  */
@@ -32,6 +34,7 @@ final class RouteSelector
     {
         $generated = [];
         $handWritten = [];
+        $restful = [];
         $seen = [];
 
         foreach ($this->router->getRoutes()->getRoutes() as $route) {
@@ -42,11 +45,15 @@ final class RouteSelector
 
             $seen[spl_object_id($route)] = true;
 
-            if (! in_array('POST', $route->methods(), true) || ($class = self::actionClass($route)) === null) {
+            $rest = RestRegistrar::of($route) !== null;
+
+            if ((! $rest && ! in_array('POST', $route->methods(), true)) || ($class = self::actionClass($route)) === null) {
                 continue;
             }
 
-            if ($route->getAction(ActionRequest::GENERATED) === true) {
+            if ($rest) {
+                $restful[$class][] = $route;
+            } elseif ($route->getAction(ActionRequest::GENERATED) === true) {
                 $generated[$class][] = $route;
             } else {
                 $handWritten[$class][] = $route;
@@ -56,12 +63,13 @@ final class RouteSelector
         $primary = [];
         $extra = [];
 
-        foreach (array_unique([...array_keys($generated), ...array_keys($handWritten)]) as $class) {
+        foreach (array_unique([...array_keys($generated), ...array_keys($handWritten), ...array_keys($restful)]) as $class) {
             $others = $handWritten[$class] ?? [];
 
             $primary[$class] = isset($generated[$class]) ? self::webMount($generated[$class]) : array_shift($others);
 
-            foreach ($others as $route) {
+            // A #[Rest] route is always exported by its route name, beside the action's own export.
+            foreach ([...$others, ...($restful[$class] ?? [])] as $route) {
                 $name = $route->getName();
 
                 if ($name !== null && $name !== '') {

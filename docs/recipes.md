@@ -520,6 +520,138 @@ The rules for what you return:
 
 Your reader replaces the default one, so keep the session and Sanctum branches if the app still uses them. This one reads a Sanctum token's stored abilities only, so test Sanctum calls with real tokens from `createToken()` rather than `Sanctum::actingAs()`, whose token has none stored. `php artisan actions:list` then shows "custom reader" with your class.
 
+## A public REST API from your actions
+
+The generated routes name the action (`POST /api/actions/publish-post`). A public API usually names the resource instead. `#[Rest]` gives an action a route of that shape, and `Actions::rest()` registers those routes inside your own group. Each one is a generated route, so it runs the same pipeline as `/actions/publish-post`: exposure, the token's ability, the tenant and membership, both `authorize()` steps, validation, rate limits from your group's middleware, the events and the output schema.
+
+```php
+use AgenticActions\Attributes\Expose;
+use AgenticActions\Attributes\Rest;
+
+#[Expose(web: true)]
+#[Rest('GET', 'posts')]
+final class ListPosts extends Action { /* Effect::Read */ }
+
+#[Expose(web: true)]
+#[Rest('POST', 'posts', created: true, location: 'posts/{id}')]
+final class CreatePost extends Action { /* Effect::Write, outputSchema() has id */ }
+
+#[Expose(web: true)]
+#[Rest('GET', 'posts/{post}', bind: ['post' => 'post_id'])]
+final class ShowPost extends Action { /* Effect::Read, schema() has post_id */ }
+
+#[Expose(web: true)]
+#[Rest('PATCH', 'posts/{post}')]
+final class UpdatePost extends Action { /* Effect::Write, schema() has post */ }
+
+#[Expose(web: true)]
+#[Rest('DELETE', 'posts/{post}')]
+final class DeletePost extends Action { /* Effect::Destructive, no outputSchema() */ }
+
+#[Expose(web: true)]
+#[Rest('POST', 'posts/{post}/publish')]
+final class PublishPost extends Action { /* Effect::Write: a verb as a sub-resource */ }
+```
+
+Mount them in `routes/api.php`, under a version:
+
+```php
+use AgenticActions\Facades\Actions;
+use Illuminate\Support\Facades\Route;
+
+Route::middleware(['auth:sanctum', 'throttle:api'])
+    ->prefix('v1')
+    ->name('api.v1.')
+    ->group(fn () => Actions::rest(tenant: false));
+
+Route::middleware(['auth:sanctum', 'throttle:api'])
+    ->prefix('v1/teams/{team}')
+    ->name('api.v1.teams.')
+    ->group(fn () => Actions::rest(tenant: true));
+```
+
+That gives `GET /api/v1/posts`, `POST /api/v1/posts`, `GET|PATCH|DELETE /api/v1/posts/{post}` and `POST /api/v1/posts/{post}/publish`, named `api.v1.rest.list-posts` and so on. A repeated `#[Rest]` is an alias, named `rest.{action}.2` and on. `Actions::rest()` takes `only` and `except`, as `Actions::routes()` does ([which actions a mount serves](concepts.md#which-actions-a-mount-serves)). An action needs the web open for its `#[Rest]` routes to serve it, and `Actions::routes()` still serves its generated route wherever you mount that.
+
+**Path parameters are input.** `{post}` fills the input key `post`, or the key `bind` names (`['post' => 'post_id']`), and is validated with the rest of the input, so `/posts/abc` against an integer key is a 422. The path wins: a request that also sends that key in the query or the body is refused with 422 on the key, and nothing runs. A tenant-scoped action finds its row with `$context->find(Post::class, $input->integer('post'))`, so another tenant's id is a 404, like an id that does not exist.
+
+**The methods follow the effect.** `actions:check`'s REST row fails a `GET` on anything but a Read, a `DELETE` on anything but a Destructive action, a `POST`, `PUT` or `PATCH` on a Read, and two web-open actions on one method and path (`posts/{post}` and `posts/{id}` count as one path). It also fails a path parameter `schema()` does not declare, a `bind` entry for a parameter the path lacks, `created` on anything but a `POST`, and a `location` without `created` or naming a key neither the output nor the path holds. `Actions::rest()` itself refuses a method other than `GET`, `POST`, `PUT`, `PATCH` and `DELETE`, and two routes on one method and path in one group.
+
+**The statuses are REST's:**
+
+| Case | Status |
+|---|---|
+| A Read | 200 with its output; over `GET` with an ETag, and 304 for a matching `If-None-Match` ([reads over GET](concepts.md#reads-over-get)) |
+| `created: true` | 201 with the output, and `Location` when `location` is set: the group's prefix, then the location with each `{key}` filled from the route's parameters, then the output's top-level values |
+| An action whose `outputSchema()` declares nothing | 204 with no body |
+| Any other success | 200 with the output |
+| Invalid input, a refusal on a field, a path key sent twice | 422 |
+| A refusal without a field | 409, or the status it sets |
+| No such row, another tenant's row, a token without the ability | 404 |
+| `authorize()` said no | 403 |
+| No user | 401 |
+| A method the path does not serve | 405 |
+
+A success is always JSON. The refusals come from your exception handler, so send `Accept: application/json`, or make the handler answer JSON for `api/*` with `->shouldRenderJsonWhen()`.
+
+**Confirmations follow the doors.** A Destructive or External action waits for a person's confirmation only when a model drives the call. A person's token calling `DELETE /api/v1/posts/{post}` runs it at once, as `POST /api/actions/delete-post` does, provided the token holds `actions:destructive`.
+
+**Keep it on a token guard.** A `GET` skips Laravel's CSRF check, and a browser sends a `SameSite=Lax` session cookie on a link from another site, so mount `Actions::rest()` in a token group such as `auth:sanctum`, never in the `web` group. `actions:check` fails a `GET` route whose group starts a session or authenticates with a session guard.
+
+**Version the mount, not the action.** Keep each public URL's meaning fixed: mount under `api/v1`, and add fields only as optional input or extra output. A breaking change gets a new action on the same path under a `v2` mount, such as `#[Rest('GET', 'posts/{post}')]` on `ShowPostV2`, mounted with `Actions::rest(only: ...)` under `prefix('v2')`, while v1 keeps its action. An action's `$name` is in its route name, so pin it once the API is public.
+
+**Describe it as OpenAPI.** `Actions::restRoutes()` returns one row per registered `#[Rest]` route, read from the router, so it holds the real prefix:
+
+```php
+[
+    'name' => 'api.v1.rest.show-post',
+    'method' => 'GET',
+    'path' => '/api/v1/posts/{post}',
+    'action' => 'show-post',
+    'class' => ShowPost::class,
+    'description' => 'Show one post.',
+    'effect' => 'read',
+    'ability' => 'actions:read',
+    'tenant_scoped' => false,
+    'parameters' => [['name' => 'post', 'input' => 'post_id', 'required' => true, 'schema' => ['type' => 'integer']]],
+    'input' => ['type' => 'object', 'properties' => [/* schema() without the path keys */]],
+    'input_in' => 'query',   // 'body' for every other method
+    'output' => ['type' => 'object', 'properties' => [/* outputSchema() */]],
+    'status' => 200,         // 201 for created, 204 for no output
+]
+```
+
+`input` and `output` are JSON Schema, which OpenAPI 3.1 takes as it is, so a document needs no other package:
+
+```php
+$paths = [];
+
+foreach (Actions::restRoutes() as $route) {
+    $operation = [
+        'operationId' => $route['action'],
+        'summary' => $route['description'],
+        'security' => [['sanctum' => [$route['ability']]]],
+        'parameters' => array_map(fn (array $parameter): array => [
+            'name' => $parameter['name'], 'in' => 'path', 'required' => true, 'schema' => $parameter['schema'],
+        ], $route['parameters']),
+        'responses' => [(string) $route['status'] => $route['status'] === 204
+            ? ['description' => 'Done.']
+            : ['description' => 'OK', 'content' => ['application/json' => ['schema' => $route['output']]]]],
+    ];
+
+    if ($route['input_in'] === 'query') {
+        foreach ($route['input']['properties'] ?? [] as $name => $schema) {
+            $operation['parameters'][] = ['name' => $name, 'in' => 'query', 'required' => in_array($name, $route['input']['required'] ?? [], true), 'schema' => $schema];
+        }
+    } else {
+        $operation['requestBody'] = ['content' => ['application/json' => ['schema' => $route['input']]]];
+    }
+
+    $paths[$route['path']][strtolower($route['method'])] = $operation;
+}
+```
+
+`actions:typescript` exports each `#[Rest]` route by its route name, with its method and path: `api.v1.rest.show-post` becomes `apiV1RestShowPost({ post: 1 })`, whose input leaves out the key the path fills ([which route names the URL](client.md#which-route-names-the-url)).
+
 ## TypeScript and Wayfinder
 
 A generated route is an ordinary route whose controller is the action class, so Laravel Wayfinder sees it as it sees any other controller route. `php artisan actions:typescript` adds what Wayfinder does not know: the input and output types from `schema()` and `outputSchema()`, the description, and the `touches` keys. The two can live side by side. Whatever regenerates Wayfinder's files in your dev loop can run `php artisan actions:typescript` too, and `php artisan actions:typescript --check` in CI fails when the committed file is stale.

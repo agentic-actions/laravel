@@ -11,6 +11,7 @@ use AgenticActions\Discovery\ActionRegistry;
 use AgenticActions\Discovery\Snapshot;
 use AgenticActions\Exposure\ClassExposure;
 use AgenticActions\Exposure\Entry;
+use AgenticActions\Http\RestRegistrar;
 use AgenticActions\Http\RouteRegistrar;
 use AgenticActions\Pipeline\Door;
 use AgenticActions\Streaming\ConversationSlot;
@@ -71,6 +72,30 @@ final class ActionsManager
     public function routes(?bool $tenant = null, string $reads = 'post', ?Closure $only = null, ?Closure $except = null): void
     {
         app(RouteRegistrar::class)->register($tenant, $reads, $only, $except);
+    }
+
+    /**
+     * Register the #[Rest] routes of the web-exposed actions inside the caller's route group, such as
+     * GET posts/{post}, each named {group name}rest.{action}. They run the generated route's pipeline.
+     *
+     * @param  bool|null  $tenant  true: tenant-scoped actions only; false: the others; null: all
+     * @param  (Closure(Entry): bool)|null  $only  mount only the actions it returns true for
+     * @param  (Closure(Entry): bool)|null  $except  leave out the actions it returns true for
+     */
+    public function rest(?bool $tenant = null, ?Closure $only = null, ?Closure $except = null): void
+    {
+        app(RestRegistrar::class)->register($tenant, $only, $except);
+    }
+
+    /**
+     * One row per registered #[Rest] route: its method, path, parameters, input and output schemas (JSON Schema),
+     * effect, token ability and success status, for an OpenAPI document the app builds.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function restRoutes(): array
+    {
+        return app(RestRegistrar::class)->describe();
     }
 
     /**

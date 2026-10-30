@@ -832,6 +832,7 @@ When an agent streams its turn through `ActionsProtocol`, each call of an action
 | Method | Use |
 |---|---|
 | `routes(?bool $tenant = null, string $reads = 'post', ?Closure $only = null, ?Closure $except = null)` | One POST route per web-exposed action inside the calling route group: `true` mounts the tenant-scoped actions, `false` the others, null all. `reads: 'get'` lets each Read answer GET too ([reads over GET](#reads-over-get)), and `only` and `except` filter the actions ([which actions a mount serves](#which-actions-a-mount-serves)). See [Setup](setup.md). |
+| `rest(?bool $tenant = null, ?Closure $only = null, ?Closure $except = null)`, `restRoutes()` | The `#[Rest]` routes of the web-exposed actions inside the calling route group, such as `GET posts/{post}`, and one row per registered route for an OpenAPI document. See [a public REST API](recipes.md#a-public-rest-api-from-your-actions). |
 | `attempt($action, $input, $context)` | Runs the pipeline in-process and returns an [`Outcome`](#the-pipeline). |
 | `tools(ActionContext $context, array $toolsets, ?Agent $agent = null)` | The action tools of these toolsets for an agent that does not use `InteractsWithActions` (below). |
 | `conversation($agent, $participant, $tenant = null)` | The conversation a person continues with an agent in a tenant. See [the copilot](copilot.md#one-conversation-per-tenant). |

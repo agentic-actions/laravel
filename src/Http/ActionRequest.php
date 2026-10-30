@@ -148,6 +148,31 @@ final class ActionRequest extends FormRequest
     }
 
     /**
+     * On a #[Rest] route, a key its path fills is refused when the query or the body also sends it: the path wins, and
+     * a caller is told rather than silently overruled.
+     */
+    public function withValidator(Validator $validator): void
+    {
+        if ($this->faked() !== null || RestRegistrar::of($this->route() instanceof Route ? $this->route() : null) === null) {
+            return;
+        }
+
+        $sent = array_intersect(array_keys($this->context()->fixed), array_keys($this->all()));
+
+        if ($sent === []) {
+            return;
+        }
+
+        $message = (string) trans('agentic-actions::http.path_parameter', [], $this->context()->locale);
+
+        $validator->after(function (Validator $validator) use ($sent, $message): void {
+            foreach ($sent as $key) {
+                $validator->errors()->add((string) $key, $message);
+            }
+        });
+    }
+
+    /**
      * Step 6 stopped: fire ActionRefused, as every other door does, then let FormRequest throw its ValidationException
      * for the app's handler. A Precognition request only checks a draft, so it records nothing.
      *

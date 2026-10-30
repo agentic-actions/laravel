@@ -12,6 +12,8 @@ use Tests\Feature\TypeScript\Fixtures\EveryShape;
 use Tests\Fixtures\Actions\CreateNote;
 use Tests\Fixtures\Actions\ListNotes;
 use Tests\Fixtures\Actions\TeamNote;
+use Tests\Fixtures\Http\DeletePost;
+use Tests\Fixtures\Http\ShowPost;
 
 it('writes the golden file exactly for CreatePost mounted on the web and api. groups', function () {
     $this->mountRoutes(function (): void {
@@ -181,6 +183,29 @@ it('calls a Read over GET where its route answers GET, and keeps POST where the 
     expect(app(Emitter::class)->render())
         ->toContain("action({ name: 'list-notes', method: 'post', url: '/actions/list-notes', touches: [] });")
         ->not->toContain('/api/v1/');
+});
+
+it('exports each #[Rest] route by its route name, with its method, its path and the bound key out of the input', function () {
+    config(['agentic-actions.discovery.paths' => [], 'agentic-actions.discovery.classes' => [ShowPost::class, DeletePost::class]]);
+    $this->refreshActions();
+
+    $this->mountRoutes(function (): void {
+        Route::middleware(['web', 'auth'])->group(fn () => Actions::routes());
+        Route::middleware(['api', 'auth:sanctum'])->prefix('api/v1')->name('api.v1.')->group(fn () => Actions::rest());
+    });
+
+    $file = app(Emitter::class)->render();
+
+    expect($file)
+        ->toContain("export const showPost = (): ActionDefinition<ShowPostInput, ShowPostOutput> =>\n    action({ name: 'show-post', method: 'post', url: '/actions/show-post', touches: [] });")
+        ->toContain(<<<'TS'
+            export type ApiV1RestShowPostParams = { post: string | number };
+
+            export type ApiV1RestShowPostInput = Record<string, never>;
+            TS)
+        ->toContain("export const apiV1RestShowPost = (params: ApiV1RestShowPostParams): ActionDefinition<ApiV1RestShowPostInput, ApiV1RestShowPostOutput> =>\n    action({ name: 'show-post', method: 'get', url: uri('/api/v1/posts/{post}', params), touches: [] });")
+        ->toContain("export const apiV1RestShowPost2 = (params: ApiV1RestShowPost2Params): ActionDefinition<ApiV1RestShowPost2Input, ApiV1RestShowPost2Output> =>\n    action({ name: 'show-post', method: 'get', url: uri('/api/v1/articles/{post}', params), touches: [] });")
+        ->toContain("export const apiV1RestDeletePost = (params: ApiV1RestDeletePostParams): ActionDefinition<ApiV1RestDeletePostInput, ApiV1RestDeletePostOutput> =>\n    action({ name: 'delete-post', method: 'delete', url: uri('/api/v1/posts/{post}', params), touches: [] });");
 });
 
 it('exports named hand-written routes as extras, by route name', function () {

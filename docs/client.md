@@ -46,7 +46,7 @@ export const createPost = (): ActionDefinition<CreatePostInput, CreatePostOutput
 - The export is the action's name in camel case (`createPost`), and its types take the name in studly case: `CreatePostInput` from `schema()` and `CreatePostOutput` from `outputSchema()`. A field the schema does not require is optional. An empty input or output is `Record<string, never>`.
 - The doc comments are the action's and the fields' descriptions.
 - `touches` is the action's `$touches`.
-- A definition uses POST, or GET for a Read whose route answers GET ([reads over GET](concepts.md#reads-over-get)). The file exports only routes that accept POST and whose controller is an action.
+- A definition uses POST, or GET for a Read whose route answers GET ([reads over GET](concepts.md#reads-over-get)), or a `#[Rest]` route's own method. The file exports only routes whose controller is an action and that accept POST or come from `#[Rest]`.
 - The import gains `uri` once any route has parameters, as in [routes with parameters](#routes-with-parameters).
 
 ### Routes with parameters
@@ -76,7 +76,7 @@ Pass the value the URL takes, which is the tenant's route key: `listTeamPosts({ 
 
 An action has one export, whatever the number of groups that mount it. With several generated mounts, the URL is the first one in the `web` middleware group, else the first one registered, so an app with both the web and the `api.` mount gets `/actions/create-post`, never `/api/actions/create-post`. To call the `api.` mount from a browser, write the definition yourself, as in [action() and uri()](#action-and-uri).
 
-A hand-written route whose controller is an action, such as `Route::post('posts/{post}/archive', ArchivePost::class)->name('posts.archive')`, is exported under the action's name (`archivePost`) when the action has no generated route. Each further named route to the same action is exported under its route name, dots read as words: `api.posts.archive` becomes `apiPostsArchive`, with `ApiPostsArchiveInput` and the rest. An unnamed further route is not exported. When two exports would take one name, or a name is not one TypeScript can declare (a reserved word, or `action` and `uri`, which the file imports), the command fails and names the action or route to rename.
+A hand-written route whose controller is an action, such as `Route::post('posts/{post}/archive', ArchivePost::class)->name('posts.archive')`, is exported under the action's name (`archivePost`) when the action has no generated route. Each further named route to the same action is exported under its route name, dots read as words: `api.posts.archive` becomes `apiPostsArchive`, with `ApiPostsArchiveInput` and the rest. An unnamed further route is not exported. A `#[Rest]` route is always exported by its route name, with its own method and path, and its input leaves out the key its path fills: `api.v1.rest.show-post` becomes `apiV1RestShowPost({ post: 1 })` with `method: 'get'` ([a public REST API](recipes.md#a-public-rest-api-from-your-actions)). When two exports would take one name, or a name is not one TypeScript can declare (a reserved word, or `action` and `uri`, which the file imports), the command fails and names the action or route to rename.
 
 ## callAction()
 
