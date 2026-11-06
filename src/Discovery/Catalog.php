@@ -50,24 +50,40 @@ final class Catalog
     }
 
     /**
-     * Live class facts, the surface, the toolsets (agents only), the tenant, forbidden keys, then steps 1 to 3 without
-     * input. With tenancy on, MCP lists tenant-scoped actions only with a tenant and the rest only without one, the
-     * split the mount makes.
+     * The one entry an MCP client may call by this name for this context, or null: forMcp() for that name alone, so
+     * a call runs every listing check without building the other tools.
+     */
+    public function mcpTool(ActionContext $context, string $name): ?Entry
+    {
+        if (! config('agentic-actions.surfaces.mcp')) {
+            return null;
+        }
+
+        return $this->listed(Surface::Mcp, $context->withSurface(Surface::Mcp), Door::Mcp, [], $name)[0] ?? null;
+    }
+
+    /**
+     * Live class facts, the surface, the toolsets (agents only), the tenant, steps 1 to 3 without input, then forbidden
+     * keys. With tenancy on, MCP lists tenant-scoped actions only with a tenant and the rest only without one, the
+     * split the mount makes. Forbidden keys run last because they build each advertised schema, so only entries the
+     * caller may list pay for one.
      *
      * @param  list<string>  $toolsets
+     * @param  string|null  $name  only the candidate of this name, when one tool is wanted
      * @return list<Entry>
      */
-    private function listed(Surface $surface, ActionContext $context, Door $door, array $toolsets): array
+    private function listed(Surface $surface, ActionContext $context, Door $door, array $toolsets, ?string $name = null): array
     {
         return collect(app(ActionRegistry::class)->on($surface))
+            ->filter(fn (Entry $candidate): bool => $name === null || $candidate->name === $name)
             ->map(fn (Entry $candidate): ?Entry => self::live($candidate))
             ->filter(fn (?Entry $entry): bool => $entry !== null && $entry->allows($surface))
             ->filter(fn (Entry $entry): bool => $door !== Door::Agent || array_intersect($entry->toolsets, $toolsets) !== [])
             ->filter(fn (Entry $entry): bool => $door === Door::Mcp && config('agentic-actions.tenant.model') !== null
                 ? $entry->tenantScoped === ($context->tenant !== null)
                 : ! $entry->tenantScoped || $context->tenant !== null)
-            ->filter(fn (Entry $entry): bool => app(ForbiddenKeys::class)->advertisable($entry, $context))
             ->filter(fn (Entry $entry): bool => app(Runner::class)->exposed($entry, $context, $door, $toolsets))
+            ->filter(fn (Entry $entry): bool => app(ForbiddenKeys::class)->advertisable($entry, $context))
             ->sortBy('name')
             ->values()
             ->all();

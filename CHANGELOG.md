@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **The MCP server builds tools only for the methods that read them.** `tools/list` builds every listed tool as before, `tools/call` builds only the tool it names, through the same listing checks (so a tool the caller may not list, or one with a forbidden key, is still not found), and `ping`, `initialize` and every other method no longer read the tenant, check membership or touch the catalog. The listing itself runs the exposure checks before the forbidden-keys check, so an advertised schema is built only for the actions the caller may list. What each method answers is unchanged.
+
 ## 0.9.0-beta.7 - 2026-10-31
 
 A token API can now serve its Read actions over `GET`, with an `ETag` and 304s (`Actions::routes(reads: 'get')`), keep a mount to some actions (`only` and `except`), and give actions REST-style routes such as `GET posts/{post}` that run the same pipeline (`#[Rest]` and `Actions::rest()`), with `Actions::restRoutes()` describing them for an OpenAPI document. A generated route never answers `GET` to a browser session: a link on another site gets 405. Nothing changes for an app that does not opt in.
