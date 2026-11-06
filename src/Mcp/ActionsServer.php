@@ -10,38 +10,88 @@ use AgenticActions\Tenancy\Tenants;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\Translation\HasLocalePreference;
 use Illuminate\Http\Request;
+use Laravel\Mcp\Exceptions\JsonRpcException;
 use Laravel\Mcp\Server;
+use Laravel\Mcp\Server\ServerContext;
+use Laravel\Mcp\Transport\JsonRpcRequest;
+use Laravel\Mcp\Transport\JsonRpcResponse;
 
 /**
  * The package's MCP server. It is built for every request, so its tool list is always this caller's: the actions
- * agents could list, for the authenticated person, inside the URL's tenant when there is one.
+ * agents could list, for the authenticated person, inside the URL's tenant when there is one. The tools are built
+ * only for the methods that read them: tools/list builds every listed tool, tools/call only the one it names, through
+ * the same checks, and every other method (ping, initialize…) touches neither the tenant nor the catalog.
  *
  * @internal
  */
 final class ActionsServer extends Server
 {
     /**
-     * Name the server, write its instructions in the caller's locale, build this request's tools, and answer tools/call
-     * with CallAction, so an asking action can ask a client that shows forms.
+     * The caller's locale, read when the server boots.
+     */
+    private string $locale = '';
+
+    /**
+     * The caller's context once a method needed it; false before.
+     */
+    private ActionContext|false|null $caller = false;
+
+    /**
+     * Name the server, write its instructions in the caller's locale, and answer tools/call with CallAction, so an
+     * asking action can ask a client that shows forms.
      */
     protected function boot(): void
     {
         $this->addMethod('tools/call', CallAction::class);
 
-        $request = request();
-        $actor = $request->user();
+        $actor = request()->user();
 
         // The locale is read before the tenant, so an unknown and a foreign tenant answer in the same language.
-        $locale = $actor instanceof Authenticatable ? self::locale($actor) : app()->getLocale();
-        $context = $this->context($request, $locale);
+        $this->locale = $actor instanceof Authenticatable ? self::locale($actor) : app()->getLocale();
 
         $this->name = (string) config('app.name');
         $this->version = app(Packages::class)->version('agentic-actions/laravel') ?? '0.3';
-        $this->instructions = (string) trans('agentic-actions::mcp.instructions', [], $locale);
-        $this->tools = $context === null ? [] : array_map(
-            fn (Entry $entry): McpTool => new McpTool($entry, $context),
-            app(Catalog::class)->forMcp($context),
-        );
+        $this->instructions = (string) trans('agentic-actions::mcp.instructions', [], $this->locale);
+    }
+
+    /**
+     * Build this request's tools for the methods that read them, then answer as laravel/mcp does.
+     *
+     * @return iterable<JsonRpcResponse>|JsonRpcResponse
+     *
+     * @throws JsonRpcException
+     */
+    protected function runMethodHandle(JsonRpcRequest $request, ServerContext $context): iterable|JsonRpcResponse
+    {
+        if (! in_array($request->method, ['tools/list', 'tools/call'], true)) {
+            return parent::runMethodHandle($request, $context);
+        }
+
+        $caller = $this->caller();
+        $name = $request->get('name');
+
+        $entries = match (true) {
+            $caller === null => [],
+            $request->method === 'tools/list' => app(Catalog::class)->forMcp($caller),
+            ! is_string($name) => [],
+            default => array_filter([app(Catalog::class)->mcpTool($caller, $name)]),
+        };
+
+        $this->tools = $caller === null ? [] : array_map(fn (Entry $entry): McpTool => new McpTool($entry, $caller), array_values($entries));
+
+        return parent::runMethodHandle($request, $this->createContext());
+    }
+
+    /**
+     * The caller's context, worked out once per server.
+     */
+    private function caller(): ?ActionContext
+    {
+        if ($this->caller === false) {
+            $this->caller = $this->context(request(), $this->locale);
+        }
+
+        return $this->caller;
     }
 
     /**

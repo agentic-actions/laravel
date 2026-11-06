@@ -92,7 +92,7 @@ it('resolves a slug-routed team by slug and binds tokens by its id', function ()
         ->and(mcpTenantTools('/mcp/t/acme', $bySlug))->toBe([]);
 });
 
-it('answers an unknown and a foreign tenant with the same bytes, in the person\'s language, after one membership check', function () {
+it('answers an unknown and a foreign tenant with the same bytes, in the person\'s language, after one membership check per tools request', function () {
     $outsider = ArabicUser::query()->create(['name' => 'Salma', 'email' => 'salma@example.test', 'password' => 'secret']);
     $token = $outsider->createToken('client', ['actions:read', 'actions:write'])->plainTextToken;
 
@@ -116,7 +116,8 @@ it('answers an unknown and a foreign tenant with the same bytes, in the person\'
     expect($answers['acme'])->toBe($answers['no-such-team'])
         ->and(json_decode($answers['acme'][0], true)['result']['instructions'])->toBe(trans('agentic-actions::mcp.instructions', [], 'ar'))
         ->and(json_decode($answers['acme'][1], true)['result']['tools'])->toBe([])
-        ->and($asked['acme'])->toBe([null, null, null])
+        // initialize reads no tenant; tools/list and tools/call each ask once.
+        ->and($asked['acme'])->toBe([null, null])
         ->and($asked['no-such-team'])->toBe([]);
 });
 
