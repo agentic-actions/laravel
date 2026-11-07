@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **The package now requires Laravel 12.69+ or 13.30+**, the first versions of each line with no published security advisory. Composer will not install this version on an older Laravel. See Upgrading.
+
+### Fixed
+
+- **An MCP request with a member of the wrong JSON type answers invalid params.** A tool or prompt `name`, a resource `uri` or a `cursor` that is not a string, or a `per_page` that is not an integer, now gets `-32602` naming the member, with nothing reported to the app's error tracker. Most of them answered a generic `-32603` and were reported, and a number as a tool name answered `Tool [7] not found.`
+
+### Upgrading
+
+- **Update Laravel first.** Run `composer update laravel/framework` to reach 12.69 or 13.30 or later, then update this package. A full `composer update` also brings in the current versions of the framework's own dependencies.
+
 ## 0.9.0-beta.8 - 2026-11-07
 
 The MCP server now builds tools only for the methods that read them, so `ping`, `initialize` and a `tools/call` no longer pay for the whole catalog on every request. Nothing changes for an MCP client: a tool the caller may not list is still not found.

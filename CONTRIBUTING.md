@@ -64,14 +64,14 @@ To run that cell, clone into `build/` (git-ignored), so your own `vendor/` stays
 
 ```bash
 git clone --quiet . build/cells/no-ai && cd build/cells/no-ai
-composer update --prefer-stable --prefer-dist --no-interaction --no-progress --with="laravel/framework:^13.15"
+composer update --prefer-stable --prefer-dist --no-interaction --no-progress --with="laravel/framework:^13.30"
 composer remove --dev laravel/ai laravel/passport --no-interaction --no-progress
 vendor/bin/pint --test && vendor/bin/pest --exclude-group=database --testsuite=Unit,Feature
 ```
 
 ### The Laravel 12 floor
 
-A tag also runs the suite on the oldest versions the package supports: Laravel 12.62, and the lowest laravel/ai and laravel/mcp it allows. When your change uses a framework, laravel/ai or laravel/mcp API that may be newer than that, run the floor cell on PHP 8.3, in a clone as above:
+A tag also runs the suite on the oldest versions the package supports: Laravel 12.69, and the lowest laravel/ai and laravel/mcp it allows. When your change uses a framework, laravel/ai or laravel/mcp API that may be newer than that, run the floor cell on PHP 8.3, in a clone as above:
 
 ```bash
 git clone --quiet . build/cells/floor && cd build/cells/floor

@@ -33,7 +33,7 @@ jobs:
           coverage: none
 
       - name: Install dependencies
-        run: composer update --prefer-stable --prefer-dist --no-interaction --no-progress --with="laravel/framework:^13.15"
+        run: composer update --prefer-stable --prefer-dist --no-interaction --no-progress --with="laravel/framework:^13.30"
 
       - name: Remove laravel/ai and laravel/passport
         if: ${{ ! matrix.ai }}

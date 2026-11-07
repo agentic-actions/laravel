@@ -26,11 +26,11 @@ jobs:
             analyse: false
           - name: Laravel 12 latest - PHP 8.4
             php: '8.4'
-            install: composer update --prefer-stable --prefer-dist --no-interaction --no-progress --with="laravel/framework:^12.62"
+            install: composer update --prefer-stable --prefer-dist --no-interaction --no-progress --with="laravel/framework:^12.69"
             analyse: true
           - name: Laravel 13 - PHP 8.4
             php: '8.4'
-            install: composer update --prefer-stable --prefer-dist --no-interaction --no-progress --with="laravel/framework:^13.15"
+            install: composer update --prefer-stable --prefer-dist --no-interaction --no-progress --with="laravel/framework:^13.30"
             analyse: true
 
     steps:
@@ -142,7 +142,7 @@ jobs:
           coverage: none
 
       - name: Install dependencies
-        run: composer update --prefer-stable --prefer-dist --no-interaction --no-progress --with="laravel/framework:^13.15"
+        run: composer update --prefer-stable --prefer-dist --no-interaction --no-progress --with="laravel/framework:^13.30"
 
       - name: Run database tests
         run: vendor/bin/pest --group=database

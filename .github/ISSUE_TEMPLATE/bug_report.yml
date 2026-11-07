@@ -22,7 +22,7 @@ body:
     id: platform
     attributes:
       label: Laravel and PHP versions
-      placeholder: Laravel 13.15, PHP 8.4
+      placeholder: Laravel 13.40, PHP 8.4
     validations:
       required: true
   - type: textarea
