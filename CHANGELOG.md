@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.9.0-beta.8 - 2026-11-07
+
+The MCP server now builds tools only for the methods that read them, so `ping`, `initialize` and a `tools/call` no longer pay for the whole catalog on every request. Nothing changes for an MCP client: a tool the caller may not list is still not found.
 
 ### Changed
 
