@@ -134,7 +134,7 @@ An action that removes something other people rely on (`Effect::Destructive`) or
 
 ## Installation
 
-You need PHP 8.3 or later and Laravel 12.62+ or 13.15+. laravel/ai 1.x is optional, for agent tools.
+You need PHP 8.3 or later and Laravel 12.69+ or 13.30+. laravel/ai 1.x is optional, for agent tools.
 
 ```bash
 composer require agentic-actions/laravel:^0.9@beta

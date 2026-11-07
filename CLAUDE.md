@@ -4,7 +4,7 @@ Read this before any change. It is written so a new session, another agent or a 
 
 ## What it is
 
-`agentic-actions/laravel` (PHP) and `@agentic-actions/client` (npm, in `js/`). An app writes each operation once as an `Action` class, and `#[Expose]` makes that class a web and JSON route (with Precognition), an Artisan command, a laravel/ai agent tool, an MCP tool, a queued job and a typed TypeScript function. Every caller goes through one pipeline in `Runner`: exposure, token abilities, tenant membership, `authorize()`, validation, `handle()`, and the output schema as an allowlist. On top sit the copilot wire (live rows while an agent works), a change feed, person-confirmed agent calls for Destructive and External actions, asking the person for missing fields, and OAuth for remote MCP clients on Passport. PHP 8.3+, Laravel 12.62+ or 13.15+; laravel/mcp 1.x is the one package it installs, and laravel/ai 1.x is optional (`docs/setup.md`). It is a beta: `CHANGELOG.md` has each version and its upgrade notes.
+`agentic-actions/laravel` (PHP) and `@agentic-actions/client` (npm, in `js/`). An app writes each operation once as an `Action` class, and `#[Expose]` makes that class a web and JSON route (with Precognition), an Artisan command, a laravel/ai agent tool, an MCP tool, a queued job and a typed TypeScript function. Every caller goes through one pipeline in `Runner`: exposure, token abilities, tenant membership, `authorize()`, validation, `handle()`, and the output schema as an allowlist. On top sit the copilot wire (live rows while an agent works), a change feed, person-confirmed agent calls for Destructive and External actions, asking the person for missing fields, and OAuth for remote MCP clients on Passport. PHP 8.3+, Laravel 12.69+ or 13.30+; laravel/mcp 1.x is the one package it installs, and laravel/ai 1.x is optional (`docs/setup.md`). It is a beta: `CHANGELOG.md` has each version and its upgrade notes.
 
 ## Where things are
 
@@ -41,7 +41,7 @@ CI: `.github/workflows/push.yml` runs on every push and pull request (PHP 8.3 an
 
 ```bash
 git clone --quiet . build/cells/no-ai && cd build/cells/no-ai
-composer update --prefer-stable --prefer-dist --no-interaction --no-progress --with="laravel/framework:^13.15"
+composer update --prefer-stable --prefer-dist --no-interaction --no-progress --with="laravel/framework:^13.30"
 composer remove --dev laravel/ai laravel/passport --no-interaction --no-progress
 vendor/bin/pint --test && vendor/bin/pest --exclude-group=database --testsuite=Unit,Feature
 ```

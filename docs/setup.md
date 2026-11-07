@@ -8,7 +8,7 @@ Installing the package brings in one other package: laravel/mcp 1.x, which serve
 
 | Package | Required? | What it is for |
 |---|---|---|
-| PHP 8.3+, Laravel 12.62+ or 13.15+ | yes | everything |
+| PHP 8.3+, Laravel 12.69+ or 13.30+ | yes | everything |
 | `laravel/mcp` 1.x | yes, installed with the package | the MCP server |
 | `laravel/ai` 1.x | for agents | agent tools, the copilot, confirmations and forms, the per-tenant conversation store |
 | `laravel/sanctum` 4.x | for tokens | token clients over HTTP, and MCP's default guard |
