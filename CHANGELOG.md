@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.9.0-beta.9 - 2026-11-07
+
+This version requires Laravel 12.69+ or 13.30+, the first versions of each line with no published security advisory, so update Laravel first (see Upgrading). An MCP request with a member of the wrong JSON type now answers invalid params instead of an internal error.
 
 ### Changed
 
