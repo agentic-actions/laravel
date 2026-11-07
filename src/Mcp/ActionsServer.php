@@ -10,6 +10,7 @@ use AgenticActions\Tenancy\Tenants;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Contracts\Translation\HasLocalePreference;
 use Illuminate\Http\Request;
+use Laravel\Mcp\Enums\ErrorCode;
 use Laravel\Mcp\Exceptions\JsonRpcException;
 use Laravel\Mcp\Server;
 use Laravel\Mcp\Server\ServerContext;
@@ -57,12 +58,16 @@ final class ActionsServer extends Server
     /**
      * Build this request's tools for the methods that read them, then answer as laravel/mcp does.
      *
+     * @upstream The tools are built here, for the method that reads them, rather than when the server boots.
+     *
      * @return iterable<JsonRpcResponse>|JsonRpcResponse
      *
      * @throws JsonRpcException
      */
     protected function runMethodHandle(JsonRpcRequest $request, ServerContext $context): iterable|JsonRpcResponse
     {
+        self::refuseWrongTypes($request);
+
         if (! in_array($request->method, ['tools/list', 'tools/call'], true)) {
             return parent::runMethodHandle($request, $context);
         }
@@ -80,6 +85,31 @@ final class ActionsServer extends Server
         $this->tools = $caller === null ? [] : array_map(fn (Entry $entry): McpTool => new McpTool($entry, $caller), array_values($entries));
 
         return parent::runMethodHandle($request, $this->createContext());
+    }
+
+    /**
+     * Refuse a member of the wrong JSON type as invalid params, the client's mistake rather than the server's error.
+     *
+     * @upstream A tool name, prompt name, resource uri, cursor or page size of the wrong type answers invalid params.
+     *
+     * @throws JsonRpcException
+     */
+    private static function refuseWrongTypes(JsonRpcRequest $request): void
+    {
+        $members = match ($request->method) {
+            'tools/call', 'prompts/get' => ['name' => 'a string'],
+            'resources/read' => ['uri' => 'a string'],
+            'tools/list', 'resources/list', 'resources/templates/list', 'prompts/list' => ['cursor' => 'a string', 'per_page' => 'an integer'],
+            default => [],
+        };
+
+        foreach ($members as $member => $type) {
+            $value = $request->get($member);
+
+            if ($value !== null && ! ($type === 'a string' ? is_string($value) : is_int($value))) {
+                throw new JsonRpcException("Invalid params: The [{$member}] member must be {$type}.", ErrorCode::INVALID_PARAMS->value, $request->id);
+            }
+        }
     }
 
     /**
