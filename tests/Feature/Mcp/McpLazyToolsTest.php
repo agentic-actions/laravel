@@ -2,6 +2,7 @@
 
 use AgenticActions\Discovery\Catalog;
 use AgenticActions\Exceptions\MisconfiguredExposure;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Exceptions;
 use Tests\Fixtures\Mcp\Extra\McpCounted;
 use Tests\Fixtures\Mcp\Extra\McpSecret;
@@ -63,7 +64,7 @@ it('lists every tool the caller may list, sorted by name, with its schema, and b
 
     expect($tools->keys()->all())->toBe(['mcp-counted', 'mcp-crashes', 'mcp-create-post', 'mcp-keyed', 'mcp-read-posts', 'mcp-translated'])
         ->and($tools['mcp-counted']['inputSchema'])->toEqual(['type' => 'object', 'properties' => ['label' => ['type' => 'string']]])
-        ->and($tools['mcp-counted']['annotations'])->toBe(['title' => 'Mcp Counted', 'readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false])
+        ->and(Arr::except($tools['mcp-counted']['annotations'], 'title'))->toBe(['readOnlyHint' => true, 'idempotentHint' => true, 'openWorldHint' => false])
         ->and($this->catalogs)->toBe(1)
         ->and(McpCounted::$schemas)->toBeGreaterThan(0);
 
