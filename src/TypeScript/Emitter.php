@@ -51,9 +51,13 @@ final class Emitter
     ) {}
 
     /**
-     * The whole generated file.
+     * The whole generated file: every action route, or with $classes, only the routes of those actions, as one
+     * discovery group's file. Every file imports only the npm client and declares its own Json type, so no file
+     * depends on another.
+     *
+     * @param  list<string>|null  $classes
      */
-    public function render(): string
+    public function render(?array $classes = null): string
     {
         $usesJson = false;
         $writer = new TypeWriter(function () use (&$usesJson): void {
@@ -63,7 +67,7 @@ final class Emitter
         $usesUri = false;
         $blocks = [];
 
-        foreach ($this->definitions() as $definition) {
+        foreach ($this->definitions($classes) as $definition) {
             $blocks[] = $this->block($definition, $writer);
             $usesUri = $usesUri || $definition['route']->parameterNames() !== [];
         }
@@ -89,11 +93,66 @@ final class Emitter
     }
 
     /**
+     * The action classes some route exports, sorted.
+     *
+     * @return list<string>
+     */
+    public function classes(): array
+    {
+        $classes = array_unique(array_map(fn (array $definition): string => $definition['entry']->class, $this->candidates()));
+
+        sort($classes, SORT_STRING);
+
+        return $classes;
+    }
+
+    /**
      * Every exported definition, in action-name order: each action's primary route, then its extras by route name.
+     * With $classes, only the definitions of those actions.
+     *
+     * @param  list<string>|null  $classes
+     * @return list<array{entry: Entry, route: Route, export: string, prefix: string, extra: bool}>
+     */
+    private function definitions(?array $classes = null): array
+    {
+        $definitions = $this->candidates();
+
+        if ($classes !== null) {
+            $definitions = array_values(array_filter($definitions, fn (array $definition): bool => in_array($definition['entry']->class, $classes, true)));
+        }
+
+        usort($definitions, fn (array $a, array $b): int => [$a['entry']->name, $a['extra'], (string) $a['route']->getName()]
+            <=> [$b['entry']->name, $b['extra'], (string) $b['route']->getName()]);
+
+        $taken = [];
+
+        foreach ($definitions as $definition) {
+            $export = $definition['export'];
+            $source = $definition['extra']
+                ? 'The route ['.$definition['route']->getName().']'
+                : 'The action ['.$definition['entry']->name.']';
+
+            if (! self::isIdentifier($export) || in_array($export, self::RESERVED, true)) {
+                throw new LogicException("{$source} cannot be exported to TypeScript as [{$export}]. Give it another name.");
+            }
+
+            if (isset($taken[$export]) || isset($taken[$definition['prefix']])) {
+                throw new LogicException("{$source} is exported to TypeScript as [{$export}], a name ".($taken[$export] ?? $taken[$definition['prefix']]).' already takes. Give one of them another name.');
+            }
+
+            $taken[$export] = strtolower($source);
+            $taken[$definition['prefix']] = strtolower($source);
+        }
+
+        return $definitions;
+    }
+
+    /**
+     * Every definition the routes give, unsorted and unchecked.
      *
      * @return list<array{entry: Entry, route: Route, export: string, prefix: string, extra: bool}>
      */
-    private function definitions(): array
+    private function candidates(): array
     {
         $selection = $this->routes->select();
         $definitions = [];
@@ -126,29 +185,6 @@ final class Emitter
                 'prefix' => Str::studly($base),
                 'extra' => true,
             ];
-        }
-
-        usort($definitions, fn (array $a, array $b): int => [$a['entry']->name, $a['extra'], (string) $a['route']->getName()]
-            <=> [$b['entry']->name, $b['extra'], (string) $b['route']->getName()]);
-
-        $taken = [];
-
-        foreach ($definitions as $definition) {
-            $export = $definition['export'];
-            $source = $definition['extra']
-                ? 'The route ['.$definition['route']->getName().']'
-                : 'The action ['.$definition['entry']->name.']';
-
-            if (! self::isIdentifier($export) || in_array($export, self::RESERVED, true)) {
-                throw new LogicException("{$source} cannot be exported to TypeScript as [{$export}]. Give it another name.");
-            }
-
-            if (isset($taken[$export]) || isset($taken[$definition['prefix']])) {
-                throw new LogicException("{$source} is exported to TypeScript as [{$export}], a name ".($taken[$export] ?? $taken[$definition['prefix']]).' already takes. Give one of them another name.');
-            }
-
-            $taken[$export] = strtolower($source);
-            $taken[$definition['prefix']] = strtolower($source);
         }
 
         return $definitions;

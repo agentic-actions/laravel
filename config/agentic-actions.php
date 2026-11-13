@@ -12,11 +12,32 @@ return [
     | patterns such as "Modules/*". A missing path is skipped. List
     | classes outside these paths under "classes".
     |
+    | "groups" splits discovery by owner, such as the app's core and each
+    | optional module. Each group lists its own paths (and classes) and
+    | owns its own snapshot and TypeScript file. A group none of whose
+    | paths exists is not installed: it adds no routes, tools or files.
+    | When groups is set, it replaces paths, classes, snapshot and
+    | typescript.path below.
+    |
+    | 'groups' => [
+    |     'core' => [
+    |         'paths' => ['app'],
+    |         'snapshot' => 'actions.exposure.json',
+    |         'typescript' => 'resources/js/agentic/actions.ts',
+    |     ],
+    |     'billing' => [
+    |         'paths' => ['modules/Billing/src'],
+    |         'snapshot' => 'modules/Billing/actions.exposure.json',
+    |         'typescript' => 'modules/Billing/resources/js/actions.ts',
+    |     ],
+    | ],
+    |
     */
 
     'discovery' => [
         'paths' => ['app'],
         'classes' => [],
+        'groups' => [],
     ],
 
     /*

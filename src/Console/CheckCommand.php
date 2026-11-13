@@ -2,9 +2,11 @@
 
 namespace AgenticActions\Console;
 
-use AgenticActions\Discovery\Scanner;
+use AgenticActions\Discovery\Group;
+use AgenticActions\Discovery\Groups;
 use AgenticActions\Discovery\Snapshot;
 use AgenticActions\Exceptions\DuplicateActionName;
+use AgenticActions\Exceptions\MisconfiguredDiscovery;
 use Illuminate\Console\Command;
 use Illuminate\Support\Str;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -26,7 +28,8 @@ final class CheckCommand extends Command
      */
     protected $signature = 'actions:check
         {--update : Rewrite actions.exposure.json first}
-        {--production : Also require a fresh manifest}';
+        {--production : Also require a fresh manifest}
+        {--group=* : Update and compare only these discovery groups\' snapshots}';
 
     /**
      * The console command description.
@@ -38,13 +41,22 @@ final class CheckCommand extends Command
     /**
      * Execute the console command.
      */
-    public function handle(Scanner $scanner, Checks $checks): int
+    public function handle(Groups $groups, Checks $checks): int
     {
-        if ($this->option('update')) {
-            $this->update($scanner);
+        /** @var list<string> $only */
+        $only = array_values(array_map(strval(...), (array) $this->option('group')));
+
+        if (($unknown = Groups::unknown($only)) !== []) {
+            $this->components->error('There is no discovery group ['.implode(', ', $unknown).'].');
+
+            return self::FAILURE;
         }
 
-        $findings = $checks->run((bool) $this->option('production'));
+        if ($this->option('update')) {
+            $this->update($groups, $only);
+        }
+
+        $findings = $checks->run((bool) $this->option('production'), $only);
 
         foreach ($findings as $finding) {
             $mark = $finding->level === 'fail' ? '<fg=red>✗</>' : '<fg=yellow>!</>';
@@ -74,31 +86,46 @@ final class CheckCommand extends Command
 
     /**
      * Write the snapshot from a fresh scan, and name each action it now lists under another name than the file did,
-     * since the rows that run next read the new file. A scan that finds two actions under one name writes nothing; the
-     * Names row reports it.
+     * since the rows that run next read the new file. With discovery groups, each installed group writes its own file
+     * from its own scan. A scan that finds two actions under one name writes nothing; the Names row reports it.
+     *
+     * @param  list<string>  $only  the groups to write; every group when empty
      */
-    private function update(Scanner $scanner): void
+    private function update(Groups $groups, array $only): void
     {
         try {
-            $scan = $scanner->scan(
-                array_values(array_map(strval(...), (array) config('agentic-actions.discovery.paths', []))),
-                array_values(array_map(strval(...), (array) config('agentic-actions.discovery.classes', []))),
-            );
+            $scan = $groups->scan();
+            $scans = Groups::grouped() ? $groups->scans() : [Group::DEFAULT => $scan];
+            $named = Groups::named($only);
         } catch (DuplicateActionName) {
             $this->components->warn('The snapshot was not written: two actions share a name (see the Names row).');
 
             return;
+        } catch (MisconfiguredDiscovery) {
+            $this->components->warn('The snapshot was not written: discovery.groups is misconfigured (see the Discovery row).');
+
+            return;
         }
 
-        $stored = Snapshot::read();
-        $built = Snapshot::build($scan);
+        foreach ($named as $group) {
+            // A group whose roots are missing is not installed here: its snapshot is neither written nor checked.
+            if (! isset($scans[$group->name])) {
+                $this->components->info("Skipped the {$group->name} group: none of its paths exists.");
 
-        Snapshot::write($built);
+                continue;
+            }
 
-        $this->components->info('Wrote '.Snapshot::path().'.');
+            $path = $group->snapshotPath();
+            $stored = Snapshot::read($path);
+            $built = Snapshot::build($scans[$group->name]);
 
-        if (($renames = self::renames($stored, $built)) !== []) {
-            $this->components->warn('Renamed: '.implode(', ', $renames).'. Update what calls an action by its old name, or keep that name with $name on its class and run php artisan actions:check --update again.');
+            Snapshot::write($built, $path);
+
+            $this->components->info('Wrote '.$path.'.');
+
+            if (($renames = self::renames($stored, $built)) !== []) {
+                $this->components->warn('Renamed: '.implode(', ', $renames).'. Update what calls an action by its old name, or keep that name with $name on its class and run php artisan actions:check --update again.');
+            }
         }
     }
 

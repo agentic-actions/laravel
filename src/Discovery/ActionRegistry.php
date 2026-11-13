@@ -131,17 +131,12 @@ final class ActionRegistry
     }
 
     /**
-     * Scan the configured paths and classes, then apply the table of where an exposure error lands.
+     * Scan every installed discovery group, then apply the table of where an exposure error lands. A misconfigured
+     * group throws, so no surface opens on a path the app did not mean.
      */
     private static function fromScan(Application $app): self
     {
-        /** @var list<string> $paths */
-        $paths = array_values((array) config('agentic-actions.discovery.paths', []));
-
-        /** @var list<class-string> $classes */
-        $classes = array_values((array) config('agentic-actions.discovery.classes', []));
-
-        $scan = $app->make(Scanner::class)->scan($paths, $classes);
+        $scan = $app->make(Groups::class)->scan();
 
         if (($errors = $scan->errors()) !== []) {
             self::misconfigured($app, $errors);

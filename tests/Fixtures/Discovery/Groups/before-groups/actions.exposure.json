@@ -1,0 +1,40 @@
+{
+    "actions": {
+        "charge-card": {
+            "agents": [
+                "billing"
+            ],
+            "class": "Tests\\Fixtures\\Discovery\\Groups\\Billing\\ChargeCard",
+            "effect": "write",
+            "mcp": true,
+            "tenant_scoped": false,
+            "web": true
+        },
+        "refund-charge": {
+            "agents": [
+                "billing"
+            ],
+            "class": "Tests\\Fixtures\\Discovery\\Groups\\Billing\\RefundCharge",
+            "effect": "destructive",
+            "mcp": false,
+            "tenant_scoped": false,
+            "web": true
+        },
+        "rename-team": {
+            "agents": [
+                "default"
+            ],
+            "class": "Tests\\Fixtures\\Discovery\\Groups\\Core\\RenameTeam",
+            "effect": "write",
+            "mcp": true,
+            "tenant_scoped": false,
+            "web": true
+        }
+    },
+    "agents": {
+        "Tests\\Fixtures\\Discovery\\Groups\\Billing\\BillingDesk": [
+            "billing"
+        ]
+    },
+    "version": 1
+}

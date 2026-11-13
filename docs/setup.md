@@ -226,6 +226,7 @@ A `handle()` that returns `void` makes `run()` return `null`. A class whose `han
 |---|---|---|
 | `actions.exposure.json` (the `snapshot` key, relative to the base path unless absolute) | `php artisan actions:check --update`, and nothing else | yes: `actions:check` fails while it differs from the classes ([the snapshot](concepts.md#discovery-the-manifest-and-the-snapshot)) |
 | `resources/js/agentic/actions.ts` (`typescript.path`) | `php artisan actions:typescript` | yes: `actions:typescript --check` fails in CI while it is stale ([the generated file](client.md#the-generated-file)) |
+| With `discovery.groups`, each installed group's `snapshot` and `typescript` files instead of the two above | the same two commands, for every group or the ones `--group` names | yes, each one ([optional modules](recipes.md#optional-modules)) |
 | `bootstrap/cache/agentic-actions.php`, the manifest | `php artisan optimize`, `actions:cache` and a plain `route:cache` | no: it belongs to one deploy, as the route cache does |
 
 ## Deploying

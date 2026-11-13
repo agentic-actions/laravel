@@ -18,7 +18,7 @@ Importing `/react` installs the Inertia reload described below. No other entry d
 
 ## The generated file
 
-`php artisan actions:typescript` writes `resources/js/agentic/actions.ts` (the `typescript.path` config key moves it). Commit it, run the command again after you change an action's schema, description, touches or routes, and run `php artisan actions:typescript --check` in CI: it fails while the committed file differs from what the command would write. While routes are cached, the command refuses and asks for `php artisan route:clear`, because cached routes hide new actions.
+`php artisan actions:typescript` writes `resources/js/agentic/actions.ts` (the `typescript.path` config key moves it; with [discovery groups](recipes.md#optional-modules), each group writes its own file). Commit it, run the command again after you change an action's schema, description, touches or routes, and run `php artisan actions:typescript --check` in CI: it fails while the committed file differs from what the command would write. While routes are cached, the command refuses and asks for `php artisan route:clear`, because cached routes hide new actions.
 
 For an action named `create-post` mounted by `Actions::routes()`, the file holds:
 

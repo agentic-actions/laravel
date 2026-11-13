@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Discovery groups, for optional modules.** `discovery.groups` splits discovery by owner, such as `core` and each module: a group lists its own `paths` and `classes` and owns its own `snapshot` and `typescript` file. A group none of whose paths exists is not installed, so it adds no action, agent, route, agent tool or MCP tool, even for classes it lists, and its files are neither written nor checked. `actions:check --update` writes each installed group's snapshot from its own scan and `actions:check` compares each one, so the check passes with or without a module; `actions:typescript` writes each group's file with only its own actions, each importing only `@agentic-actions/client`. Both commands take `--group` to narrow them. A group's paths and outputs must stay inside the base path: a `..` segment, an absolute path outside it, a root that is a symbolic link out of it, an unknown key, two groups writing one file or one class in two groups throws `MisconfiguredDiscovery` and fails the Discovery row of `actions:check`. Exposure, the surface switches, `shouldRegister()`, `authorize()`, toolsets and confirmations are unchanged, and an app that sets no group writes byte for byte the files it wrote before ([optional modules](docs/recipes.md#optional-modules)).
+
 ## 0.9.0-beta.9 - 2026-11-07
 
 This version requires Laravel 12.69+ or 13.30+, the first versions of each line with no published security advisory, so update Laravel first (see Upgrading). An MCP request with a member of the wrong JSON type now answers invalid params instead of an internal error.

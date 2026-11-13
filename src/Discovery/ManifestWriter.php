@@ -2,6 +2,7 @@
 
 namespace AgenticActions\Discovery;
 
+use AgenticActions\Exceptions\MisconfiguredDiscovery;
 use AgenticActions\Exceptions\MisconfiguredExposure;
 use AgenticActions\Exposure\Entry;
 use Illuminate\Contracts\Foundation\Application;
@@ -20,24 +21,19 @@ final class ManifestWriter
      */
     public function __construct(
         private readonly Application $app,
-        private readonly Scanner $scanner,
+        private readonly Groups $groups,
         private readonly Filesystem $files,
     ) {}
 
     /**
-     * Scan, refuse on errors, write atomically. Returns the path written.
+     * Scan every installed group, refuse on errors, write atomically. Returns the path written.
      *
      * @throws MisconfiguredExposure
+     * @throws MisconfiguredDiscovery
      */
     public function write(): string
     {
-        /** @var list<string> $paths */
-        $paths = array_values((array) config('agentic-actions.discovery.paths', []));
-
-        /** @var list<class-string> $classes */
-        $classes = array_values((array) config('agentic-actions.discovery.classes', []));
-
-        $scan = $this->scanner->scan($paths, $classes);
+        $scan = $this->groups->scan();
 
         if (($errors = $scan->errors()) !== []) {
             throw MisconfiguredExposure::withErrors($errors);

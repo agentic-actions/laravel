@@ -2,13 +2,17 @@
 
 namespace AgenticActions\TypeScript;
 
+use AgenticActions\Discovery\Groups;
+use AgenticActions\Exceptions\DuplicateActionName;
+use AgenticActions\Exceptions\MisconfiguredDiscovery;
 use Illuminate\Console\Command;
 use Illuminate\Contracts\Foundation\CachesRoutes;
 use Illuminate\Filesystem\Filesystem;
 use Symfony\Component\Console\Attribute\AsCommand;
 
 /**
- * Writes the typed action definitions the npm client imports, or checks that the committed file is current.
+ * Writes the typed action definitions the npm client imports, or checks that the committed file is current. With
+ * discovery groups, each installed group that names a typescript file gets the definitions of its own actions only.
  *
  * @internal
  */
@@ -21,7 +25,8 @@ final class TypeScriptCommand extends Command
      * @var string
      */
     protected $signature = 'actions:typescript
-        {--check : Fail when the file on disk differs, instead of writing it}';
+        {--check : Fail when the file on disk differs, instead of writing it}
+        {--group=* : Write or check only these discovery groups\' files}';
 
     /**
      * The console command description.
@@ -33,7 +38,7 @@ final class TypeScriptCommand extends Command
     /**
      * Execute the console command.
      */
-    public function handle(Emitter $emitter, Filesystem $files): int
+    public function handle(Emitter $emitter, Filesystem $files, Groups $groups): int
     {
         if ($this->laravel instanceof CachesRoutes && $this->laravel->routesAreCached()) {
             $this->components->error('Routes are cached, so new actions are invisible. Run php artisan route:clear first.');
@@ -41,20 +46,77 @@ final class TypeScriptCommand extends Command
             return self::FAILURE;
         }
 
-        $path = $emitter->path();
+        /** @var list<string> $only */
+        $only = array_values(array_map(strval(...), (array) $this->option('group')));
+
+        if (($unknown = Groups::unknown($only)) !== []) {
+            $this->components->error('There is no discovery group ['.implode(', ', $unknown).'].');
+
+            return self::FAILURE;
+        }
+
+        if (! Groups::grouped()) {
+            return $this->emit($emitter->path(), $emitter->render(), $files) ? self::SUCCESS : self::FAILURE;
+        }
+
+        try {
+            $scans = $groups->scans();
+            $named = Groups::named($only);
+        } catch (DuplicateActionName|MisconfiguredDiscovery $exception) {
+            $this->components->error($exception->getMessage());
+
+            return self::FAILURE;
+        }
+
+        $passed = true;
+        $claimed = [];
+
+        foreach ($scans as $scan) {
+            foreach ($scan->actions as $entry) {
+                $claimed[] = $entry->class;
+            }
+        }
+
+        foreach ($named as $group) {
+            if (! isset($scans[$group->name])) {
+                $this->components->info("Skipped the {$group->name} group: none of its paths exists.");
+
+                continue;
+            }
+
+            if (($path = $group->typescriptPath()) === null) {
+                continue;
+            }
+
+            $classes = array_values(array_map(fn ($entry): string => $entry->class, $scans[$group->name]->actions));
+
+            $passed = $this->emit($path, $emitter->render($classes), $files) && $passed;
+        }
+
+        if (($unclaimed = array_values(array_diff($emitter->classes(), $claimed))) !== []) {
+            $this->components->warn('No discovery group finds '.implode(', ', $unclaimed).', so no file exports '.(count($unclaimed) === 1 ? 'its route' : 'their routes').'. List each one under a group\'s classes.');
+        }
+
+        return $passed ? self::SUCCESS : self::FAILURE;
+    }
+
+    /**
+     * Write one file, or with --check compare it. Returns false when --check finds it stale.
+     */
+    private function emit(string $path, string $contents, Filesystem $files): bool
+    {
         $shown = $this->shown($path);
-        $contents = $emitter->render();
 
         if ($this->option('check')) {
             if (! $files->isFile($path) || $files->get($path) !== $contents) {
                 $this->components->error("{$shown} is stale: run php artisan actions:typescript");
 
-                return self::FAILURE;
+                return false;
             }
 
             $this->components->info("{$shown} is current.");
 
-            return self::SUCCESS;
+            return true;
         }
 
         $files->ensureDirectoryExists(dirname($path));
@@ -62,7 +124,7 @@ final class TypeScriptCommand extends Command
 
         $this->components->info("Wrote {$shown}.");
 
-        return self::SUCCESS;
+        return true;
     }
 
     /**
