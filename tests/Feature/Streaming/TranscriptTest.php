@@ -14,7 +14,6 @@ use Tests\Fixtures\Streaming\PagingStore;
 use Tests\Fixtures\Streaming\Parts;
 use Tests\Fixtures\Streaming\PlainStore;
 use Tests\Fixtures\Streaming\StreamAgent;
-use Tests\Fixtures\Streaming\ThrowingTool;
 use Workbench\App\Models\User;
 
 /*
@@ -33,7 +32,6 @@ beforeEach(function () {
     $this->refreshActions();
 
     Auth::shouldUse('web');
-    ThrowingTool::$validation = false;
     Exceptions::fake();
 
     $this->user = User::factory()->create();
@@ -45,10 +43,10 @@ beforeEach(function () {
         Parts::body((new StreamAgent($this->user))->continueLastConversation($this->user)->stream($words));
     };
 
-    // A completed turn that saved a note, then one that failed in its tool after writing a few words.
+    // A completed turn that saved a note, then one whose provider failed after a tool step and a few words.
     $this->twoTurns = function (): string {
         ($this->turn)('First words.', new OneStepGateway([new ToolCall('call_1', 'save-note', ['title' => 'CANARY-ARG'])], 'First reply.'));
-        ($this->turn)('Second words.', new OneStepGateway([new ToolCall('call_2', 'ThrowingTool', [])], lead: 'Let me check.'));
+        ($this->turn)('Second words.', new ErrorGateway([new ToolCall('call_2', 'TracedTool', [])], lead: 'Let me check.'));
 
         return (string) DB::table('agent_conversations')->value('id');
     };
@@ -76,8 +74,9 @@ it('gives no tool call, result or argument', function () {
 
     expect($transcript)->not->toContain('CANARY-ARG')
         ->not->toContain('save-note')
-        ->not->toContain('ThrowingTool')
-        ->not->toContain('Done.');
+        ->not->toContain('TracedTool')
+        ->not->toContain('Let me check.')
+        ->not->toContain('Partly');
 });
 
 it('adds nothing for a turn that failed before its first step', function () {
