@@ -722,7 +722,7 @@ public function tools(): iterable
 
 The status comes from what the action actually did, as the package recorded it, not from the text the model reads. A refusal is still a successful tool call as far as the model's loop is concerned, so the row is the only place the page can learn it.
 
-A hand-written tool that throws a `ValidationException` ends as `ended`, and the model reads the validation messages and carries on. Anything else a tool throws marks its row `failed` and ends the turn with the error sentence.
+A hand-written tool that throws a `ValidationException` ends as `ended`, and the model reads the validation messages and carries on. Anything else a tool throws marks its row `failed` with the note "Couldn't finish", and the exception goes to your exception handler, never to the browser. laravel/ai then either ends the turn with the error sentence or tells the model the call failed and lets it carry on, depending on its version. What the model reads about the failure comes from laravel/ai; an action tool answers the model with its fixed failed sentence instead, so write an action when an error's text must stay private.
 
 ## Page context
 

@@ -264,7 +264,7 @@ The Tool search row of `actions:check`. With laravel/ai 1.0, the `tools()` that 
 The reply stopped before it finished. Anything already saved stays saved.
 ```
 
-Every turn that fails shows the person only this sentence. The real error goes to your exception handler, so locally it is in `storage/logs/laravel.log`, for example `Laravel\Ai\Exceptions\ProviderConnectionException: Could not connect to AI provider [openai].` The usual causes are a missing or wrong provider key, a provider that cannot be reached, a 401 or 429 from it, and a hand-written tool that throws (an action tool answers the model with its failed sentence instead).
+Every turn that fails shows the person only this sentence. The real error goes to your exception handler, so locally it is in `storage/logs/laravel.log`, for example `Laravel\Ai\Exceptions\ProviderConnectionException: Could not connect to AI provider [openai].` The usual causes are a missing or wrong provider key, a provider that cannot be reached, a 401 or 429 from it, and, on laravel/ai versions that end the turn there, a hand-written tool that throws (an action tool answers the model with its failed sentence instead).
 
 Fix: set laravel/ai's default provider and its key, as [the copilot](copilot.md) says at the top, and for anything else read the reported exception. What the person keeps from a failed turn is in [reloading the chat](copilot.md#reloading-the-chat). To reword the sentence, publish the language files (`php artisan vendor:publish --tag=agentic-actions-lang`) and edit `stream.interrupted`.
 

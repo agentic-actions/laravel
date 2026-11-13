@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **The docs no longer promise that a hand-written tool which throws ends the turn.** Its row still shows `failed` with "Couldn't finish" and its exception still never reaches the browser; whether the turn then ends or the model carries on depends on the laravel/ai version. An action tool answers the model with its fixed failed sentence, as before. The MCP route also keeps whichever middleware laravel/mcp adds of its own, such as an origin check, ahead of `mcp.middleware`.
+
 ## 0.9.0-beta.9 - 2026-11-07
 
 This version requires Laravel 12.69+ or 13.30+, the first versions of each line with no published security advisory, so update Laravel first (see Upgrading). An MCP request with a member of the wrong JSON type now answers invalid params instead of an internal error.
