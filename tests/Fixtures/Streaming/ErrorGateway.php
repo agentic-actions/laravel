@@ -30,9 +30,9 @@ final class ErrorGateway extends OneStepGateway
      *
      * @param  list<ToolCall>  $toolCalls
      */
-    public function __construct(array $toolCalls = [], private readonly bool $respond = false, private readonly bool $started = true)
+    public function __construct(array $toolCalls = [], private readonly bool $respond = false, private readonly bool $started = true, string $lead = '')
     {
-        parent::__construct($toolCalls);
+        parent::__construct($toolCalls, lead: $lead);
     }
 
     /**

@@ -18,6 +18,7 @@ use Tests\Fixtures\Streaming\OneStepGateway;
 use Tests\Fixtures\Streaming\Parts;
 use Tests\Fixtures\Streaming\SaveNote;
 use Tests\Fixtures\Streaming\StreamAgent;
+use Tests\Fixtures\Streaming\ThrowingGateway;
 use Tests\Fixtures\Streaming\ThrowingTool;
 use Tests\Fixtures\Streaming\TracedTool;
 use Workbench\App\Models\User;
@@ -224,16 +225,33 @@ describe('failures', function () {
         'followed by a step response' => [true],
     ]);
 
-    it('sends the failed row, the host\'s parts and one error when an exception leaves the stream, and reports it once', function () {
+    it('sends the failed row with the fixed note for a tool that throws, never its message, and reports it once', function () {
         Exceptions::fake();
 
         (new OneStepGateway([new ToolCall('call_1', 'ThrowingTool', [])]))->fake(StreamAgent::class);
 
-        $parts = Parts::of(Parts::body((new StreamAgent($this->user))->stream('Go.'), new ActionsProtocol(fn (StreamableAgentResponse $response, bool $failed): array => [['type' => 'data-notes', 'data' => ['failed' => $failed]]])));
+        $body = Parts::body((new StreamAgent($this->user))->stream('Go.'));
 
-        expect(Parts::types($parts))->toBe(['start', 'start-step', 'data-action', 'data-action', 'data-notes', 'error', '[DONE]'])
-            ->and(Parts::rows($parts))->toBe([['action' => 'ThrowingTool', 'label' => 'Checking…', 'status' => 'failed', 'note' => 'Couldn\'t finish']])
-            ->and($parts[4]['data'])->toBe(['failed' => true]);
+        expect(Parts::rows(Parts::of($body)))->toBe([['action' => 'ThrowingTool', 'label' => 'Checking…', 'status' => 'failed', 'note' => 'Couldn\'t finish']])
+            ->and($body)->not->toContain('CANARY-EXCEPTION');
+
+        Exceptions::assertReported(fn (RuntimeException $exception): bool => $exception->getMessage() === 'CANARY-EXCEPTION');
+        Exceptions::assertReportedCount(1);
+    });
+
+    it('sends the rows, the host\'s parts and one error when an exception leaves the stream, and reports it once', function () {
+        Exceptions::fake();
+
+        (new ThrowingGateway([new ToolCall('call_1', 'TracedTool', [])]))->fake(StreamAgent::class);
+
+        $body = Parts::body((new StreamAgent($this->user))->stream('Go.'), new ActionsProtocol(fn (StreamableAgentResponse $response, bool $failed): array => [['type' => 'data-notes', 'data' => ['failed' => $failed]]]));
+        $parts = Parts::of($body);
+        $types = Parts::types($parts);
+
+        expect(array_slice($types, -3))->toBe(['data-notes', 'error', '[DONE]'])
+            ->and($parts[count($parts) - 3]['data'])->toBe(['failed' => true])
+            ->and(array_count_values($types)['error'])->toBe(1)
+            ->and($body)->not->toContain('CANARY-EXCEPTION');
 
         Exceptions::assertReported(fn (RuntimeException $exception): bool => $exception->getMessage() === 'CANARY-EXCEPTION');
         Exceptions::assertReportedCount(1);

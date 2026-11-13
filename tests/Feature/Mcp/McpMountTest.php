@@ -47,17 +47,18 @@ describe('the routes', function () {
         $route = Route::getRoutes()->getByName(McpMount::ROUTE);
         $tenant = Route::getRoutes()->getByName(McpMount::TENANT_ROUTE);
 
-        expect($route)->not->toBeNull()
-            ->and($route->uri())->toBe('mcp/actions')
+        expect($route)->not->toBeNull();
+
+        // laravel/mcp's own layers come first, whichever ones its version adds; mcp.middleware follows them.
+        $own = array_slice($route->middleware(), 0, -2);
+
+        expect($route->uri())->toBe('mcp/actions')
             ->and($route->methods())->toBe(['POST'])
             ->and($route->getAction(McpMount::MARK))->toBeTrue()
-            ->and($route->middleware())->toBe([
-                ReorderJsonAccept::class,
-                ValidateMcpHeaders::class,
-                AddWwwAuthenticateHeader::class,
-                'auth:sanctum',
-                'throttle:agentic-actions-mcp',
-            ])
+            ->and(array_slice($route->middleware(), -2))->toBe(['auth:sanctum', 'throttle:agentic-actions-mcp'])
+            ->and($own)->each->toStartWith('Laravel\\Mcp\\')
+            ->and(array_values(array_intersect($own, [ReorderJsonAccept::class, ValidateMcpHeaders::class, AddWwwAuthenticateHeader::class])))
+            ->toBe([ReorderJsonAccept::class, ValidateMcpHeaders::class, AddWwwAuthenticateHeader::class])
             ->and(mcpRoutesAt('mcp/actions'))->toBe(['GET|HEAD mcp/actions', 'DELETE mcp/actions', 'POST mcp/actions'])
             ->and($tenant)->not->toBeNull()
             ->and($tenant->uri())->toBe('mcp/t/{team}')
