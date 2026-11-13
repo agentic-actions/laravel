@@ -28,6 +28,9 @@ afterAll(function () {
 });
 
 beforeEach(function () {
+    // Every group fixture offers agents, an exposure error without laravel/ai.
+    $this->skipUnlessAi();
+
     config(['cache.default' => 'array']);
     Cache::forget('agentic-actions:manifest-missing');
     Cache::forget('agentic-actions:misconfigured-discovery');
@@ -56,6 +59,10 @@ beforeEach(function () {
 });
 
 afterEach(function () {
+    if (! isset($this->root)) {
+        return;
+    }
+
     File::delete($this->manifest);
     File::deleteDirectory(base_path($this->root));
 
@@ -113,6 +120,10 @@ it('ignores a manifest written for other groups, or without any', function (Clos
     }],
     'a path changed' => [fn ($test) => config(['agentic-actions.discovery.groups.billing.paths' => [$test->root.'/modules/Billing']])],
     'groups removed' => [fn ($test) => config(['agentic-actions.discovery.groups' => []])],
+    'a group made optional' => [fn ($test) => config(['agentic-actions.discovery.groups.core.optional' => true])],
+    'a class listed' => [fn ($test) => config(['agentic-actions.discovery.groups.core.classes' => [ChargeCard::class]])],
+    'paths that are not a list' => [fn ($test) => config(['agentic-actions.discovery.groups.core.paths' => $test->root.'/app'])],
+    'a value that is not configuration' => [fn ($test) => config(['agentic-actions.discovery.groups.core.classes' => [fn () => ChargeCard::class]])],
 ]);
 
 it('ignores a manifest written without groups once groups are set', function () {

@@ -46,11 +46,17 @@ final class Group
      */
     public function installed(): bool
     {
-        if ($this->implicit) {
-            return true;
-        }
+        return $this->implicit || self::exists($this->paths);
+    }
 
-        foreach ($this->paths as $path) {
+    /**
+     * Whether one of these configured paths names a directory.
+     *
+     * @param  list<string>  $paths
+     */
+    public static function exists(array $paths): bool
+    {
+        foreach ($paths as $path) {
             if ((glob(Paths::resolve($path), GLOB_ONLYDIR) ?: []) !== []) {
                 return true;
             }

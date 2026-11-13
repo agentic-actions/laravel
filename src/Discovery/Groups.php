@@ -5,6 +5,7 @@ namespace AgenticActions\Discovery;
 use AgenticActions\Exceptions\DuplicateActionName;
 use AgenticActions\Exceptions\MisconfiguredDiscovery;
 use AgenticActions\Support\Paths;
+use Throwable;
 
 /**
  * The discovery groups: discovery.groups when the app sets it, else one implicit group read from discovery.paths,
@@ -115,10 +116,14 @@ final class Groups
 
     /**
      * What the manifest records of discovery.groups, so a manifest written for another set of groups, or before a
-     * module was added or removed, reads as stale: a hash of every configured group and of which ones are installed.
-     * Null without discovery.groups, so that manifest stays as it was.
+     * module was added or removed, reads as stale: a hash of discovery.groups as configured and of which groups have a
+     * path that exists. Null without discovery.groups, so that manifest stays as it was.
      *
-     * @throws MisconfiguredDiscovery
+     * Production reads it on every request that loads the manifest, so it validates nothing and only globs each
+     * group's paths: actions:cache validated this same configuration when it wrote the manifest, and any change to it
+     * changes the hash, so the next process scans and validates again.
+     *
+     * @throws MisconfiguredDiscovery when a group's paths are not a list of strings, or the configuration does not hash
      */
     public static function fingerprint(): ?string
     {
@@ -126,17 +131,25 @@ final class Groups
             return null;
         }
 
-        $groups = array_map(fn (Group $group): array => [
-            'name' => $group->name,
-            'paths' => $group->paths,
-            'classes' => $group->classes,
-            'snapshot' => $group->snapshot,
-            'typescript' => $group->typescript,
-            'optional' => $group->optional,
-            'installed' => $group->installed(),
-        ], self::configured());
+        $configured = (array) config('agentic-actions.discovery.groups');
+        $installed = [];
 
-        return hash('sha256', json_encode($groups, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
+        foreach ($configured as $name => $definition) {
+            $paths = is_array($definition) ? ($definition['paths'] ?? null) : null;
+
+            if (! is_array($paths) || array_filter($paths, fn (mixed $path): bool => ! is_string($path)) !== []) {
+                throw MisconfiguredDiscovery::in((string) $name, 'paths is a non-empty list of directories, relative to the base path.');
+            }
+
+            /** @var array<string> $paths */
+            $installed[$name] = Group::exists(array_values($paths));
+        }
+
+        try {
+            return hash('sha256', serialize([$configured, $installed]));
+        } catch (Throwable) {
+            throw new MisconfiguredDiscovery('discovery.groups holds a value that is not plain configuration.');
+        }
     }
 
     /**
@@ -193,19 +206,15 @@ final class Groups
      */
     public function scan(): Scan
     {
-        $paths = [];
-        $classes = [];
+        $directories = [];
+        $found = [];
 
-        if (self::grouped()) {
-            $this->refuseOverlap(self::installed());
+        foreach ($this->found() as [$groupDirectories, $groupFound]) {
+            array_push($directories, ...$groupDirectories);
+            $found += $groupFound;
         }
 
-        foreach (self::installed() as $group) {
-            array_push($paths, ...$group->paths);
-            array_push($classes, ...$group->classes);
-        }
-
-        return $this->scanner->scan($paths, $classes);
+        return $this->scanner->scanFound(array_values(array_unique($directories)), $found);
     }
 
     /**
@@ -219,39 +228,41 @@ final class Groups
      */
     public function scans(): array
     {
-        $installed = self::installed();
         $scans = [];
 
-        $this->refuseOverlap($installed);
-
-        foreach ($installed as $group) {
-            $scans[$group->name] = $this->scanner->scan($group->paths, $group->classes);
+        foreach ($this->found() as $name => [$directories, $found]) {
+            $scans[$name] = $this->scanner->scanFound($directories, $found);
         }
 
         return $scans;
     }
 
     /**
-     * Refuse a class that two installed groups both find, under their paths or in their classes. It reads each
-     * group's sources as text and loads nothing, so the registry runs it on every scan as cheaply as the checks do.
+     * What each installed group's scan would consider, read as text once and keyed by group name. A class that two
+     * groups both find, under their paths or in their classes, is refused before any class loads.
      *
-     * @param  list<Group>  $groups
+     * @return array<string, array{0: list<string>, 1: array<string, ?string>}>
      *
      * @throws MisconfiguredDiscovery
      */
-    private function refuseOverlap(array $groups): void
+    private function found(): array
     {
+        $found = [];
         $owners = [];
 
-        foreach ($groups as $group) {
-            foreach ($this->scanner->candidates($group->paths, $group->classes) as $class) {
-                if (isset($owners[$class]) && $owners[$class] !== $group->name) {
+        foreach (self::installed() as $group) {
+            $found[$group->name] = $this->scanner->find($group->paths, $group->classes);
+
+            foreach (array_keys($found[$group->name][1]) as $class) {
+                if (isset($owners[$class])) {
                     throw MisconfiguredDiscovery::in($group->name, "{$class} is also found by discovery.groups.{$owners[$class]}. A class belongs to one group: narrow the paths so they do not overlap.");
                 }
 
                 $owners[$class] = $group->name;
             }
         }
+
+        return $found;
     }
 
     /**
@@ -348,6 +359,10 @@ final class Groups
 
             if (! str_ends_with(strtolower($path), $extension)) {
                 throw MisconfiguredDiscovery::in($group, "{$key} [{$path}] is not a {$extension} file.");
+            }
+
+            if (is_link($resolved)) {
+                throw MisconfiguredDiscovery::in($group, "{$key} [{$path}] is a symbolic link. Name the file itself, so a write never lands on what the link points to.");
             }
 
             $existing = $resolved;

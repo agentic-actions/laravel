@@ -26,6 +26,9 @@ use Tests\Fixtures\Discovery\Groups\Core\RenameTeam;
  */
 
 beforeEach(function () {
+    // Every group fixture offers agents, an exposure error without laravel/ai.
+    $this->skipUnlessAi();
+
     $this->fixtures = dirname(__DIR__, 2).'/Fixtures/Discovery/Groups';
     $this->root = 'agentic-groups-'.getmypid();
 
@@ -50,6 +53,10 @@ beforeEach(function () {
 });
 
 afterEach(function () {
+    if (! isset($this->root)) {
+        return;
+    }
+
     File::deleteDirectory(base_path($this->root));
     File::delete(Snapshot::path());
 });

@@ -25,6 +25,9 @@ use Workbench\App\Models\User;
  */
 
 beforeEach(function () {
+    // Every group fixture offers agents, an exposure error without laravel/ai.
+    $this->skipUnlessAi();
+
     $this->fixtures = dirname(__DIR__, 2).'/Fixtures/Discovery/Groups';
     $this->root = 'agentic-group-attacks-'.getmypid();
     $this->outside = sys_get_temp_dir().'/agentic-group-attacks-outside-'.getmypid();
@@ -55,6 +58,10 @@ beforeEach(function () {
 });
 
 afterEach(function () {
+    if (! isset($this->root)) {
+        return;
+    }
+
     File::deleteDirectory(base_path($this->root));
     File::deleteDirectory($this->outside);
     ChargeCard::$registers = true;

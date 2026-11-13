@@ -38,18 +38,45 @@ final class Scanner
      */
     public function scan(array $paths, array $classes = []): Scan
     {
+        [$directories, $found] = $this->find($paths, $classes);
+
+        return $this->scanFound($directories, $found);
+    }
+
+    /**
+     * What a scan of these paths and classes would consider, read as text and loading no class: the directories, and
+     * each candidate class with the source that declares it, or null for a listed class no source declares.
+     *
+     * @param  list<string>  $paths  relative or absolute; globs allowed; missing paths skipped
+     * @param  list<string>  $classes
+     * @return array{0: list<string>, 1: array<string, ?string>}
+     */
+    public function find(array $paths, array $classes = []): array
+    {
         $directories = $this->directories($paths);
-        $candidates = array_map(fn (string $class): string => ltrim($class, '\\'), $classes);
-        $sources = [];
+        $found = array_fill_keys(array_map(fn (string $class): string => ltrim($class, '\\'), $classes), null);
 
         foreach ($this->sources($directories) as $source) {
             if (($class = self::declaredClass($source)) !== null) {
-                $candidates[] = $class;
-                $sources[$class] = $source;
+                $found[$class] = $source;
             }
         }
 
-        $candidates = array_values(array_unique($candidates));
+        return [$directories, $found];
+    }
+
+    /**
+     * Find actions and agents among what find() read, so the sources are read and tokenized once.
+     *
+     * @param  list<string>  $directories
+     * @param  array<string, ?string>  $found
+     *
+     * @throws DuplicateActionName
+     */
+    public function scanFound(array $directories, array $found): Scan
+    {
+        $candidates = array_map(strval(...), array_keys($found));
+        $sources = array_filter($found, fn (?string $source): bool => $source !== null);
 
         sort($candidates, SORT_STRING);
 
@@ -128,31 +155,6 @@ final class Scanner
         sort($pageContext, SORT_STRING);
 
         return new Scan($actions, $agents, $directories, $warnings, $pageContext, $deferred);
-    }
-
-    /**
-     * The classes a scan of these paths and classes would consider, sorted: the listed ones and the class each source
-     * that names the package declares. It reads the sources as text and loads no class.
-     *
-     * @param  list<string>  $paths  relative or absolute; globs allowed; missing paths skipped
-     * @param  list<string>  $classes
-     * @return list<string>
-     */
-    public function candidates(array $paths, array $classes = []): array
-    {
-        $candidates = array_map(fn (string $class): string => ltrim($class, '\\'), $classes);
-
-        foreach ($this->sources($this->directories($paths)) as $source) {
-            if (($class = self::declaredClass($source)) !== null) {
-                $candidates[] = $class;
-            }
-        }
-
-        $candidates = array_values(array_unique($candidates));
-
-        sort($candidates, SORT_STRING);
-
-        return $candidates;
     }
 
     /**
