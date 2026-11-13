@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.9.0-beta.10 - 2026-11-13
+
+An app split into optional modules can now give each module its own discovery group (`discovery.groups`), with its own snapshot and TypeScript file, so `actions:check` passes with or without the module installed and an uninstalled module adds no action, route or tool. Nothing changes for an app that sets no group.
 
 ### Added
 
