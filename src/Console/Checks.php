@@ -10,7 +10,6 @@ use AgenticActions\Attributes\Expose;
 use AgenticActions\Contracts\ProposesCalls;
 use AgenticActions\Contracts\ReadsTokenGrants;
 use AgenticActions\Datasets\Dataset;
-use AgenticActions\Discovery\ActionRegistry;
 use AgenticActions\Discovery\Groups;
 use AgenticActions\Discovery\Manifest;
 use AgenticActions\Discovery\Scan;
@@ -149,6 +148,7 @@ final class Checks
         $routes = array_values($this->router->getRoutes()->getRoutes());
 
         return [
+            ...$this->discoveryGroups($groups),
             ...$this->snapshot($scan, $groups),
             ...$this->renamed($scan),
             ...$this->exposure($scan),
@@ -232,6 +232,56 @@ final class Checks
         }
 
         return $subjects;
+    }
+
+    /**
+     * Discovery, for discovery.groups: a required group none of whose paths exists (a typo would otherwise pass while
+     * checking nothing), no group installed at all, a group --group names that is not installed here, and top-level
+     * discovery keys that groups make the package ignore.
+     *
+     * @param  list<string>  $only  the groups --group names
+     * @return list<Finding>
+     */
+    private function discoveryGroups(array $only): array
+    {
+        if (! Groups::grouped()) {
+            return [];
+        }
+
+        // A misconfigured discovery.groups is the Discovery row's failure already.
+        try {
+            $configured = Groups::configured();
+        } catch (MisconfiguredDiscovery) {
+            return [];
+        }
+
+        $findings = [];
+        $installed = array_filter($configured, fn ($group): bool => $group->installed());
+
+        if ($installed === []) {
+            $findings[] = self::fail('Discovery', 'No discovery group is installed: none of the paths of any group in discovery.groups exists, so nothing is checked.');
+        }
+
+        foreach ($configured as $group) {
+            if ($group->installed()) {
+                continue;
+            }
+
+            if (! $group->optional) {
+                $findings[] = self::fail('Discovery', "discovery.groups.{$group->name}: none of its paths exists (".implode(', ', $group->paths)."), so none of its actions is found or checked. Fix the path, or set 'optional' => true on a group a deployment may leave out.");
+            } elseif (in_array($group->name, $only, true)) {
+                $findings[] = self::fail('Discovery', "discovery.groups.{$group->name} is not installed here: none of its paths exists, so --group={$group->name} checks nothing.");
+            }
+        }
+
+        $paths = array_values((array) config('agentic-actions.discovery.paths', []));
+        $classes = array_values((array) config('agentic-actions.discovery.classes', []));
+
+        if ($paths !== ['app'] || $classes !== []) {
+            $findings[] = self::warn('Discovery', 'discovery.groups is set, so discovery.paths and discovery.classes are ignored, with what they list. Move each path and class into a group, then remove both keys or set them back to their defaults.');
+        }
+
+        return $findings;
     }
 
     /**
@@ -1950,14 +2000,12 @@ final class Checks
         }
 
         if (($manifest = Manifest::readFresh($this->app)) === null) {
-            return [self::fail('Manifest', 'The actions manifest is older than the route cache, unreadable or from another release: run php artisan optimize, or actions:cache, on deploy.')];
+            return [self::fail('Manifest', Groups::grouped()
+                ? 'The actions manifest is older than the route cache, unreadable, from another release or written for other discovery groups: run php artisan optimize, or actions:cache, on deploy.'
+                : 'The actions manifest is older than the route cache, unreadable or from another release: run php artisan optimize, or actions:cache, on deploy.')];
         }
 
-        $expected = [
-            'version' => ActionRegistry::VERSION,
-            'actions' => array_map(fn (Entry $entry): array => $entry->toManifest(), $scan->actions),
-            'agents' => $scan->recordedAgents(),
-        ];
+        $expected = Manifest::build($scan);
 
         // The snapshot's canonical text compares both sides key-order-free and type-exact.
         if (Snapshot::encode($manifest) === Snapshot::encode($expected)) {

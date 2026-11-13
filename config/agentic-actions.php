@@ -16,8 +16,9 @@ return [
     | optional module. Each group lists its own paths (and classes) and
     | owns its own snapshot and TypeScript file. A group none of whose
     | paths exists is not installed: it adds no routes, tools or files.
-    | When groups is set, it replaces paths, classes, snapshot and
-    | typescript.path below.
+    | Only a group marked optional may be missing; a required one fails
+    | actions:check. When groups is set, it replaces paths, classes,
+    | snapshot and typescript.path below.
     |
     | 'groups' => [
     |     'core' => [
@@ -29,6 +30,7 @@ return [
     |         'paths' => ['modules/Billing/src'],
     |         'snapshot' => 'modules/Billing/actions.exposure.json',
     |         'typescript' => 'modules/Billing/resources/js/actions.ts',
+    |         'optional' => true,
     |     ],
     | ],
     |

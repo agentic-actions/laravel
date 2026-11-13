@@ -131,6 +131,31 @@ final class Scanner
     }
 
     /**
+     * The classes a scan of these paths and classes would consider, sorted: the listed ones and the class each source
+     * that names the package declares. It reads the sources as text and loads no class.
+     *
+     * @param  list<string>  $paths  relative or absolute; globs allowed; missing paths skipped
+     * @param  list<string>  $classes
+     * @return list<string>
+     */
+    public function candidates(array $paths, array $classes = []): array
+    {
+        $candidates = array_map(fn (string $class): string => ltrim($class, '\\'), $classes);
+
+        foreach ($this->sources($this->directories($paths)) as $source) {
+            if (($class = self::declaredClass($source)) !== null) {
+                $candidates[] = $class;
+            }
+        }
+
+        $candidates = array_values(array_unique($candidates));
+
+        sort($candidates, SORT_STRING);
+
+        return $candidates;
+    }
+
+    /**
      * The first declared class in a PHP source, from its tokens, never from its path.
      */
     public static function declaredClass(string $source): ?string

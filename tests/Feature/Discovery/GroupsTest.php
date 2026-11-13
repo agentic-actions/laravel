@@ -6,6 +6,7 @@ use AgenticActions\Discovery\ActionRegistry;
 use AgenticActions\Discovery\Group;
 use AgenticActions\Discovery\Groups;
 use AgenticActions\Discovery\Snapshot;
+use AgenticActions\Exceptions\DuplicateActionName;
 use AgenticActions\Exceptions\MisconfiguredDiscovery;
 use AgenticActions\Facades\Actions;
 use AgenticActions\TypeScript\Emitter;
@@ -15,6 +16,7 @@ use Illuminate\Support\Facades\Route;
 use Tests\Fixtures\Actions\CreateNote;
 use Tests\Fixtures\Discovery\Groups\Billing\BillingDesk;
 use Tests\Fixtures\Discovery\Groups\Billing\ChargeCard;
+use Tests\Fixtures\Discovery\Groups\Clash\RenameTeamAgain;
 use Tests\Fixtures\Discovery\Groups\Core\RenameTeam;
 
 /*
@@ -30,7 +32,7 @@ beforeEach(function () {
     File::copyDirectory($this->fixtures.'/Core', base_path($this->root.'/app'));
     File::copyDirectory($this->fixtures.'/Billing', base_path($this->root.'/modules/Billing/src'));
 
-    config(['agentic-actions.typescript.path' => $this->root.'/legacy.ts', 'agentic-actions.discovery.groups' => [
+    config(['agentic-actions.typescript.path' => $this->root.'/legacy.ts', 'agentic-actions.discovery.paths' => ['app'], 'agentic-actions.discovery.classes' => [], 'agentic-actions.discovery.groups' => [
         'core' => [
             'paths' => [$this->root.'/app'],
             'snapshot' => $this->root.'/actions.exposure.json',
@@ -40,6 +42,7 @@ beforeEach(function () {
             'paths' => [$this->root.'/modules/Billing/src'],
             'snapshot' => $this->root.'/modules/Billing/actions.exposure.json',
             'typescript' => $this->root.'/modules/Billing/resources/js/actions.ts',
+            'optional' => true,
         ],
     ]]);
 
@@ -319,10 +322,13 @@ describe('misconfigured groups', function () {
         config(['agentic-actions.discovery.groups.core.paths' => [$this->root.'/app', $this->root.'/modules/Billing/src']]);
 
         expect(groupFindings('Discovery'))->toBe([
-            'discovery.groups.billing: '.ChargeCard::class.' is also found by discovery.groups.core. A class belongs to one group: narrow the paths so they do not overlap.',
+            'discovery.groups.billing: '.BillingDesk::class.' is also found by discovery.groups.core. A class belongs to one group: narrow the paths so they do not overlap.',
         ]);
 
-        mountGroupRoutes();
+        // The registry refuses it too, so a request never serves a class whose owner is unclear.
+        expect(fn () => mountGroupRoutes())->toThrow(MisconfiguredDiscovery::class, 'is also found by discovery.groups.core');
+
+        Route::setRoutes(new RouteCollection);
 
         $this->artisan('actions:typescript')
             ->expectsOutputToContain('is also found by discovery.groups.core')
@@ -353,5 +359,141 @@ describe('misconfigured groups', function () {
         'a list' => [[['paths' => ['app'], 'snapshot' => 'a.json']], 'discovery.groups: [0] is not a group name.'],
         'a bad name' => [['co re' => ['paths' => ['app'], 'snapshot' => 'a.json']], 'discovery.groups: [co re] is not a group name.'],
         'a pattern output' => [['core' => ['paths' => ['app'], 'snapshot' => '*.json']], 'discovery.groups.core: snapshot [*.json] is a pattern.'],
+        'optional not a bool' => [['core' => ['paths' => ['app'], 'snapshot' => 'a.json', 'optional' => 'yes']], 'discovery.groups.core: optional is true or false.'],
+        'a snapshot that is not JSON' => [['core' => ['paths' => ['app'], 'snapshot' => 'app/Models/User.php']], 'discovery.groups.core: snapshot [app/Models/User.php] is not a .json file.'],
+        'a TypeScript file that is not .ts' => [['core' => ['paths' => ['app'], 'snapshot' => 'a.json', 'typescript' => 'routes/web.php']], 'discovery.groups.core: typescript [routes/web.php] is not a .ts file.'],
     ]);
+
+    it('refuses two outputs that are one file on disk, however they are spelled', function (string $before, string $after) {
+        config(['agentic-actions.discovery.groups.billing.snapshot' => $before.$this->root.$after]);
+
+        expect(fn () => Groups::configured())->toThrow(MisconfiguredDiscovery::class, 'is already written by discovery.groups.core.snapshot');
+    })->with([
+        './' => ['./', '/actions.exposure.json'],
+        '//' => ['', '//actions.exposure.json'],
+        '/./' => ['', '/./actions.exposure.json'],
+        'case' => ['', '/ACTIONS.exposure.json'],
+    ]);
+
+    it('refuses a class two groups both list', function () {
+        config(['agentic-actions.discovery.groups.billing.classes' => [RenameTeam::class]]);
+
+        expect(groupFindings('Discovery'))->toBe([
+            'discovery.groups.billing: '.RenameTeam::class.' is also found by discovery.groups.core. A class belongs to one group: narrow the paths so they do not overlap.',
+        ]);
+    });
+
+    it('refuses one action name in two groups', function () {
+        File::copyDirectory($this->fixtures.'/Clash', base_path($this->root.'/modules/Clash/src'));
+        config(['agentic-actions.discovery.groups.clash' => [
+            'paths' => [$this->root.'/modules/Clash/src'],
+            'snapshot' => $this->root.'/modules/Clash/actions.exposure.json',
+        ]]);
+        $this->refreshActions();
+
+        expect(groupFindings('Names'))->toHaveCount(1)
+            ->and(groupFindings('Names')[0])->toContain(RenameTeam::class)->toContain(RenameTeamAgain::class);
+
+        expect(fn () => app(ActionRegistry::class))->toThrow(DuplicateActionName::class);
+    });
+
+    it('refuses an output whose directory is a symbolic link out of the app', function (string $key, string $file) {
+        $outside = sys_get_temp_dir().'/agentic-groups-outside-'.getmypid();
+        File::ensureDirectoryExists($outside);
+        symlink($outside, base_path($this->root.'/link'));
+
+        try {
+            config(["agentic-actions.discovery.groups.billing.{$key}" => $this->root.'/link/nested/'.$file]);
+
+            expect(fn () => Groups::configured())->toThrow(MisconfiguredDiscovery::class, "discovery.groups.billing: {$key} [{$this->root}/link/nested/{$file}] resolves to [");
+
+            $this->artisan('actions:check --update')->run();
+            $this->artisan('actions:typescript')->assertExitCode(1);
+
+            expect(File::allFiles($outside))->toBe([]);
+        } finally {
+            File::deleteDirectory($outside);
+        }
+    })->with([['snapshot', 'a.json'], ['typescript', 'a.ts']]);
+});
+
+describe('required and optional groups', function () {
+    it('fails both checks while a required group\'s path is mistyped, instead of passing on nothing', function () {
+        config(['agentic-actions.discovery.groups.core.paths' => [$this->root.'/apq']]);
+        $this->refreshActions();
+        mountGroupRoutes();
+
+        expect(groupFindings('Discovery'))->toBe([
+            "discovery.groups.core: none of its paths exists ({$this->root}/apq), so none of its actions is found or checked. Fix the path, or set 'optional' => true on a group a deployment may leave out.",
+        ]);
+
+        $this->artisan('actions:check')->assertExitCode(1);
+        $this->artisan('actions:check --update')
+            ->expectsOutputToContain("Did not write the core group's snapshot: none of its paths exists (see the Discovery row).")
+            ->assertExitCode(1);
+        $this->artisan('actions:typescript --check')
+            ->expectsOutputToContain("The core group is not installed: none of its paths exists ({$this->root}/apq).")
+            ->assertExitCode(1);
+        $this->artisan('actions:typescript')->assertExitCode(1);
+    });
+
+    it('fails when no group is installed at all', function () {
+        config(['agentic-actions.discovery.groups.core.optional' => true]);
+        File::deleteDirectory(base_path($this->root.'/app'));
+        uninstallBilling();
+        mountGroupRoutes();
+
+        expect(groupFindings('Discovery'))->toBe([
+            'No discovery group is installed: none of the paths of any group in discovery.groups exists, so nothing is checked.',
+        ]);
+
+        $this->artisan('actions:check')->assertExitCode(1);
+        $this->artisan('actions:typescript --check')
+            ->expectsOutputToContain('No discovery group is installed')
+            ->assertExitCode(1);
+    });
+
+    it('fails a --group that names a group not installed here', function () {
+        mountGroupRoutes();
+        $this->artisan('actions:check --update')->run();
+        $this->artisan('actions:typescript')->assertExitCode(0);
+
+        uninstallBilling();
+        mountGroupRoutes();
+
+        $this->artisan('actions:check --group=billing')
+            ->expectsOutputToContain('[Discovery] discovery.groups.billing is not installed here: none of its paths exists, so --group=billing checks nothing.')
+            ->assertExitCode(1);
+        $this->artisan('actions:typescript --check --group=billing')
+            ->expectsOutputToContain('The billing group is not installed')
+            ->assertExitCode(1);
+
+        // Without --group, an optional group that is missing passes.
+        $this->artisan('actions:check')->assertExitCode(0);
+        $this->artisan('actions:typescript --check')->assertExitCode(0);
+    });
+
+    it('warns while discovery.paths or discovery.classes lists what groups make it ignore', function (array $config) {
+        config($config);
+
+        expect(groupFindings('Discovery'))->toBe([
+            'discovery.groups is set, so discovery.paths and discovery.classes are ignored, with what they list. Move each path and class into a group, then remove both keys or set them back to their defaults.',
+        ]);
+    })->with([
+        'paths' => [['agentic-actions.discovery.paths' => ['app', 'modules']]],
+        'classes' => [['agentic-actions.discovery.classes' => [CreateNote::class]]],
+    ]);
+});
+
+describe('TypeScript names across groups', function () {
+    it('refuses an export one group\'s file takes that another group\'s file takes too', function () {
+        mountGroupRoutes();
+        $this->mountRoutes(fn () => Route::middleware('web')->post('billing/rename', ChargeCard::class)->name('rename-team'));
+
+        expect(fn () => $this->artisan('actions:typescript')->run())
+            ->toThrow(LogicException::class, 'The action [rename-team] is exported to TypeScript as [renameTeam], a name the route [rename-team] already takes.');
+
+        expect(File::exists(base_path($this->root.'/resources/js/actions.ts')))->toBeFalse()
+            ->and(File::exists(base_path($this->root.'/modules/Billing/resources/js/actions.ts')))->toBeFalse();
+    });
 });

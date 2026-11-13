@@ -3,6 +3,7 @@
 namespace AgenticActions\Discovery;
 
 use AgenticActions\Action;
+use AgenticActions\Exceptions\MisconfiguredDiscovery;
 use AgenticActions\Exceptions\MisconfiguredExposure;
 use AgenticActions\Exceptions\StaleActionManifest;
 use AgenticActions\Exposure\ClassExposure;
@@ -132,14 +133,21 @@ final class ActionRegistry
 
     /**
      * Scan every installed discovery group, then apply the table of where an exposure error lands. A misconfigured
-     * group throws, so no surface opens on a path the app did not mean.
+     * discovery.groups goes through the same table and nominates nothing, so no surface opens on a path the app did
+     * not mean, and actions:check still runs to print its Discovery row.
      */
     private static function fromScan(Application $app): self
     {
-        $scan = $app->make(Groups::class)->scan();
+        try {
+            $scan = $app->make(Groups::class)->scan();
+        } catch (MisconfiguredDiscovery $exception) {
+            self::misconfigured($app, $exception, 'agentic-actions:misconfigured-discovery');
+
+            return new self([], [], false);
+        }
 
         if (($errors = $scan->errors()) !== []) {
-            self::misconfigured($app, $errors);
+            self::misconfigured($app, MisconfiguredExposure::withErrors($errors), 'agentic-actions:misconfigured-exposure');
         }
 
         return new self($scan->actions, $scan->recordedAgents(), false);
@@ -189,18 +197,15 @@ final class ActionRegistry
     }
 
     /**
-     * Where a scan's exposure errors land. The first matching row wins: a test run throws, any other console process
-     * records them (actions:cache throws), a local web request throws, and production reports them once an hour
-     * while the refused surfaces stay closed.
-     *
-     * @param  list<string>  $errors
+     * Where a scan's exposure errors, or a misconfigured discovery.groups, land. The first matching row wins: a test
+     * run throws, any other console process records them (actions:cache and actions:check report them), a local web
+     * request throws, and production reports them once an hour, under $key, while the refused surfaces stay closed.
      *
      * @throws MisconfiguredExposure
+     * @throws MisconfiguredDiscovery
      */
-    private static function misconfigured(Application $app, array $errors): void
+    private static function misconfigured(Application $app, MisconfiguredExposure|MisconfiguredDiscovery $exception, string $key): void
     {
-        $exception = MisconfiguredExposure::withErrors($errors);
-
         // PHPUnit is a console process too, so the test-run row comes first.
         if ($app->runningUnitTests()) {
             throw $exception;
@@ -214,7 +219,7 @@ final class ActionRegistry
             throw $exception;
         }
 
-        if (Cache::add('agentic-actions:misconfigured-exposure', true, 3600)) {
+        if (Cache::add($key, true, 3600)) {
             report($exception);
         }
     }

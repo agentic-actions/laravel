@@ -93,6 +93,19 @@ final class Emitter
     }
 
     /**
+     * Throw when the exports of these actions' routes, written to one file or to several that one frontend imports,
+     * are not valid TypeScript names or take one name twice.
+     *
+     * @param  list<string>  $classes
+     *
+     * @throws LogicException
+     */
+    public function verify(array $classes): void
+    {
+        $this->definitions($classes);
+    }
+
+    /**
      * The action classes some route exports, sorted.
      *
      * @return list<string>

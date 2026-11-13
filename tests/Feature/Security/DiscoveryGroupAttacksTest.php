@@ -32,7 +32,7 @@ beforeEach(function () {
     File::copyDirectory($this->fixtures.'/Core', base_path($this->root.'/app'));
     File::copyDirectory($this->fixtures.'/Billing', base_path($this->root.'/modules/Billing/src'));
 
-    config(['agentic-actions.discovery.groups' => [
+    config(['agentic-actions.discovery.paths' => ['app'], 'agentic-actions.discovery.classes' => [], 'agentic-actions.discovery.groups' => [
         'core' => [
             'paths' => [$this->root.'/app'],
             'snapshot' => $this->root.'/actions.exposure.json',
@@ -42,6 +42,7 @@ beforeEach(function () {
             'paths' => [$this->root.'/modules/Billing/src'],
             'snapshot' => $this->root.'/modules/Billing/actions.exposure.json',
             'typescript' => $this->root.'/modules/Billing/actions.ts',
+            'optional' => true,
         ],
     ]]);
 
@@ -246,6 +247,41 @@ describe('an installed module', function () {
                 ->not->toContain(config('app.key'))
                 ->not->toContain($this->root);
         }
+    });
+});
+
+describe('a module that joins a core toolset', function () {
+    beforeEach(function () {
+        File::copyDirectory($this->fixtures.'/Support', base_path($this->root.'/modules/Support/src'));
+        config(['agentic-actions.discovery.groups.support' => [
+            'paths' => [$this->root.'/modules/Support/src'],
+            'snapshot' => $this->root.'/modules/Support/actions.exposure.json',
+            'optional' => true,
+        ]]);
+
+        $this->refreshActions();
+    });
+
+    it('widens the core agent while installed, recorded in the module\'s snapshot, not the core\'s', function () {
+        $this->skipUnlessAi();
+
+        $agents = fn (): array => array_map(fn (Entry $entry): string => $entry->name, app(Catalog::class)->forAgents(ActionContext::agent($this->user), ['default']));
+
+        $this->artisan('actions:check --update')->run();
+        $core = File::get(base_path($this->root.'/actions.exposure.json'));
+
+        expect($agents())->toBe(['open-ticket', 'rename-team'])
+            ->and($core)->not->toContain('open-ticket')
+            ->and(json_decode(File::get(base_path($this->root.'/modules/Support/actions.exposure.json')), true)['actions']['open-ticket']['agents'])->toBe(['default']);
+
+        File::deleteDirectory(base_path($this->root.'/modules/Support'));
+        $this->refreshActions();
+
+        expect($agents())->toBe(['rename-team']);
+
+        $this->artisan('actions:check --update')->run();
+
+        expect(File::get(base_path($this->root.'/actions.exposure.json')))->toBe($core);
     });
 });
 

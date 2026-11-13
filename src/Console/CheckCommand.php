@@ -108,9 +108,12 @@ final class CheckCommand extends Command
         }
 
         foreach ($named as $group) {
-            // A group whose roots are missing is not installed here: its snapshot is neither written nor checked.
+            // A group whose roots are missing is not installed here: its snapshot is neither written nor checked. For a
+            // required group, the Discovery row fails too.
             if (! isset($scans[$group->name])) {
-                $this->components->info("Skipped the {$group->name} group: none of its paths exists.");
+                $group->optional
+                    ? $this->components->info("Skipped the {$group->name} group: none of its paths exists.")
+                    : $this->components->warn("Did not write the {$group->name} group's snapshot: none of its paths exists (see the Discovery row).");
 
                 continue;
             }

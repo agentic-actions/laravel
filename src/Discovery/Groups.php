@@ -21,7 +21,12 @@ final class Groups
     /**
      * The keys a configured group may set.
      */
-    private const KEYS = ['paths', 'classes', 'typescript', 'snapshot'];
+    private const KEYS = ['paths', 'classes', 'typescript', 'snapshot', 'optional'];
+
+    /**
+     * The extension each output must carry, so an output never overwrites a PHP source or any other file.
+     */
+    private const EXTENSIONS = ['snapshot' => '.json', 'typescript' => '.ts'];
 
     /**
      * Create the groups service.
@@ -67,11 +72,14 @@ final class Groups
                     continue;
                 }
 
-                if (isset($outputs[$path])) {
-                    throw MisconfiguredDiscovery::in($group->name, "{$key} [{$path}] is already written by {$outputs[$path]}. Give each group its own files.");
+                // a.json, ./a.json and A.json are one file on a case-insensitive disk, so they compare as one.
+                $file = self::normalized($path);
+
+                if (isset($outputs[$file])) {
+                    throw MisconfiguredDiscovery::in($group->name, "{$key} [{$path}] is already written by {$outputs[$file]}. Give each group its own files.");
                 }
 
-                $outputs[$path] = "discovery.groups.{$group->name}.{$key}";
+                $outputs[$file] = "discovery.groups.{$group->name}.{$key}";
             }
 
             $groups[] = $group;
@@ -90,6 +98,45 @@ final class Groups
     public static function installed(): array
     {
         return array_values(array_filter(self::configured(), fn (Group $group): bool => $group->installed()));
+    }
+
+    /**
+     * The groups a deployment may not leave out whose code is not here: a required group none of whose paths exists,
+     * such as a core path with a typo. The checks fail on each one rather than pass while checking nothing.
+     *
+     * @return list<Group>
+     *
+     * @throws MisconfiguredDiscovery
+     */
+    public static function missing(): array
+    {
+        return array_values(array_filter(self::configured(), fn (Group $group): bool => ! $group->optional && ! $group->installed()));
+    }
+
+    /**
+     * What the manifest records of discovery.groups, so a manifest written for another set of groups, or before a
+     * module was added or removed, reads as stale: a hash of every configured group and of which ones are installed.
+     * Null without discovery.groups, so that manifest stays as it was.
+     *
+     * @throws MisconfiguredDiscovery
+     */
+    public static function fingerprint(): ?string
+    {
+        if (! self::grouped()) {
+            return null;
+        }
+
+        $groups = array_map(fn (Group $group): array => [
+            'name' => $group->name,
+            'paths' => $group->paths,
+            'classes' => $group->classes,
+            'snapshot' => $group->snapshot,
+            'typescript' => $group->typescript,
+            'optional' => $group->optional,
+            'installed' => $group->installed(),
+        ], self::configured());
+
+        return hash('sha256', json_encode($groups, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
     }
 
     /**
@@ -149,6 +196,10 @@ final class Groups
         $paths = [];
         $classes = [];
 
+        if (self::grouped()) {
+            $this->refuseOverlap(self::installed());
+        }
+
         foreach (self::installed() as $group) {
             array_push($paths, ...$group->paths);
             array_push($classes, ...$group->classes);
@@ -168,29 +219,39 @@ final class Groups
      */
     public function scans(): array
     {
+        $installed = self::installed();
         $scans = [];
+
+        $this->refuseOverlap($installed);
+
+        foreach ($installed as $group) {
+            $scans[$group->name] = $this->scanner->scan($group->paths, $group->classes);
+        }
+
+        return $scans;
+    }
+
+    /**
+     * Refuse a class that two installed groups both find, under their paths or in their classes. It reads each
+     * group's sources as text and loads nothing, so the registry runs it on every scan as cheaply as the checks do.
+     *
+     * @param  list<Group>  $groups
+     *
+     * @throws MisconfiguredDiscovery
+     */
+    private function refuseOverlap(array $groups): void
+    {
         $owners = [];
 
-        foreach (self::installed() as $group) {
-            $scan = $this->scanner->scan($group->paths, $group->classes);
-
-            $classes = [
-                ...array_map(fn ($entry): string => $entry->class, array_values($scan->actions)),
-                ...array_keys($scan->agents),
-            ];
-
-            foreach ($classes as $class) {
-                if (isset($owners[$class])) {
+        foreach ($groups as $group) {
+            foreach ($this->scanner->candidates($group->paths, $group->classes) as $class) {
+                if (isset($owners[$class]) && $owners[$class] !== $group->name) {
                     throw MisconfiguredDiscovery::in($group->name, "{$class} is also found by discovery.groups.{$owners[$class]}. A class belongs to one group: narrow the paths so they do not overlap.");
                 }
 
                 $owners[$class] = $group->name;
             }
-
-            $scans[$group->name] = $scan;
         }
-
-        return $scans;
     }
 
     /**
@@ -233,6 +294,11 @@ final class Groups
         }
 
         $typescript = $definition['typescript'] ?? null;
+        $optional = $definition['optional'] ?? false;
+
+        if (! is_bool($optional)) {
+            throw MisconfiguredDiscovery::in($name, 'optional is true or false.');
+        }
 
         /** @var list<string> $paths */
         /** @var list<class-string> $classes */
@@ -242,12 +308,15 @@ final class Groups
             $classes,
             $typescript === null ? null : self::inside($name, 'typescript', $typescript, glob: false),
             self::inside($name, 'snapshot', $definition['snapshot'], glob: false),
+            optional: $optional,
         );
     }
 
     /**
      * A configured path, refused unless it stays inside the base path: no ".." segment, no absolute path outside the
-     * base path, and, for a root that exists, no real path outside it either (a symbolic link out of the app).
+     * base path, and, for a root that exists, no real path outside it either (a symbolic link out of the app). An
+     * output also carries its extension, and its nearest existing directory, and the file itself when it exists,
+     * must really lie inside the base path, so no symbolic link carries a write out of the app.
      *
      * @throws MisconfiguredDiscovery
      */
@@ -272,9 +341,33 @@ final class Groups
             throw MisconfiguredDiscovery::in($group, "{$key} [{$path}] is outside the base path [{$base}].");
         }
 
-        if ($glob) {
-            $real = realpath($base) ?: $base;
+        $real = realpath($base) ?: $base;
 
+        if (! $glob) {
+            $extension = self::EXTENSIONS[$key];
+
+            if (! str_ends_with(strtolower($path), $extension)) {
+                throw MisconfiguredDiscovery::in($group, "{$key} [{$path}] is not a {$extension} file.");
+            }
+
+            $existing = $resolved;
+
+            while (! file_exists($existing) && ! is_link($existing) && dirname($existing) !== $existing) {
+                $existing = dirname($existing);
+            }
+
+            $target = realpath($existing);
+
+            if ($target === false || ! self::within($target, [$real])) {
+                throw MisconfiguredDiscovery::in($group, "{$key} [{$path}] resolves to [".($target ?: $existing)."], outside the base path [{$base}].");
+            }
+
+            if (is_dir($resolved)) {
+                throw MisconfiguredDiscovery::in($group, "{$key} [{$path}] is a directory. Name one file.");
+            }
+        }
+
+        if ($glob) {
             foreach (glob($resolved, GLOB_ONLYDIR) ?: [] as $directory) {
                 if (! self::within(realpath($directory) ?: $directory, [$real])) {
                     throw MisconfiguredDiscovery::in($group, "{$key} [{$path}] resolves to [".(realpath($directory) ?: $directory)."], outside the base path [{$base}].");
@@ -283,6 +376,16 @@ final class Groups
         }
 
         return $path;
+    }
+
+    /**
+     * A resolved output path in the form two groups' outputs compare by: one separator, no "." segment, lower case.
+     */
+    private static function normalized(string $path): string
+    {
+        $segments = array_filter(explode('/', str_replace('\\', '/', $path)), fn (string $segment): bool => $segment !== '' && $segment !== '.');
+
+        return strtolower((str_starts_with($path, '/') ? '/' : '').implode('/', $segments));
     }
 
     /**

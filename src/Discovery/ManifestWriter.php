@@ -4,7 +4,6 @@ namespace AgenticActions\Discovery;
 
 use AgenticActions\Exceptions\MisconfiguredDiscovery;
 use AgenticActions\Exceptions\MisconfiguredExposure;
-use AgenticActions\Exposure\Entry;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Filesystem\Filesystem;
 
@@ -39,11 +38,7 @@ final class ManifestWriter
             throw MisconfiguredExposure::withErrors($errors);
         }
 
-        $manifest = [
-            'version' => ActionRegistry::VERSION,
-            'actions' => array_map(fn (Entry $entry): array => $entry->toManifest(), $scan->actions),
-            'agents' => $scan->recordedAgents(),
-        ];
+        $manifest = Manifest::build($scan);
 
         $path = Manifest::path($this->app);
 

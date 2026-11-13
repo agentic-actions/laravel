@@ -26,6 +26,8 @@ final class Group
      * @param  string|null  $typescript  as configured; null writes no TypeScript file for the group
      * @param  string  $snapshot  as configured
      * @param  bool  $implicit  the group built from the top-level keys, which is always installed
+     * @param  bool  $optional  whether a deployment may leave the group out; a required group whose paths are all
+     *                          missing fails actions:check and actions:typescript instead of being skipped
      */
     public function __construct(
         public readonly string $name,
@@ -34,11 +36,13 @@ final class Group
         public readonly ?string $typescript,
         public readonly string $snapshot,
         public readonly bool $implicit = false,
+        public readonly bool $optional = false,
     ) {}
 
     /**
      * Whether the group's code is here. The implicit group always is; a configured one is when one of its paths names
-     * a directory, so removing a module's folder removes its actions, its routes, its tools and its outputs.
+     * a directory, so removing a module's folder removes its actions, its routes, its tools and its outputs. A group
+     * that is not installed only ever adds nothing; whether that is allowed is the checks' question (see $optional).
      */
     public function installed(): bool
     {

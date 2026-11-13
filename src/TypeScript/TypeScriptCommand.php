@@ -77,9 +77,26 @@ final class TypeScriptCommand extends Command
             }
         }
 
+        if ($scans === []) {
+            $this->components->error('No discovery group is installed: none of the paths of any group in discovery.groups exists.');
+
+            return self::FAILURE;
+        }
+
+        // Every group's exports share one name space in the frontend that imports them, so a name two groups export
+        // is refused before any file is written, as one file's two exports are.
+        $emitter->verify($claimed);
+
         foreach ($named as $group) {
             if (! isset($scans[$group->name])) {
-                $this->components->info("Skipped the {$group->name} group: none of its paths exists.");
+                // A required group with a missing path, or one --group names, fails instead of passing on nothing.
+                if (! $group->optional || $only !== []) {
+                    $this->components->error("The {$group->name} group is not installed: none of its paths exists (".implode(', ', $group->paths).').'.($group->optional ? '' : " Fix the path, or set 'optional' => true on a group a deployment may leave out."));
+
+                    $passed = false;
+                } else {
+                    $this->components->info("Skipped the {$group->name} group: none of its paths exists.");
+                }
 
                 continue;
             }
