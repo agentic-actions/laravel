@@ -323,7 +323,8 @@ It is reported, never thrown, at most once an hour. The request still worked: it
 
 - the deploy runs neither `php artisan optimize` nor `actions:cache`;
 - `route:clear`, `actions:clear` or `optimize:clear` ran after it, since all three delete it;
-- the manifest is older than the route cache, or an upgrade of the package changed the manifest's format.
+- the manifest is older than the route cache, or an upgrade of the package changed the manifest's format;
+- with [discovery groups](recipes.md#optional-modules), the manifest was written for other groups, or before a module was added or removed.
 
 Fix: run `php artisan optimize` in the deploy, then `php artisan actions:check --production`, as [Deploying](setup.md#deploying) shows. `php artisan about` shows `Manifest` as `CACHED` or `NOT CACHED`.
 
@@ -332,10 +333,11 @@ Fix: run `php artisan optimize` in the deploy, then `php artisan actions:check -
 ```text
 The actions manifest is missing: run php artisan optimize, or actions:cache, on deploy.
 The actions manifest is older than the route cache, unreadable or from another release: run php artisan optimize, or actions:cache, on deploy.
+The actions manifest is older than the route cache, unreadable, from another release or written for other discovery groups: run php artisan optimize, or actions:cache, on deploy.
 The actions manifest differs from the actions on disk: run php artisan actions:cache.
 ```
 
-`--production` adds this row to the usual checks. The first two have the causes above. The third means actions changed after the manifest was written. Run the check after the deploy's cache step.
+`--production` adds this row to the usual checks. The first three have the causes above; the third is the second's wording with discovery groups. The last means actions changed after the manifest was written. Run the check after the deploy's cache step.
 
 ### php artisan optimize fails with MisconfiguredExposure
 

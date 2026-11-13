@@ -50,11 +50,12 @@ final class Snapshot
     /**
      * The committed snapshot, or null when the file is missing or unreadable.
      *
+     * @param  string|null  $path  a group's resolved snapshot path; the configured one when null
      * @return array<string, mixed>|null
      */
-    public static function read(): ?array
+    public static function read(?string $path = null): ?array
     {
-        $path = self::path();
+        $path ??= self::path();
 
         if (! is_file($path) || ($text = @file_get_contents($path)) === false) {
             return null;
@@ -74,11 +75,12 @@ final class Snapshot
      * Write through a temporary file and rename(), creating the configured file's directory first.
      *
      * @param  array<string, mixed>  $snapshot
+     * @param  string|null  $path  a group's resolved snapshot path; the configured one when null
      */
-    public static function write(array $snapshot): void
+    public static function write(array $snapshot, ?string $path = null): void
     {
         $files = app(Filesystem::class);
-        $path = self::path();
+        $path ??= self::path();
 
         $files->ensureDirectoryExists(dirname($path));
         $files->replace($path, self::encode($snapshot), 0666 & ~umask());

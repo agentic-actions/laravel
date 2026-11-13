@@ -462,6 +462,39 @@ Actions are found under `app` by default. Set `discovery.paths` in `config/agent
 
 The scanner only reads files that mention `AgenticActions\`. An action that extends your own base class and never names the package itself goes in `discovery.classes`. `php artisan actions:list` prints the directories it walked when it finds nothing.
 
+### Optional modules
+
+When some modules are installed in one deployment and left out of another, give each one a discovery group. A group lists its own `paths` (and `classes`), and owns its own exposure snapshot and TypeScript file, so the files of the core never mention a module, and `actions:check` passes whether the module is there or not:
+
+```php
+'discovery' => [
+    'groups' => [
+        'core' => [
+            'paths' => ['app'],
+            'snapshot' => 'actions.exposure.json',
+            'typescript' => 'resources/js/agentic/actions.ts',
+        ],
+        'billing' => [
+            'paths' => ['modules/Billing/src'],
+            'snapshot' => 'modules/Billing/actions.exposure.json',
+            'typescript' => 'modules/Billing/resources/js/actions.ts',
+            'optional' => true,
+        ],
+    ],
+],
+```
+
+- **A group is installed when one of its `paths` exists.** A group whose paths are all missing adds nothing: none of its actions or agents is found, even ones it lists under `classes`, so it has no route, no agent tool and no MCP tool, and its snapshot and TypeScript file are neither written nor checked. The core's two files stay byte for byte as they were.
+- **Only an `optional` group may be missing.** A group is required unless it sets `'optional' => true`. A required group none of whose paths exists, such as a core path with a typo, fails the Discovery row of `actions:check` and fails `actions:typescript`, with or without `--check`, instead of passing while checking nothing. So do no group being installed at all, and a `--group` that names a group that is not installed here.
+- **Re-cache on every deploy that adds or removes a module.** Removing `modules/Billing` removes billing from every door once the deploy runs `php artisan optimize` (or `route:cache` and `actions:cache`), as [Deploying](setup.md#deploying) asks of every deploy. The manifest records which groups were installed when it was written, so a manifest from before the module was added or removed is ignored and the process scans instead (and reports `StaleActionManifest` once an hour). A route cache is the framework's own, though: until it is rebuilt, it still holds the routes of the module it was built with.
+- **Each group's files hold only its own actions.** `actions:check --update` writes each installed group's snapshot from that group's own scan, and `actions:check` compares each one. `actions:typescript` writes each installed group's file with the routes of its own actions. Every file imports only `@agentic-actions/client` and declares its own `Json` type, so a module's file never imports the core's and the core's never imports a module's. A group without `typescript` writes no file. Export names stay unique across every group's file, so one frontend can import them all.
+- **`--group` narrows the commands.** `actions:check --update --group=billing` writes only billing's snapshot, and `actions:typescript --check --group=core` checks only the core's file. Every other row of `actions:check` still runs over every installed group.
+- **Every other rule is unchanged.** Discovery groups decide where the scanner looks and which file records what it found. They do not change what an action exposes: `#[Expose]`, the surface switches, `shouldRegister()`, `authorize()`, toolsets and confirmations behave exactly as without groups. Action names stay unique across all installed groups.
+- **A toolset is shared across groups.** A module action with `#[Toolset('support')]` joins the core's `support` toolset, so an agent of the core that uses `support` gets that tool while the module is installed. The module's snapshot records it, not the core's, so review a module's snapshot with the toolsets of the whole app in mind.
+- **A group's paths stay inside the app.** A path with a `..` segment, an absolute path outside the base path or a root whose real path leaves the base path (a symbolic link out of the app) is refused. So is an output that is not a `.json` snapshot or a `.ts` file, that is itself a symbolic link, or whose nearest existing directory really lies outside the base path, an unknown key, two groups that write the same file (`a.json`, `./a.json` and `A.json` are one file) and one class two groups both find. Each throws `MisconfiguredDiscovery` from `actions:cache` and `optimize`, so a deploy stops there, and fails the Discovery row of `actions:check` and `actions:typescript`. A web request goes through the same table as an [exposure error](troubleshooting.md#php-artisan-optimize-fails-with-misconfiguredexposure): a local request throws, and production reports it once an hour while nothing of any group is nominated, so no surface opens until it is fixed.
+
+`discovery.groups` replaces `discovery.paths`, `discovery.classes`, `snapshot` and `typescript.path`, which are ignored while it is set; `actions:check` warns while `discovery.paths` or `discovery.classes` differs from its default, since what they list is no longer found. An app that sets no group keeps one implicit group, `default`, built from those four keys, and writes the same files it always did. A route to an action that no group finds, such as a hand-written route to a class outside every group, is exported nowhere, and `actions:typescript` warns about it: list the class under a group's `classes`.
+
 ## A token reader for a JWT or API-key guard
 
 The default reader knows three credentials: Laravel's session (full access), Sanctum tokens (their abilities) and Passport tokens (their read and write scopes, on the MCP URL of their [OAuth connection](mcp.md#what-a-connection-reaches) only). Any other guard reads as having no abilities, so every action is not found for it. Bind your own `AgenticActions\Contracts\ReadsTokenGrants` to read its grants. A reader of your own replaces the one that keeps each OAuth connection to its URL and tenant, so `actions:check` fails while it is bound beside a Passport guard in `mcp.middleware`:

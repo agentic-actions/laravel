@@ -3,10 +3,11 @@
 namespace AgenticActions\Console;
 
 use AgenticActions\Contracts\ReadsTokenGrants;
+use AgenticActions\Discovery\Groups;
 use AgenticActions\Discovery\Scan;
-use AgenticActions\Discovery\Scanner;
 use AgenticActions\Discovery\Snapshot;
 use AgenticActions\Exceptions\DuplicateActionName;
+use AgenticActions\Exceptions\MisconfiguredDiscovery;
 use AgenticActions\Exposure\Entry;
 use AgenticActions\Http\ActionRequest;
 use AgenticActions\Mcp\McpMount;
@@ -52,14 +53,11 @@ final class ListCommand extends Command
     /**
      * Execute the console command.
      */
-    public function handle(Scanner $scanner, Router $router): int
+    public function handle(Groups $groups, Router $router): int
     {
         try {
-            $scan = $scanner->scan(
-                array_values(array_map(strval(...), (array) config('agentic-actions.discovery.paths', []))),
-                array_values(array_map(strval(...), (array) config('agentic-actions.discovery.classes', []))),
-            );
-        } catch (DuplicateActionName $exception) {
+            $scan = $groups->scan();
+        } catch (DuplicateActionName|MisconfiguredDiscovery $exception) {
             $this->components->error($exception->getMessage());
 
             return self::FAILURE;

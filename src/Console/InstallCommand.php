@@ -2,8 +2,9 @@
 
 namespace AgenticActions\Console;
 
-use AgenticActions\Discovery\Scanner;
+use AgenticActions\Discovery\Groups;
 use AgenticActions\Exceptions\DuplicateActionName;
+use AgenticActions\Exceptions\MisconfiguredDiscovery;
 use AgenticActions\Feed\ChangesController;
 use AgenticActions\Http\ActionRequest;
 use AgenticActions\Mcp\McpMount;
@@ -212,11 +213,8 @@ final class InstallCommand extends Command
         $tenants = $uses('tenancy') && config('agentic-actions.tenant.model') === null;
 
         try {
-            $scan = $this->laravel->make(Scanner::class)->scan(
-                array_values(array_map(strval(...), (array) config('agentic-actions.discovery.paths', []))),
-                array_values(array_map(strval(...), (array) config('agentic-actions.discovery.classes', []))),
-            );
-        } catch (DuplicateActionName) {
+            $scan = $this->laravel->make(Groups::class)->scan();
+        } catch (DuplicateActionName|MisconfiguredDiscovery) {
             $scan = null;
         }
 

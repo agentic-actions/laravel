@@ -579,7 +579,7 @@ The `ActionAssertions` trait adds `assertToolset()` and `assertAgentTools()` to 
 - [MCP](https://github.com/agentic-actions/laravel/blob/main/docs/mcp.md): the MCP server, its tokens and tenant paths, connecting Claude Code, Cursor and Claude Desktop, and OAuth for Claude and ChatGPT connectors
 - [Security](https://github.com/agentic-actions/laravel/blob/main/docs/security.md): what the package guarantees, and where each guarantee stops
 - [Testing](https://github.com/agentic-actions/laravel/blob/main/docs/testing.md): fakes, toolset assertions, confirmations and forms, queued runs and tokens in tests
-- [Recipes](https://github.com/agentic-actions/laravel/blob/main/docs/recipes.md): strict agent schemas, controllers and Livewire, discovery layouts, custom token guards
+- [Recipes](https://github.com/agentic-actions/laravel/blob/main/docs/recipes.md): strict agent schemas, controllers and Livewire, discovery layouts and optional modules, custom token guards
 - [The TypeScript client](https://github.com/agentic-actions/laravel/blob/main/docs/client.md): the generated file, `callAction()`, errors, touches and `useAction()`
 - [Troubleshooting](https://github.com/agentic-actions/laravel/blob/main/docs/troubleshooting.md): each error message, its cause and its fix
 - [Migrating from laravel-actions](https://github.com/agentic-actions/laravel/blob/main/docs/migrating-from-laravel-actions.md)

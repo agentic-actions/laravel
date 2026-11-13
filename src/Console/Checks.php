@@ -10,13 +10,13 @@ use AgenticActions\Attributes\Expose;
 use AgenticActions\Contracts\ProposesCalls;
 use AgenticActions\Contracts\ReadsTokenGrants;
 use AgenticActions\Datasets\Dataset;
-use AgenticActions\Discovery\ActionRegistry;
+use AgenticActions\Discovery\Groups;
 use AgenticActions\Discovery\Manifest;
 use AgenticActions\Discovery\Scan;
-use AgenticActions\Discovery\Scanner;
 use AgenticActions\Discovery\Snapshot;
 use AgenticActions\Effect;
 use AgenticActions\Exceptions\DuplicateActionName;
+use AgenticActions\Exceptions\MisconfiguredDiscovery;
 use AgenticActions\Exceptions\UnsupportedSchema;
 use AgenticActions\Exposure\Entry;
 use AgenticActions\Feed\ChangesController;
@@ -106,7 +106,7 @@ final class Checks
      */
     public function __construct(
         private readonly Application $app,
-        private readonly Scanner $scanner,
+        private readonly Groups $groups,
         private readonly Router $router,
         private readonly SchemaReader $reader,
         private readonly AdvertisedSchema $advertised,
@@ -118,19 +118,17 @@ final class Checks
     /**
      * Run every row of 11.3 against a fresh scan and the routes.
      *
+     * @param  list<string>  $groups  the discovery groups whose snapshots the Snapshot row reads; every group when empty
      * @return list<Finding>
      */
-    public function run(bool $production = false): array
+    public function run(bool $production = false, array $groups = []): array
     {
         try {
-            $scan = $this->scanner->scan(
-                array_values(array_map(strval(...), (array) config('agentic-actions.discovery.paths', []))),
-                array_values(array_map(strval(...), (array) config('agentic-actions.discovery.classes', []))),
-            );
-        } catch (DuplicateActionName $exception) {
+            $scan = $this->groups->scan();
+        } catch (DuplicateActionName|MisconfiguredDiscovery $exception) {
             // Without a scan, only the rows that do not read the actions can run.
             return [
-                self::fail('Names', $exception->getMessage()),
+                self::fail($exception instanceof DuplicateActionName ? 'Names' : 'Discovery', $exception->getMessage()),
                 ...$this->membership(),
                 ...$this->tenantScope(),
                 ...$this->abilities(),
@@ -150,7 +148,8 @@ final class Checks
         $routes = array_values($this->router->getRoutes()->getRoutes());
 
         return [
-            ...$this->snapshot($scan),
+            ...$this->discoveryGroups($groups),
+            ...$this->snapshot($scan, $groups),
             ...$this->renamed($scan),
             ...$this->exposure($scan),
             ...$this->discovery($scan),
@@ -236,20 +235,101 @@ final class Checks
     }
 
     /**
-     * Snapshot: the committed file is missing, or differs from the fresh scan. actions:install reads it too.
+     * Discovery, for discovery.groups: a required group none of whose paths exists (a typo would otherwise pass while
+     * checking nothing), no group installed at all, a group --group names that is not installed here, and top-level
+     * discovery keys that groups make the package ignore.
+     *
+     * @param  list<string>  $only  the groups --group names
+     * @return list<Finding>
+     */
+    private function discoveryGroups(array $only): array
+    {
+        if (! Groups::grouped()) {
+            return [];
+        }
+
+        // A misconfigured discovery.groups is the Discovery row's failure already.
+        try {
+            $configured = Groups::configured();
+        } catch (MisconfiguredDiscovery) {
+            return [];
+        }
+
+        $findings = [];
+        $installed = array_filter($configured, fn ($group): bool => $group->installed());
+
+        if ($installed === []) {
+            $findings[] = self::fail('Discovery', 'No discovery group is installed: none of the paths of any group in discovery.groups exists, so nothing is checked.');
+        }
+
+        foreach ($configured as $group) {
+            if ($group->installed()) {
+                continue;
+            }
+
+            if (! $group->optional) {
+                $findings[] = self::fail('Discovery', "discovery.groups.{$group->name}: none of its paths exists (".implode(', ', $group->paths)."), so none of its actions is found or checked. Fix the path, or set 'optional' => true on a group a deployment may leave out.");
+            } elseif (in_array($group->name, $only, true)) {
+                $findings[] = self::fail('Discovery', "discovery.groups.{$group->name} is not installed here: none of its paths exists, so --group={$group->name} checks nothing.");
+            }
+        }
+
+        $paths = array_values((array) config('agentic-actions.discovery.paths', []));
+        $classes = array_values((array) config('agentic-actions.discovery.classes', []));
+
+        if ($paths !== ['app'] || $classes !== []) {
+            $findings[] = self::warn('Discovery', 'discovery.groups is set, so discovery.paths and discovery.classes are ignored, with what they list. Move each path and class into a group, then remove both keys or set them back to their defaults.');
+        }
+
+        return $findings;
+    }
+
+    /**
+     * Snapshot: the committed file is missing, or differs from the fresh scan. actions:install reads it too. With
+     * discovery groups, each installed group's file is compared with that group's own scan, and a group whose roots
+     * are missing is skipped, so the check passes with or without an optional module.
+     *
+     * @param  list<string>  $groups  the groups to compare; every group when empty
+     * @return list<Finding>
+     */
+    public function snapshot(Scan $scan, array $groups = []): array
+    {
+        if (! Groups::grouped()) {
+            return self::snapshotOf((string) config('agentic-actions.snapshot', 'actions.exposure.json'), Snapshot::path(), $scan);
+        }
+
+        try {
+            $scans = $this->groups->scans();
+            $named = Groups::named($groups);
+        } catch (DuplicateActionName|MisconfiguredDiscovery $exception) {
+            return [self::fail('Discovery', $exception->getMessage())];
+        }
+
+        $findings = [];
+
+        foreach ($named as $group) {
+            if (isset($scans[$group->name])) {
+                array_push($findings, ...self::snapshotOf($group->snapshot, $group->snapshotPath(), $scans[$group->name]));
+            }
+        }
+
+        return $findings;
+    }
+
+    /**
+     * Snapshot for one file and the scan it records.
      *
      * @return list<Finding>
      */
-    public function snapshot(Scan $scan): array
+    private static function snapshotOf(string $label, string $path, Scan $scan): array
     {
-        $label = (string) config('agentic-actions.snapshot', 'actions.exposure.json');
         $built = Snapshot::build($scan);
 
-        if (! is_file(Snapshot::path())) {
+        if (! is_file($path)) {
             return [self::fail('Snapshot', "{$label} is missing: run php artisan actions:check --update")];
         }
 
-        $stored = Snapshot::read();
+        $stored = Snapshot::read($path);
 
         if ($stored !== null && Snapshot::encode($stored) === Snapshot::encode($built)) {
             return [];
@@ -268,7 +348,34 @@ final class Checks
      */
     private function renamed(Scan $scan): array
     {
-        $stored = Snapshot::read();
+        if (! Groups::grouped()) {
+            return self::renamedIn($scan, Snapshot::read());
+        }
+
+        // A misconfigured group is the Snapshot row's to report.
+        try {
+            $scans = $this->groups->scans();
+        } catch (DuplicateActionName|MisconfiguredDiscovery) {
+            return [];
+        }
+
+        $findings = [];
+
+        foreach (Groups::installed() as $group) {
+            array_push($findings, ...self::renamedIn($scans[$group->name], Snapshot::read($group->snapshotPath())));
+        }
+
+        return $findings;
+    }
+
+    /**
+     * Names for one scan and the snapshot that records it.
+     *
+     * @param  array<string, mixed>|null  $stored
+     * @return list<Finding>
+     */
+    private static function renamedIn(Scan $scan, ?array $stored): array
+    {
         $rows = is_array($stored['actions'] ?? null) ? $stored['actions'] : [];
         $findings = [];
 
@@ -1893,14 +2000,12 @@ final class Checks
         }
 
         if (($manifest = Manifest::readFresh($this->app)) === null) {
-            return [self::fail('Manifest', 'The actions manifest is older than the route cache, unreadable or from another release: run php artisan optimize, or actions:cache, on deploy.')];
+            return [self::fail('Manifest', Groups::grouped()
+                ? 'The actions manifest is older than the route cache, unreadable, from another release or written for other discovery groups: run php artisan optimize, or actions:cache, on deploy.'
+                : 'The actions manifest is older than the route cache, unreadable or from another release: run php artisan optimize, or actions:cache, on deploy.')];
         }
 
-        $expected = [
-            'version' => ActionRegistry::VERSION,
-            'actions' => array_map(fn (Entry $entry): array => $entry->toManifest(), $scan->actions),
-            'agents' => $scan->recordedAgents(),
-        ];
+        $expected = Manifest::build($scan);
 
         // The snapshot's canonical text compares both sides key-order-free and type-exact.
         if (Snapshot::encode($manifest) === Snapshot::encode($expected)) {
